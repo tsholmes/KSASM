@@ -50,14 +50,13 @@ namespace KSACPU
 
     public static class U8
     {
-      public static ulong Decode(byte[] data, int offset) => data[offset];
+      public static ulong Decode(byte[] data, int offset) => Read1(data, offset);
       public static void Encode(ulong val, byte[] data, int offset) => data[offset] = (byte)val;
     }
 
     public static class I16
     {
-      public static long Decode(byte[] data, int offset) =>
-        ((long)data[offset + 0] << 0) | ((long)data[offset + 1] << 8);
+      public static long Decode(byte[] data, int offset) => (short)Read2(data, offset);
 
       public static void Encode(long val, byte[] data, int offset)
       {
@@ -68,9 +67,7 @@ namespace KSACPU
 
     public static class I32
     {
-      public static long Decode(byte[] data, int offset) =>
-        ((long)data[offset + 0] << 0) | ((long)data[offset + 1] << 8) |
-        ((long)data[offset + 2] << 16) | ((long)data[offset + 3] << 24);
+      public static long Decode(byte[] data, int offset) => (int)Read4(data, offset);
 
       public static void Encode(long val, byte[] data, int offset)
       {
@@ -83,11 +80,7 @@ namespace KSACPU
 
     public static class I64
     {
-      public static long Decode(byte[] data, int offset) =>
-        ((long)data[offset + 0] << 0) | ((long)data[offset + 1] << 8) |
-        ((long)data[offset + 2] << 16) | ((long)data[offset + 3] << 24) |
-        ((long)data[offset + 4] << 32) | ((long)data[offset + 5] << 40) |
-        ((long)data[offset + 6] << 48) | ((long)data[offset + 7] << 56);
+      public static long Decode(byte[] data, int offset) => (long)Read8(data, offset);
 
       public static void Encode(long val, byte[] data, int offset)
       {
@@ -104,11 +97,7 @@ namespace KSACPU
 
     public static class U64
     {
-      public static ulong Decode(byte[] data, int offset) =>
-        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) |
-        ((ulong)data[offset + 2] << 16) | ((ulong)data[offset + 3] << 24) |
-        ((ulong)data[offset + 4] << 32) | ((ulong)data[offset + 5] << 40) |
-        ((ulong)data[offset + 6] << 48) | ((ulong)data[offset + 7] << 56);
+      public static ulong Decode(byte[] data, int offset) => Read8(data, offset);
 
       public static void Encode(ulong val, byte[] data, int offset)
       {
@@ -126,7 +115,7 @@ namespace KSACPU
     public static class F64
     {
       public static double Decode(byte[] data, int offset) =>
-        BitConverter.UInt64BitsToDouble(U64.Decode(data, offset));
+        BitConverter.UInt64BitsToDouble(Read8(data, offset));
 
       public static void Encode(double value, byte[] data, int offset) =>
         U64.Encode(BitConverter.DoubleToUInt64Bits(value), data, offset);
@@ -134,8 +123,7 @@ namespace KSACPU
 
     public static class P24
     {
-      public static ulong Decode(byte[] data, int offset) =>
-        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) | ((ulong)data[offset + 2] << 16);
+      public static ulong Decode(byte[] data, int offset) => Read3(data, offset);
 
       public static void Encode(ulong val, byte[] data, int offset)
       {
@@ -154,5 +142,23 @@ namespace KSACPU
       public static void Encode(double value, byte[] data, int offset) =>
         throw new NotImplementedException();
     }
+
+    private static ulong Read1(byte[] data, int offset) => data[offset];
+
+    private static ulong Read2(byte[] data, int offset) =>
+      ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8);
+
+    private static ulong Read3(byte[] data, int offset) =>
+        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) | ((ulong)data[offset + 2] << 16);
+
+    private static ulong Read4(byte[] data, int offset) =>
+        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) |
+        ((ulong)data[offset + 2] << 16) | ((ulong)data[offset + 3] << 24);
+
+    private static ulong Read8(byte[] data, int offset) =>
+        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) |
+        ((ulong)data[offset + 2] << 16) | ((ulong)data[offset + 3] << 24) |
+        ((ulong)data[offset + 4] << 32) | ((ulong)data[offset + 5] << 40) |
+        ((ulong)data[offset + 6] << 48) | ((ulong)data[offset + 7] << 56);
   }
 }

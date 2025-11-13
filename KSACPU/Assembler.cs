@@ -25,6 +25,10 @@ namespace KSACPU
 
     private void LoadLine(string line)
     {
+      var commentIdx = line.IndexOf('#');
+      if (commentIdx != -1)
+        line = line[..commentIdx];
+
       var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
       if (parts.Length == 0)
@@ -105,6 +109,11 @@ namespace KSACPU
       var strA = args[1];
       var strB = args[2];
 
+      if (strA == "_")
+        strA = strB;
+      else if (strB == "_")
+        strB = strA;
+
       bool valid;
       OpCode op;
       var width = 1;
@@ -123,7 +132,7 @@ namespace KSACPU
 
       if (!TryParseAddress(strA, out var addrA))
         throw new InvalidOperationException($"invalid operand {strA}");
-      if (!TryParseAddress(strB, out var addrB))
+      if (!TryParseAddress(strB, out var addrB, defType: addrA.Type))
         throw new InvalidOperationException($"invalid operand {strB}");
 
       if (addrA.Base == null && addrA.Relative)
@@ -148,15 +157,19 @@ namespace KSACPU
       nextAddress += 8;
     }
 
-    private bool TryParseAddress(string str, out ParsedAddr addr)
+    private bool TryParseAddress(string str, out ParsedAddr addr, DataType? defType = null)
     {
       addr = default;
 
       var parts = str.Split(':');
-      if (parts.Length != 2)
+      if (parts.Length < 2 && defType == null)
+        return false;
+      if (parts.Length > 2)
         return false;
 
-      if (!Enum.TryParse(parts[1], true, out addr.Type))
+      if (parts.Length < 2)
+        addr.Type = defType.Value;
+      else if (!Enum.TryParse(parts[1], true, out addr.Type))
         return false;
 
       str = parts[0];
@@ -176,7 +189,7 @@ namespace KSACPU
       {
         addr.Relative = true;
         addr.Addr = str[relIdx..];
-        if (addr.Addr.Length > 3 && addr.Addr[0] == '[' && addr.Addr[^1] == ']')
+        if (addr.Addr.Length > 3 && addr.Addr[1] == '[' && addr.Addr[^1] == ']')
         {
           addr.Indirect = true;
           // +[addr] => +addr

@@ -9,6 +9,7 @@ namespace KSACPU
 
     public readonly Memory Memory = new();
     public int PC = 0;
+    public ulong SleepTime = 0;
 
     private readonly ValArray A = new();
     private readonly ValArray B = new();
@@ -55,7 +56,7 @@ namespace KSACPU
     private void Exec(OpCode op, ValuePointer opA, ValuePointer opB)
     {
       if (DebugOps)
-        Console.WriteLine($"{op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
+        Console.WriteLine($"{PC-8}: {op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
       switch (op)
       {
         case OpCode.Copy: OpCopy(opA, opB); break;
@@ -71,7 +72,7 @@ namespace KSACPU
         case OpCode.ShiftLeft: goto default;
         case OpCode.ShiftRight: goto default;
         case OpCode.Add: OpAdd(opA, opB); break;
-        case OpCode.Subtract: goto default;
+        case OpCode.Subtract: OpSubtract(opA, opB); break;
         case OpCode.Multiply: goto default;
         case OpCode.Divide: goto default;
         case OpCode.Remainder: goto default;
@@ -87,17 +88,17 @@ namespace KSACPU
         case OpCode.Product: goto default;
         case OpCode.MinAll: goto default;
         case OpCode.MaxAll: goto default;
-        case OpCode.Jump: goto default;
-        case OpCode.Call: goto default;
-        case OpCode.BranchIfZero: goto default;
-        case OpCode.BranchIfPos: goto default;
-        case OpCode.BranchIfNeg: goto default;
+        case OpCode.Jump: OpJump(opA, opB); break;
+        case OpCode.Call: OpCall(opA, opB); break;
+        case OpCode.BranchIfZero: OpBranchIfSign(opA, opB, 0); break;
+        case OpCode.BranchIfPos: OpBranchIfSign(opA, opB, 1); break;
+        case OpCode.BranchIfNeg: OpBranchIfSign(opA, opB, -1); break;
         case OpCode.Switch: goto default;
-        case OpCode.Sleep: goto default;
+        case OpCode.Sleep: OpSleep(opA, opB); break;
         case OpCode.DevID: goto default;
         case OpCode.DevType: goto default;
         case OpCode.DevRead: goto default;
-        case OpCode.DevWrite: goto default;
+        case OpCode.DevWrite: OpDevWrite(opA, opB); break;
         case OpCode.IHandler: goto default;
         case OpCode.IData: goto default;
         case OpCode.IReturn: goto default;
