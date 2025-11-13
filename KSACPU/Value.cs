@@ -1,5 +1,6 @@
 
 using System;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace KSACPU
@@ -8,7 +9,7 @@ namespace KSACPU
   {
     Unsigned,
     Signed,
-    Floating,
+    Float,
     Complex,
   }
 
@@ -21,34 +22,66 @@ namespace KSACPU
     public override string ToString() => $"{Type}*{Width}@{Address}";
   }
 
-  public partial class Value
+  [StructLayout(LayoutKind.Explicit)]
+  public partial struct Value
+  {
+    [FieldOffset(0)]
+    public ulong Unsigned;
+    [FieldOffset(0)]
+    public long Signed;
+    [FieldOffset(0)]
+    public double Float;
+
+    // TODO: complex
+
+    public void Convert(ValueMode from, ValueMode to)
+    {
+      switch ((from, to))
+      {
+        case (ValueMode.Unsigned, ValueMode.Signed):
+          Signed = (long)Unsigned;
+          break;
+        case (ValueMode.Unsigned, ValueMode.Float):
+          Float = Unsigned;
+          break;
+        case (ValueMode.Signed, ValueMode.Unsigned):
+          Unsigned = (ulong)Signed;
+          break;
+        case (ValueMode.Signed, ValueMode.Float):
+          Float = Signed;
+          break;
+        case (ValueMode.Float, ValueMode.Unsigned):
+          Unsigned = (ulong)Float;
+          break;
+        case (ValueMode.Float, ValueMode.Signed):
+          Signed = (long)Float;
+          break;
+        default:
+          throw new NotImplementedException($"conversion {from}->{to} not implemented");
+      }
+    }
+
+    public object As(DataType type) => type.VMode() switch
+    {
+      ValueMode.Unsigned => Unsigned,
+      ValueMode.Signed => Signed,
+      ValueMode.Float => Float,
+      _ => "Invalid",
+    };
+  }
+
+  public partial class ValArray
   {
     public ValueMode Mode;
     public int Width;
-    public ulong[] Unsigned = new ulong[8];
-    public long[] Signed = new long[8];
-    public double[] Floating = new double[8];
-    // TODO: complex
+
+    public Value[] Values = new Value[8];
 
     public void Init(ValueMode mode, int width)
     {
       this.Mode = mode;
       this.Width = width;
-      switch (mode)
-      {
-        case ValueMode.Unsigned:
-          Array.Fill(Unsigned, 0u);
-          break;
-        case ValueMode.Signed:
-          Array.Fill(Signed, 0);
-          break;
-        case ValueMode.Floating:
-          Array.Fill(Floating, 0.0);
-          break;
-        case ValueMode.Complex:
-        default:
-          throw new InvalidOperationException($"{mode}");
-      }
+      Array.Fill(Values, default);
     }
 
     public void Convert(ValueMode target)
@@ -56,35 +89,9 @@ namespace KSACPU
       if (Mode == target)
         return;
 
-      switch ((Mode, target))
-      {
-        case (ValueMode.Unsigned, ValueMode.Signed):
-          for (var i = 0; i < Width; i++)
-            Signed[i] = (long)Unsigned[i];
-          break;
-        case (ValueMode.Unsigned, ValueMode.Floating):
-          for (var i = 0; i < Width; i++)
-            Floating[i] = Unsigned[i];
-          break;
-        case (ValueMode.Signed, ValueMode.Unsigned):
-          for (var i = 0; i < Width; i++)
-            Unsigned[i] = (ulong)Signed[i];
-          break;
-        case (ValueMode.Signed, ValueMode.Floating):
-          for (var i = 0; i < Width; i++)
-            Floating[i] = Signed[i];
-          break;
-        case (ValueMode.Floating, ValueMode.Unsigned):
-          for (var i = 0; i < Width; i++)
-            Unsigned[i] = (ulong)Floating[i];
-          break;
-        case (ValueMode.Floating, ValueMode.Signed):
-          for (var i = 0; i < Width; i++)
-            Signed[i] = (long)Floating[i];
-          break;
-        default:
-          throw new NotImplementedException($"conversion {Mode}->{target} not implemented");
-      }
+      for (var i = 0; i < Width; i++)
+        Values[i].Convert(Mode, target);
+
       Mode = target;
     }
 
@@ -98,39 +105,8 @@ namespace KSACPU
 
       for (var i = 0; i < Width; i++)
       {
-        LoadSingle(mem, addr, ptr.Type, i);
+        Values[i] = mem.Read(addr, ptr.Type);
         addr += size;
-      }
-    }
-
-    private void LoadSingle(Memory mem, int addr, DataType type, int index)
-    {
-      switch (type)
-      {
-        case DataType.U8:
-          this.Unsigned[index] = mem.ReadU8(addr);
-          break;
-        case DataType.I16:
-          this.Signed[index] = mem.ReadI16(addr);
-          break;
-        case DataType.I32:
-          this.Signed[index] = mem.ReadI32(addr);
-          break;
-        case DataType.I64:
-          this.Signed[index] = mem.ReadI64(addr);
-          break;
-        case DataType.U64:
-          this.Unsigned[index] = mem.ReadU64(addr);
-          break;
-        case DataType.F64:
-          this.Floating[index] = mem.ReadF64(addr);
-          break;
-        case DataType.P24:
-          this.Unsigned[index] = mem.ReadP24(addr);
-          break;
-        case DataType.C128:
-        default:
-          throw new InvalidOperationException($"Invalid DataType {type}");
       }
     }
 
@@ -146,39 +122,8 @@ namespace KSACPU
 
       for (var i = 0; i < Width; i++)
       {
-        StoreSingle(mem, addr, ptr.Type, i);
+        mem.Write(addr, ptr.Type, Values[i]);
         addr += size;
-      }
-    }
-
-    private void StoreSingle(Memory mem, int addr, DataType type, int index)
-    {
-      switch (type)
-      {
-        case DataType.U8:
-          mem.WriteU8(addr, this.Unsigned[index]);
-          break;
-        case DataType.I16:
-          mem.WriteI16(addr, this.Signed[index]);
-          break;
-        case DataType.I32:
-          mem.WriteI32(addr, this.Signed[index]);
-          break;
-        case DataType.I64:
-          mem.WriteI64(addr, this.Signed[index]);
-          break;
-        case DataType.U64:
-          mem.WriteU64(addr, this.Unsigned[index]);
-          break;
-        case DataType.F64:
-          mem.WriteF64(addr, this.Floating[index]);
-          break;
-        case DataType.P24:
-          mem.WriteP24(addr, this.Unsigned[index]);
-          break;
-        case DataType.C128:
-        default:
-          throw new InvalidOperationException($"Invalid DataType {type}");
       }
     }
 
@@ -189,13 +134,14 @@ namespace KSACPU
 
       for (var i = 0; i < Width; i++)
       {
+        ref var val = ref Values[i];
         if (i != 0)
           sb.Append(',');
         sb.Append(Mode switch
         {
-          ValueMode.Unsigned => Unsigned[i],
-          ValueMode.Signed => Signed[i],
-          ValueMode.Floating => Floating[i],
+          ValueMode.Unsigned => val.Unsigned,
+          ValueMode.Signed => val.Signed,
+          ValueMode.Float => val.Float,
           _ => "Invalid",
         });
       }

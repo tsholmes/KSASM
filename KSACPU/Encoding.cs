@@ -42,7 +42,7 @@ namespace KSACPU
       DataType.I32 => ValueMode.Signed,
       DataType.I64 => ValueMode.Signed,
       DataType.U64 => ValueMode.Unsigned,
-      DataType.F64 => ValueMode.Floating,
+      DataType.F64 => ValueMode.Float,
       DataType.P24 => ValueMode.Unsigned,
       DataType.C128 => ValueMode.Complex,
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),

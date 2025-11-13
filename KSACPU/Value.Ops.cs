@@ -3,27 +3,29 @@ using System;
 
 namespace KSACPU
 {
-  public partial class Value
+  public partial struct Value
   {
-    public void Add(int index, Value other, int otherIndex)
+    public void Add(Value other, ValueMode mode)
     {
-      if (Mode != other.Mode) throw new InvalidOperationException($"{Mode} != {other.Mode}");
-
-      switch (Mode)
+      switch (mode)
       {
         case ValueMode.Unsigned:
-          this.Unsigned[index] += other.Unsigned[otherIndex];
+          this.Unsigned += other.Unsigned;
           break;
         case ValueMode.Signed:
-          this.Signed[index] += other.Signed[otherIndex];
+          this.Signed += other.Signed;
           break;
-        case ValueMode.Floating:
-          this.Floating[index] += other.Floating[otherIndex];
+        case ValueMode.Float:
+          this.Float += other.Float;
           break;
         case ValueMode.Complex:
         default:
-          throw new NotImplementedException($"{Mode}");
+          throw new NotImplementedException($"{mode}");
       }
     }
+  }
+
+  public partial class ValArray
+  {
   }
 }

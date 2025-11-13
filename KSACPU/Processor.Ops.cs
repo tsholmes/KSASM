@@ -17,7 +17,7 @@ namespace KSACPU
       C.Init(A.Mode, A.Width);
 
       for (var i = 0; i < A.Width; i++)
-        C.Add(i, A, (int)B.Unsigned[i]);
+        C.Values[i].Add(A.Values[(int)B.Values[i].Unsigned], C.Mode);
 
       C.Store(Memory, opA);
     }
@@ -40,7 +40,7 @@ namespace KSACPU
       B.Convert(A.Mode);
 
       for (var i = 0; i < A.Width; i++)
-        A.Add(i, B, i);
+        A.Values[i].Add(B.Values[i], A.Mode);
 
       A.Store(Memory, opA);
     }

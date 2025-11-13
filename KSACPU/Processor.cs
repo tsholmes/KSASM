@@ -5,12 +5,14 @@ namespace KSACPU
 {
   public partial class Processor
   {
+    public static bool DebugOps = true;
+
     public readonly Memory Memory = new();
     public int PC = 0;
 
-    private readonly Value A = new();
-    private readonly Value B = new();
-    private readonly Value C = new();
+    private readonly ValArray A = new();
+    private readonly ValArray B = new();
+    private readonly ValArray C = new();
 
     public void Step()
     {
@@ -52,7 +54,8 @@ namespace KSACPU
 
     private void Exec(OpCode op, ValuePointer opA, ValuePointer opB)
     {
-      Console.WriteLine($"{op} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
+      if (DebugOps)
+        Console.WriteLine($"{op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
       switch (op)
       {
         case OpCode.Copy: OpCopy(opA, opB); break;

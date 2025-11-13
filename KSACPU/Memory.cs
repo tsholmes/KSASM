@@ -1,8 +1,12 @@
 
+using System;
+
 namespace KSACPU
 {
   public class Memory
   {
+    public static bool DebugRead = false;
+    public static bool DebugWrite = true;
     public const int SIZE = 1 << 24;
     public const int ADDR_MASK = SIZE - 1;
 
@@ -25,5 +29,73 @@ namespace KSACPU
     public void WriteF64(int address, double val) => Encoding.F64.Encode(val, data, address & ADDR_MASK);
     public void WriteP24(int address, ulong val) => Encoding.P24.Encode(val, data, address & ADDR_MASK);
     // public void WriteC128(int address, double val) => Encoding.C128.Encode(val, data, address & ADDR_MASK);
+
+    public Value Read(int addr, DataType type)
+    {
+      var val = default(Value);
+      switch (type)
+      {
+        case DataType.U8:
+          val.Unsigned = this.ReadU8(addr);
+          break;
+        case DataType.I16:
+          val.Signed = this.ReadI16(addr);
+          break;
+        case DataType.I32:
+          val.Signed = this.ReadI32(addr);
+          break;
+        case DataType.I64:
+          val.Signed = this.ReadI64(addr);
+          break;
+        case DataType.U64:
+          val.Unsigned = this.ReadU64(addr);
+          break;
+        case DataType.F64:
+          val.Float = this.ReadF64(addr);
+          break;
+        case DataType.P24:
+          val.Unsigned = this.ReadP24(addr);
+          break;
+        case DataType.C128:
+        default:
+          throw new InvalidOperationException($"Invalid DataType {type}");
+      }
+      if (DebugRead)
+        Console.WriteLine($"READ {addr} {type} = {val.As(type)}");
+      return val;
+    }
+
+    public void Write(int addr, DataType type, Value val)
+    {
+      switch (type)
+      {
+        case DataType.U8:
+          this.WriteU8(addr, val.Unsigned);
+          break;
+        case DataType.I16:
+          this.WriteI16(addr, val.Signed);
+          break;
+        case DataType.I32:
+          this.WriteI32(addr, val.Signed);
+          break;
+        case DataType.I64:
+          this.WriteI64(addr, val.Signed);
+          break;
+        case DataType.U64:
+          this.WriteU64(addr, val.Unsigned);
+          break;
+        case DataType.F64:
+          this.WriteF64(addr, val.Float);
+          break;
+        case DataType.P24:
+          this.WriteP24(addr, val.Unsigned);
+          break;
+        case DataType.C128:
+        default:
+          throw new InvalidOperationException($"Invalid DataType {type}");
+      }
+      if (DebugWrite)
+        Console.WriteLine($"WRITE {addr} {type} = {val.As(type)}");
+    }
   }
 }
