@@ -31,4 +31,19 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
+    <Reference Include="KSA">
+      <HintPath>C:\Program Files\Kitten Space Agency\KSA.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Brutal.ImGui">
+      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.ImGui.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Brutal.Core.Numerics">
+      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.Core.Numerics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
 </Project>

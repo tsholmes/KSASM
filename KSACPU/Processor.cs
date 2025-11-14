@@ -15,6 +15,8 @@ namespace KSACPU
     private readonly ValArray B = new();
     private readonly ValArray C = new();
 
+    public Action<ulong, ValArray> OnDevWrite;
+
     public void Step()
     {
       var inst = Instruction.Decode(Memory.ReadU64(PC));

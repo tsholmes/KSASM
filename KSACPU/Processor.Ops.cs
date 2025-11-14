@@ -120,7 +120,8 @@ namespace KSACPU
       B.Load(Memory, opB);
       B.Convert(ValueMode.Unsigned);
 
-      Console.WriteLine($"{B.Values[0].Unsigned}> {A}");
+      // Console.WriteLine($"{B.Values[0].Unsigned}> {A}");
+      OnDevWrite?.Invoke(B.Values[0].Unsigned, A);
     }
 
     // private void OpIHandler(ValuePointer opA, ValuePointer opB)
