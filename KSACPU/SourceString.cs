@@ -14,7 +14,7 @@ namespace KSACPU
       for (var i = 0; i < source.Length; i++)
         if (source[i] == '\n')
           lineStarts.Add(i + 1);
-      lineStarts.Add(source.Length);
+      lineStarts.Add(source.Length + 1);
     }
 
     public int Length => source.Length;

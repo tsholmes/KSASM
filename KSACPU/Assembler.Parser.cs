@@ -16,7 +16,9 @@ namespace KSACPU
       public Parser(SourceString source)
       {
         this.source = source;
-        lexer = new(new Lexer(source));
+        ITokenStream stream = new Lexer(source);
+        stream = new MacroParser(source, stream);
+        lexer = new(stream);
       }
 
       public void Parse()
@@ -230,7 +232,7 @@ namespace KSACPU
         else
           Invalid();
 
-        if (!TakeType(TokenType.CClose, out _))
+        if (!TakeType(TokenType.PClose, out _))
           Invalid();
 
         return cval;

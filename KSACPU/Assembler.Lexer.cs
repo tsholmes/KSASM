@@ -1,7 +1,4 @@
 
-
-using System;
-
 namespace KSACPU
 {
   public partial class Assembler
@@ -10,6 +7,7 @@ namespace KSACPU
     {
       Invalid,
       EOL, // non-escaped newline, or end of file
+      EscapedEOL, // \ newline
       Placeholder, // _
       Word, // [\w][\w\d]*
       Label, // word:\b
@@ -22,7 +20,9 @@ namespace KSACPU
       Offset, // + or -
       Number, // decimal, hex with 0x prefix, binary with 0b prefix
       COpen, // $(
-      CClose, // )
+      POpen, // (
+      PClose, // )
+      Macro, // .macroname
     }
 
     public struct Token
@@ -30,6 +30,11 @@ namespace KSACPU
       public TokenType Type;
       public int Pos;
       public int Len;
+    }
+
+    public interface ITokenStream
+    {
+      public bool Next(out Token token);
     }
 
     public class LexerReader
@@ -52,6 +57,13 @@ namespace KSACPU
         return hasNext;
       }
 
+      public bool PeekType(TokenType type, out Token token)
+      {
+        if (!Peek(out token))
+          return false;
+        return type == token.Type;
+      }
+
       public bool Take(out Token token)
       {
         FillNext();
@@ -60,6 +72,9 @@ namespace KSACPU
         hasNext = false;
         return has;
       }
+
+      public bool TakeType(TokenType type, out Token token) =>
+        PeekType(type, out token) && Take(out token);
 
       public bool EOF()
       {
@@ -73,11 +88,6 @@ namespace KSACPU
           hasNext = stream.Next(out next);
         eof = !hasNext;
       }
-    }
-
-    public interface ITokenStream
-    {
-      public bool Next(out Token token);
     }
 
     public class Lexer : ITokenStream
@@ -112,17 +122,21 @@ namespace KSACPU
         return c switch
         {
           '\n' => TakeNext(TokenType.EOL, 1, out token),
+          '\\' when At(index + 1) == '\n' => TakeNext(TokenType.EscapedEOL, 2, out token),
+          '\\' when At(index + 1) == '\r' && At(index + 2) == '\n' => TakeNext(TokenType.EscapedEOL, 3, out token),
           '[' => TakeNext(TokenType.IOpen, 1, out token),
           ']' => TakeNext(TokenType.IClose, 1, out token),
           '+' or '-' => TakeNext(TokenType.Offset, 1, out token),
           ',' => TakeNext(TokenType.Comma, 1, out token),
           '$' when At(index + 1) == '(' => TakeNext(TokenType.COpen, 2, out token),
-          ')' => TakeNext(TokenType.CClose, 1, out token),
+          '(' => TakeNext(TokenType.POpen, 1, out token),
+          ')' => TakeNext(TokenType.PClose, 1, out token),
           _ when IsWordStart(c) => TakeWordLike(out token),
           '@' => TakePosition(out token),
           '*' => TakeWidth(out token),
           ':' => TakeType(out token),
           _ when IsDigit(c) => TakeNumber(out token),
+          '.' => TakeMacro(out token),
           _ => TakeNext(TokenType.Invalid, 1, out token),
         };
       }
@@ -161,6 +175,18 @@ namespace KSACPU
           return TakeNext(TokenType.Label, len + 1, out token);
         else
           return TakeNext(TokenType.Word, len, out token);
+      }
+
+      private bool TakeMacro(out Token token)
+      {
+        var len = 1;
+        while (IsWordChar(At(index + len)))
+          len++;
+
+        if (len == 1)
+          return TakeNext(TokenType.Invalid, 1, out token);
+        else
+          return TakeNext(TokenType.Macro, len, out token);
       }
 
       private bool TakePosition(out Token token)
