@@ -11,7 +11,7 @@ namespace KSACPU
 
     public static void Assemble(string source, Memory target)
     {
-      var parser = new Parser(source);
+      var parser = new Parser(new(source));
       parser.Parse();
 
       var state = new State();

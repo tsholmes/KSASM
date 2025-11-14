@@ -1,5 +1,7 @@
 
 
+using System;
+
 namespace KSACPU
 {
   public partial class Assembler
@@ -30,53 +32,99 @@ namespace KSACPU
       public int Len;
     }
 
-    public class Lexer
+    public class LexerReader
     {
-      private readonly string source;
-      private int index = 0;
-
-      private bool takenEOF = false;
+      private readonly ITokenStream stream;
 
       private bool hasNext = false;
       private Token next;
+      private bool eof = false;
 
-      public Lexer(string source)
+      public LexerReader(ITokenStream stream)
       {
-        this.source = source;
+        this.stream = stream;
       }
-
-      public string this[Token token] => source[token.Pos..(token.Pos + token.Len)];
-
-      public bool EOF() => takenEOF && !hasNext;
 
       public bool Peek(out Token token)
       {
-        if (!FillNext())
-        {
-          token = default;
-          return false;
-        }
+        FillNext();
         token = next;
-        return true;
+        return hasNext;
       }
 
       public bool Take(out Token token)
       {
-        if (!FillNext())
-        {
-          token = default;
-          return false;
-        }
+        FillNext();
         token = next;
+        var has = hasNext;
         hasNext = false;
-        return true;
+        return has;
       }
 
-      private void SetNext(TokenType type, int len)
+      public bool EOF()
       {
-        next = new() { Type = type, Pos = index, Len = len };
-        hasNext = true;
-        index += len;
+        FillNext();
+        return eof;
+      }
+
+      private void FillNext()
+      {
+        if (!hasNext && !eof)
+          hasNext = stream.Next(out next);
+        eof = !hasNext;
+      }
+    }
+
+    public interface ITokenStream
+    {
+      public bool Next(out Token token);
+    }
+
+    public class Lexer : ITokenStream
+    {
+      private readonly SourceString source;
+      private int index = 0;
+
+      private bool takenEOF = false;
+
+      public Lexer(SourceString source)
+      {
+        this.source = source;
+      }
+
+      public bool Next(out Token token)
+      {
+        SkipWS();
+
+        if (index == source.Length)
+        {
+          if (takenEOF)
+          {
+            token = default;
+            return false;
+          }
+          takenEOF = true;
+          return TakeNext(TokenType.EOL, 0, out token);
+        }
+
+        var c = At(index);
+
+        return c switch
+        {
+          '\n' => TakeNext(TokenType.EOL, 1, out token),
+          '[' => TakeNext(TokenType.IOpen, 1, out token),
+          ']' => TakeNext(TokenType.IClose, 1, out token),
+          '+' or '-' => TakeNext(TokenType.Offset, 1, out token),
+          ',' => TakeNext(TokenType.Comma, 1, out token),
+          '$' when At(index + 1) == '(' => TakeNext(TokenType.COpen, 2, out token),
+          ')' => TakeNext(TokenType.CClose, 1, out token),
+          _ when IsWordStart(c) => TakeWordLike(out token),
+          '@' => TakePosition(out token),
+          '*' => TakeWidth(out token),
+          ':' => TakeType(out token),
+          _ when IsDigit(c) => TakeNumber(out token),
+          _ => TakeNext(TokenType.Invalid, 1, out token),
+        };
       }
 
       private void SkipWS()
@@ -94,69 +142,28 @@ namespace KSACPU
           index++;
       }
 
-      private bool FillNext()
+      private bool TakeNext(TokenType type, int len, out Token token)
       {
-        if (hasNext)
-          return true;
-
-        SkipWS();
-
-        if (index == source.Length)
-        {
-          if (takenEOF)
-            return false;
-          takenEOF = true;
-          SetNext(TokenType.EOL, 0);
-          return true;
-        }
-
-        var c = At(index);
-
-        if (c == '\n')
-          SetNext(TokenType.EOL, 1);
-        else if (c == '[')
-          SetNext(TokenType.IOpen, 1);
-        else if (c == ']')
-          SetNext(TokenType.IClose, 1);
-        else if (c == '+' || c == '-')
-          SetNext(TokenType.Offset, 1);
-        else if (c == ',')
-          SetNext(TokenType.Comma, 1);
-        else if (c == '$' && At(index + 1) == '(')
-          SetNext(TokenType.COpen, 2);
-        else if (c == ')')
-          SetNext(TokenType.CClose, 1);
-        else if (IsWordStart(c))
-          TakeWordLike();
-        else if (c == '@')
-          TakePosition();
-        else if (c == '*')
-          TakeWidth();
-        else if (c == ':')
-          TakeType();
-        else if (IsDigit(c))
-          TakeNumber();
-        else
-          SetNext(TokenType.Invalid, 1);
-
+        token = new() { Type = type, Pos = index, Len = len };
+        index += len;
         return true;
       }
 
-      private void TakeWordLike()
+      private bool TakeWordLike(out Token token)
       {
         var len = 1;
         while (IsWordChar(At(index + len)))
           len++;
 
         if (len == 1 && At(index) == '_')
-          SetNext(TokenType.Placeholder, 1);
+          return TakeNext(TokenType.Placeholder, 1, out token);
         else if (At(index + len) == ':' && IsBoundary(At(index + len + 1)))
-          SetNext(TokenType.Label, len + 1);
+          return TakeNext(TokenType.Label, len + 1, out token);
         else
-          SetNext(TokenType.Word, len);
+          return TakeNext(TokenType.Word, len, out token);
       }
 
-      private void TakePosition()
+      private bool TakePosition(out Token token)
       {
         var len = 1;
         // TODO: support hex positions?
@@ -164,36 +171,36 @@ namespace KSACPU
           len++;
 
         if (len == 1)
-          SetNext(TokenType.Invalid, 1);
+          return TakeNext(TokenType.Invalid, 1, out token);
         else
-          SetNext(TokenType.Position, len);
+          return TakeNext(TokenType.Position, len, out token);
       }
 
-      private void TakeWidth()
+      private bool TakeWidth(out Token token)
       {
         var len = 1;
         while (IsDigit(At(index + len)))
           len++;
 
         if (len == 1)
-          SetNext(TokenType.Invalid, 1);
+          return TakeNext(TokenType.Invalid, 1, out token);
         else
-          SetNext(TokenType.Width, len);
+          return TakeNext(TokenType.Width, len, out token);
       }
 
-      private void TakeType()
+      private bool TakeType(out Token token)
       {
         var len = 1;
         while (IsWordChar(At(index + len)))
           len++;
 
         if (len == 1)
-          SetNext(TokenType.Invalid, 1);
+          return TakeNext(TokenType.Invalid, 1, out token);
         else
-          SetNext(TokenType.Type, len);
+          return TakeNext(TokenType.Type, len, out token);
       }
 
-      private void TakeNumber()
+      private bool TakeNumber(out Token token)
       {
         var len = 1;
         var minLen = 1;
@@ -237,9 +244,9 @@ namespace KSACPU
           }
         }
         if (len < minLen)
-          SetNext(TokenType.Invalid, len);
+          return TakeNext(TokenType.Invalid, len, out token);
         else
-          SetNext(TokenType.Number, len);
+          return TakeNext(TokenType.Number, len, out token);
       }
 
       private char At(int index)
