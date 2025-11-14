@@ -53,15 +53,26 @@ namespace KSACPU
       }
 
       private void Invalid(Token token) => throw new InvalidOperationException(
-        $"Invalid token {token.Type} '{source[token]}' at {source.Pos(token.Pos)}");
+        $"Invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
 
       private void ParseMacro(Token token)
       {
-        var name = source[token][1..];
-        if (name.ToLowerInvariant() == "macro")
-          DefineMacro();
-        else
-          ExpandMacro(name, token);
+        var name = token.Str()[1..];
+        switch (name.ToLowerInvariant())
+        {
+          case "macro": DefineMacro(); break;
+          case "import": RunImport(); break;
+          default: ExpandMacro(name, token); break;
+        }
+      }
+
+      private void RunImport()
+      {
+        if (!lexer.TakeType(TokenType.Word, out var ntoken))
+          Invalid();
+
+        var source = Library.LoadImport(ntoken.Str());
+        macroStack.Add(new(new Lexer(source)));
       }
 
       private void DefineMacro()
@@ -69,7 +80,7 @@ namespace KSACPU
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
 
-        var macro = new MacroDef { Name = source[ntoken] };
+        var macro = new MacroDef { Name = ntoken.Str() };
 
         if (lexer.TakeType(TokenType.POpen, out _))
         {
@@ -77,7 +88,7 @@ namespace KSACPU
           {
             if (!lexer.TakeType(TokenType.Word, out var atoken))
               Invalid();
-            macro.Args[source[atoken]] = macro.Args.Count;
+            macro.Args[atoken.Str()] = macro.Args.Count;
             if (lexer.TakeType(TokenType.Comma, out _))
               continue;
             else if (lexer.TakeType(TokenType.PClose, out _))
@@ -135,7 +146,7 @@ namespace KSACPU
         foreach (var tk in macro.Tokens)
         {
           var token = tk;
-          if (token.Type == TokenType.Word && macro.Args.TryGetValue(source[token], out var argIdx))
+          if (token.Type == TokenType.Word && macro.Args.TryGetValue(token.Str(), out var argIdx))
           {
             if (argIdx >= args.Count)
               continue;

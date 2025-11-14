@@ -3,40 +3,6 @@ namespace KSACPU
 {
   public partial class Assembler
   {
-    public enum TokenType
-    {
-      Invalid,
-      EOL, // non-escaped newline, or end of file
-      EscapedEOL, // \ newline
-      Placeholder, // _
-      Word, // [\w][\w\d]*
-      Label, // word:\b
-      Position, // @integer
-      Width, // *integer
-      IOpen, // [
-      IClose, // ]
-      Comma, // ,
-      Type, // :typename
-      Offset, // + or -
-      Number, // decimal, hex with 0x prefix, binary with 0b prefix
-      COpen, // $(
-      POpen, // (
-      PClose, // )
-      Macro, // .macroname
-    }
-
-    public struct Token
-    {
-      public TokenType Type;
-      public int Pos;
-      public int Len;
-    }
-
-    public interface ITokenStream
-    {
-      public bool Next(out Token token);
-    }
-
     public class LexerReader
     {
       private readonly ITokenStream stream;
@@ -158,7 +124,7 @@ namespace KSACPU
 
       private bool TakeNext(TokenType type, int len, out Token token)
       {
-        token = new() { Type = type, Pos = index, Len = len };
+        token = source.Token(type, index, len);
         index += len;
         return true;
       }

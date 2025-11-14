@@ -80,7 +80,7 @@ namespace KSACPU
 
         var ldTime = stopwatch.Elapsed.Milliseconds;
 
-        Assembler.Assemble(source, proc.Memory);
+        Assembler.Assemble(new("script", source), proc.Memory);
 
         var asmTime = stopwatch.Elapsed.Milliseconds - ldTime;
 

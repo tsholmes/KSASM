@@ -9,9 +9,9 @@ namespace KSACPU
   {
     public static bool Debug = false;
 
-    public static void Assemble(string source, Memory target)
+    public static void Assemble(SourceString source, Memory target)
     {
-      var parser = new Parser(new(source));
+      var parser = new Parser(source);
       parser.Parse();
 
       var state = new State();

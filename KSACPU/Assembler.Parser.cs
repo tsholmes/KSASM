@@ -56,11 +56,11 @@ namespace KSACPU
         PeekType(type, out token) && lexer.Take(out token);
 
       private void AddLabel(Token token) =>
-        Statements.Add(new LabelStatement { Label = source[token][..^1] });
+        Statements.Add(new LabelStatement { Label = token.Str()[..^1] });
 
       private void AddPosition(Token token)
       {
-        if (!int.TryParse(source[token][1..], out var addr))
+        if (!int.TryParse(token.Str()[1..], out var addr))
           Invalid(token);
         Statements.Add(new PositionStatement { Addr = addr });
       }
@@ -70,14 +70,14 @@ namespace KSACPU
         if (!TakeType(TokenType.Type, out var token))
           Invalid();
 
-        if (!Enum.TryParse(source[token][1..], true, out DataType curType))
+        if (!Enum.TryParse(token.Str()[1..], true, out DataType curType))
           Invalid(token);
 
         while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
         {
           if (TakeType(TokenType.Type, out token))
           {
-            if (!Enum.TryParse(source[token][1..], true, out curType))
+            if (!Enum.TryParse(token.Str()[1..], true, out curType))
               Invalid(token);
           }
           else if (TakeType(TokenType.Label, out token))
@@ -85,7 +85,7 @@ namespace KSACPU
           else if (TakeType(TokenType.Position, out token))
             AddPosition(token);
           else if (TakeType(TokenType.Word, out token))
-            Statements.Add(new ValueStatement() { Type = curType, StrValue = source[token] });
+            Statements.Add(new ValueStatement() { Type = curType, StrValue = token.Str() });
           else if (TakeType(TokenType.Number, out token))
           {
             var stmt = new ValueStatement() { Type = curType };
@@ -93,20 +93,20 @@ namespace KSACPU
             switch (curType.VMode())
             {
               case ValueMode.Unsigned:
-                valid = TryParseUnsigned(source[token], out stmt.Value.Unsigned);
+                valid = TryParseUnsigned(token.Str(), out stmt.Value.Unsigned);
                 break;
               case ValueMode.Signed:
-                valid = TryParseSigned(source[token], out stmt.Value.Signed);
+                valid = TryParseSigned(token.Str(), out stmt.Value.Signed);
                 break;
               case ValueMode.Float:
-                valid = TryParseFloat(source[token], out stmt.Value.Float);
+                valid = TryParseFloat(token.Str(), out stmt.Value.Float);
                 break;
             }
             if (!valid)
               Invalid(token);
             if (TakeType(TokenType.Width, out token))
             {
-              if (!int.TryParse(source[token][1..], out stmt.Width))
+              if (!int.TryParse(token.Str()[1..], out stmt.Width))
                 Invalid(token);
             }
             Statements.Add(stmt);
@@ -122,15 +122,15 @@ namespace KSACPU
 
         if (!TakeType(TokenType.Word, out var opword))
           Invalid();
-        if (!Enum.TryParse(source[opword], true, out inst.Op))
+        if (!Enum.TryParse(opword.Str(), true, out inst.Op))
           Invalid(opword);
 
-        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(source[wtoken][1..], out inst.Width))
+        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken.Str()[1..], out inst.Width))
           Invalid(wtoken);
 
         if (TakeType(TokenType.Type, out var ttoken))
         {
-          if (!Enum.TryParse(source[ttoken][1..], true, out DataType parsedType))
+          if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType parsedType))
             Invalid(ttoken);
           inst.Type = parsedType;
         }
@@ -177,7 +177,7 @@ namespace KSACPU
 
         if (op.Mode != ParsedOpMode.Placeholder && TakeType(TokenType.Type, out var ttoken))
         {
-          if (!Enum.TryParse(source[ttoken][1..], true, out DataType type))
+          if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType type))
             Invalid(ttoken);
           op.Type = type;
         }
@@ -192,15 +192,15 @@ namespace KSACPU
         addr.Indirect = TakeType(TokenType.IOpen, out _);
 
         if (TakeType(TokenType.Offset, out var otoken))
-          addr.Offset = source[otoken];
+          addr.Offset = otoken.Str();
         else if (requireOffset)
           Invalid();
 
         if (TakeType(TokenType.Word, out var wtoken))
-          addr.StrAddr = source[wtoken];
+          addr.StrAddr = wtoken.Str();
         else if (TakeType(TokenType.Number, out var ntoken))
         {
-          if (!TryParseValue(source[ntoken], out var val, out var mode))
+          if (!TryParseValue(ntoken.Str(), out var val, out var mode))
             Invalid(ntoken);
           if (mode != ValueMode.Unsigned)
             Invalid(ntoken);
@@ -223,10 +223,10 @@ namespace KSACPU
         var cval = new ConstVal();
 
         if (TakeType(TokenType.Word, out var wtoken))
-          cval.StringVal = source[wtoken];
+          cval.StringVal = wtoken.Str();
         else if (TakeType(TokenType.Number, out var ntoken))
         {
-          if (!TryParseValue(source[ntoken], out cval.Value, out cval.Mode))
+          if (!TryParseValue(ntoken.Str(), out cval.Value, out cval.Mode))
             Invalid(ntoken);
         }
         else
@@ -286,7 +286,7 @@ namespace KSACPU
       }
 
       private void Invalid(Token token) => throw new InvalidOperationException(
-        $"invalid token {token.Type} '{source[token]}' at {source.Pos(token.Pos)}");
+        $"invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
     }
 
     public enum ParsedOpMode

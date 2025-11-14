@@ -11,7 +11,7 @@ namespace KSACPU
   public static class KSACPUMain
   {
     private const string KSADir = @"C:\Program Files\Kitten Space Agency";
-    private static string StartDir;
+    public static string StartDir;
 
     public static int Main(string[] args)
     {
@@ -31,8 +31,8 @@ namespace KSACPU
       Memory.DebugWrite = false;
       Processor.DebugOps = false;
 
-      var fname = args.Length > 0 ? args[0] : "test.kasm";
-      var source = File.ReadAllText(Path.Join(StartDir, fname));
+      var fname = args.Length > 0 ? args[0] : "test";
+      var source = Library.LoadImport(fname);
 
       var proc = new Processor()
       {
