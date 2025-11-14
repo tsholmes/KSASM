@@ -5,7 +5,7 @@ namespace KSACPU
 {
   public partial class Processor
   {
-    public static bool DebugOps = true;
+    public static bool DebugOps = false;
 
     public readonly Memory Memory = new();
     public int PC = 0;

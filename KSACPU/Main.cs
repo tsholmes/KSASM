@@ -1,5 +1,6 @@
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -38,10 +39,18 @@ namespace KSACPU
         OnDevWrite = (devID, val) => Console.WriteLine($"{devID}> {val}")
       };
 
+      var stopwatch = Stopwatch.StartNew();
+
       Assembler.Assemble(source, proc.Memory);
+
+      var asmTime = stopwatch.Elapsed.Milliseconds;
 
       for (var i = 0; i < 10000 && proc.SleepTime == 0; i++)
         proc.Step();
+
+      var runTime = stopwatch.Elapsed.Milliseconds - asmTime;
+
+      Console.WriteLine($"asm: {asmTime:0.##}ms, run: {runTime:0.##}ms");
 
       return 0;
     }

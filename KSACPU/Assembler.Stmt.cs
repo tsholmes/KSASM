@@ -69,95 +69,87 @@ namespace KSACPU
       public ParsedOperand OperandA;
       public ParsedOperand OperandB;
 
-      public override void FirstPass(State state) =>
+      public override void FirstPass(State state)
+      {
+        if (OperandA.Mode == ParsedOpMode.Const)
+          RegisterConst(state, OperandA.Const, AType);
+        if (OperandB.Mode == ParsedOpMode.Const)
+          RegisterConst(state, OperandB.Const, BType);
         state.Addr += DataType.U64.SizeBytes();
+      }
+
+      private void RegisterConst(State state, ConstVal cval, DataType type)
+      {
+        if (cval.StringVal != null)
+          state.RegisterConst(type, cval.StringVal, Width);
+        else
+        {
+          var val = cval.Value;
+          val.Convert(cval.Mode, type.VMode());
+          state.RegisterConst(type, val, Width);
+        }
+      }
+
+      private DataType AType => OperandA.Mode != ParsedOpMode.Placeholder
+        ? Type ?? OperandA.Type ?? throw new InvalidOperationException($"Missing A Type")
+        : Type ?? OperandB.Type ?? throw new InvalidOperationException($"Missing A Type");
+      private DataType BType =>
+        Type ?? OperandB.Type ?? OperandA.Type ?? throw new InvalidOperationException($"Missing B Type");
 
       public override void SecondPass(State state)
       {
         var inst = new Instruction { OpCode = Op, DataWidth = (byte)Width };
 
-        if (Type != null && (OperandA?.Type ?? OperandB?.Type) != null)
+        if (Type != null && (OperandA.Type ?? OperandB.Type) != null)
           throw new InvalidOperationException($"Cannot have instruction-level and operand-level types");
 
-        if (OperandA != null)
-          inst.AType = Type ?? OperandA?.Type ?? throw new InvalidOperationException($"Missing A Type");
-        else
-          inst.AType = Type ?? OperandB?.Type ?? throw new InvalidOperationException($"Missing A Type");
+        inst.AType = AType;
+        inst.BType = BType;
 
-        inst.BType = Type ?? OperandB?.Type ?? OperandA?.Type
-          ?? throw new InvalidOperationException($"Missing B Type");
-
-        if (OperandA == null && OperandB == null)
-          throw new InvalidOperationException($"Cannot have both operands as placeholders");
-
-        if (OperandB?.Base != null)
-          throw new InvalidOperationException($"Cannot have base+offset on operand B");
-
-        if (OperandA != null)
+        switch ((OperandA.Mode, OperandB.Mode))
         {
-          if (OperandA.Base != null)
-          {
-            inst.OperandMode = OperandMode.AddrBaseOffAB;
-
-            if (OperandA.Base.Offset != null)
-              throw new InvalidOperationException($"Cannot have offset base");
-
-            inst.AddrBase = LookupAddr(state, OperandA.Base);
-            if (OperandA.Base.Indirect)
-              inst.BaseIndirect = true;
-
-            if (OperandA.Addr.Offset == null)
-              throw new InvalidOperationException($"Offset addr must have offset direction");
-
-            inst.OffsetA = LookupAddr(state, OperandA.Addr);
-            if (OperandA.Addr.Indirect)
-              inst.OperandMode |= OperandMode.IndirectA;
-          }
-          else
-          {
-            inst.OperandMode = OperandMode.AddrAOffB;
-
-            if (OperandA.Addr.Offset != null)
-              throw new InvalidOperationException($"Cannot have offset without base");
-
-            inst.AddrBase = LookupAddr(state, OperandA.Addr);
-            if (OperandA.Addr.Indirect)
-              inst.OperandMode |= OperandMode.IndirectA;
-          }
-
-          if (OperandB == null)
-          {
-            if (OperandA.Base != null)
-              throw new InvalidOperationException($"Cannot have placeholder B with base+offset A");
-
-            inst.OffsetB = 0;
-            if (inst.OperandMode.HasFlag(OperandMode.IndirectA))
-              inst.OperandMode |= OperandMode.IndirectB;
-          }
-          else
-          {
-            if (OperandA.Base != null && OperandB.Addr.Offset == null)
-              throw new InvalidOperationException($"B must have offset in base+offset mode");
-            inst.OffsetB = LookupAddr(state, OperandB.Addr);
-            if (OperandB.Addr.Indirect)
-              inst.OperandMode |= OperandMode.IndirectB;
-
-            if (OperandB.Addr.Offset == null)
-              inst.OffsetB -= inst.AddrBase;
-          }
-        }
-        else
-        {
-          // placeholder A
-          if (OperandB.Addr.Offset != null)
-            throw new InvalidOperationException($"Cannot have offset B with placeholder A");
-
-          inst.OperandMode = OperandMode.AddrAOffB;
-
-          inst.AddrBase = LookupAddr(state, OperandB.Addr);
-          inst.OffsetB = 0;
-          if (OperandB.Addr.Indirect)
-            inst.OperandMode |= OperandMode.IndirectA | OperandMode.IndirectB;
+          case (ParsedOpMode.Placeholder, ParsedOpMode.Addr):
+            ParseBSimple(state, ref inst);
+            CopyBToA(state, ref inst);
+            break;
+          case (ParsedOpMode.Placeholder, ParsedOpMode.Const):
+            ParseBConst(state, ref inst);
+            CopyBToA(state, ref inst);
+            break;
+          case (ParsedOpMode.Addr, ParsedOpMode.Addr):
+            ParseASimple(state, ref inst);
+            ParseBSimple(state, ref inst);
+            inst.OffsetB -= inst.AddrBase;
+            break;
+          case (ParsedOpMode.Addr, ParsedOpMode.Offset):
+            ParseASimple(state, ref inst);
+            ParseBSimple(state, ref inst);
+            break;
+          case (ParsedOpMode.Addr, ParsedOpMode.Const):
+            ParseASimple(state, ref inst);
+            ParseBConst(state, ref inst);
+            inst.OffsetB -= inst.AddrBase;
+            break;
+          case (ParsedOpMode.BaseOffset, ParsedOpMode.Offset):
+            ParseABaseOffset(state, ref inst);
+            ParseBSimple(state, ref inst);
+            break;
+          case (ParsedOpMode.Const, ParsedOpMode.Placeholder):
+            ParseASimple(state, ref inst);
+            CopyAToB(state, ref inst);
+            break;
+          case (ParsedOpMode.Const, ParsedOpMode.Addr):
+            ParseAConst(state, ref inst);
+            ParseBSimple(state, ref inst);
+            inst.OffsetB -= inst.AddrBase;
+            break;
+          case (ParsedOpMode.Const, ParsedOpMode.Const):
+            ParseAConst(state, ref inst);
+            ParseBConst(state, ref inst);
+            inst.OffsetB -= inst.AddrBase;
+            break;
+          default:
+            throw new InvalidOperationException($"Invalid operand modes ({OperandA.Mode},{OperandB.Mode})");
         }
 
         state.Emit(DataType.U64, new() { Unsigned = inst.Encode() });
@@ -174,6 +166,74 @@ namespace KSACPU
         if (addr.Offset == "-")
           val = -val;
         return val;
+      }
+
+      private void CopyAToB(State state, ref Instruction inst)
+      {
+        inst.OffsetB = 0;
+        if (inst.OperandMode.HasFlag(OperandMode.IndirectA))
+          inst.OperandMode |= OperandMode.IndirectB;
+      }
+
+      private void CopyBToA(State state, ref Instruction inst)
+      {
+        inst.AddrBase = inst.OffsetB;
+        inst.OffsetB = 0;
+        if (inst.OperandMode.HasFlag(OperandMode.IndirectB))
+          inst.OperandMode |= OperandMode.IndirectA;
+      }
+
+      private void ParseASimple(State state, ref Instruction inst)
+      {
+        inst.AddrBase = LookupAddr(state, OperandA.Addr);
+        if (OperandA.Addr.Indirect)
+          inst.OperandMode |= OperandMode.IndirectA;
+      }
+
+      private void ParseBSimple(State state, ref Instruction inst)
+      {
+        inst.OffsetB = LookupAddr(state, OperandB.Addr);
+        if (OperandB.Addr.Indirect)
+          inst.OperandMode |= OperandMode.IndirectB;
+      }
+
+      private void ParseABaseOffset(State state, ref Instruction inst)
+      {
+        inst.OperandMode |= OperandMode.AddrBaseOffAB;
+
+        if (OperandA.Base.Offset != null)
+          throw new InvalidOperationException($"Cannot have offset base");
+
+        inst.AddrBase = LookupAddr(state, OperandA.Base);
+        if (OperandA.Base.Indirect)
+          inst.BaseIndirect = true;
+
+        if (OperandA.Addr.Offset == null)
+          throw new InvalidOperationException($"Offset addr must have offset direction");
+
+        inst.OffsetA = LookupAddr(state, OperandA.Addr);
+        if (OperandA.Addr.Indirect)
+          inst.OperandMode |= OperandMode.IndirectA;
+      }
+
+      private void ParseAConst(State state, ref Instruction inst)
+      {
+        inst.AddrBase = LookupConst(state, OperandA.Const, inst.AType);
+      }
+
+      private void ParseBConst(State state, ref Instruction inst)
+      {
+        inst.OffsetB = LookupConst(state, OperandB.Const, inst.BType);
+      }
+
+      private int LookupConst(State state, ConstVal cval, DataType type)
+      {
+        if (cval.StringVal != null)
+          return state.ConstLabelAddrs[(type, cval.StringVal)];
+
+        var val = cval.Value;
+        val.Convert(cval.Mode, type.VMode());
+        return state.ConstAddrs[(type, val)];
       }
     }
   }

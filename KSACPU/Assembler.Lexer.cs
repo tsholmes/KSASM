@@ -19,6 +19,8 @@ namespace KSACPU
       Type, // :typename
       Offset, // + or -
       Number, // decimal, hex with 0x prefix, binary with 0b prefix
+      COpen, // $(
+      CClose, // )
     }
 
     public struct Token
@@ -120,6 +122,10 @@ namespace KSACPU
           SetNext(TokenType.Offset, 1);
         else if (c == ',')
           SetNext(TokenType.Comma, 1);
+        else if (c == '$' && At(index + 1) == '(')
+          SetNext(TokenType.COpen, 2);
+        else if (c == ')')
+          SetNext(TokenType.CClose, 1);
         else if (IsWordStart(c))
           TakeWordLike();
         else if (c == '@')

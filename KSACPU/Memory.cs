@@ -6,7 +6,7 @@ namespace KSACPU
   public class Memory
   {
     public static bool DebugRead = false;
-    public static bool DebugWrite = true;
+    public static bool DebugWrite = false;
     public const int SIZE = 1 << 24;
     public const int ADDR_MASK = SIZE - 1;
 

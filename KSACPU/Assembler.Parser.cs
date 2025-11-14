@@ -143,22 +143,35 @@ namespace KSACPU
 
       private ParsedOperand ParseOperand()
       {
-        if (TakeType(TokenType.Placeholder, out _))
-          return null;
-
         var op = new ParsedOperand();
 
-        var first = ParseAddr(false);
-        if (lexer.Peek(out var token) &&
-            (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
+        if (TakeType(TokenType.Placeholder, out _))
         {
-          op.Base = first;
-          op.Addr = ParseAddr(true);
+          op.Mode = ParsedOpMode.Placeholder;
+        }
+        else if (PeekType(TokenType.COpen, out _))
+        {
+          op.Const = ParseConst();
+          op.Mode = ParsedOpMode.Const;
         }
         else
-          op.Addr = first;
+        {
+          var first = ParseAddr(false);
+          if (lexer.Peek(out var token) &&
+              (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
+          {
+            op.Base = first;
+            op.Addr = ParseAddr(true);
+            op.Mode = ParsedOpMode.BaseOffset;
+          }
+          else
+          {
+            op.Addr = first;
+            op.Mode = first.Offset != null ? ParsedOpMode.Offset : ParsedOpMode.Addr;
+          }
+        }
 
-        if (TakeType(TokenType.Type, out var ttoken))
+        if (op.Mode != ParsedOpMode.Placeholder && TakeType(TokenType.Type, out var ttoken))
         {
           if (!Enum.TryParse(lexer[ttoken][1..], true, out DataType type))
             Invalid(ttoken);
@@ -196,6 +209,29 @@ namespace KSACPU
           Invalid();
 
         return addr;
+      }
+
+      private ConstVal ParseConst()
+      {
+        if (!TakeType(TokenType.COpen, out _))
+          Invalid();
+
+        var cval = new ConstVal();
+
+        if (TakeType(TokenType.Word, out var wtoken))
+          cval.StringVal = lexer[wtoken];
+        else if (TakeType(TokenType.Number, out var ntoken))
+        {
+          if (!TryParseValue(lexer[ntoken], out cval.Value, out cval.Mode))
+            Invalid(ntoken);
+        }
+        else
+          Invalid();
+
+        if (!TakeType(TokenType.CClose, out _))
+          Invalid();
+
+        return cval;
       }
 
       private bool TryParseValue(string str, out Value value, out ValueMode mode)
@@ -248,10 +284,21 @@ namespace KSACPU
         throw new InvalidOperationException($"invalid token {token.Type} '{lexer[token]}' at {token.Pos}");
     }
 
+    public enum ParsedOpMode
+    {
+      Placeholder,
+      Addr,
+      Offset,
+      BaseOffset,
+      Const,
+    }
+
     public class ParsedOperand
     {
+      public ParsedOpMode Mode;
       public AddrRef Base;
       public AddrRef Addr;
+      public ConstVal Const;
       public DataType? Type;
     }
 
@@ -263,6 +310,13 @@ namespace KSACPU
       public int IntAddr;
 
       public bool Indirect;
+    }
+
+    public class ConstVal
+    {
+      public string StringVal;
+      public ValueMode Mode;
+      public Value Value;
     }
   }
 }

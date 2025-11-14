@@ -36,6 +36,8 @@ namespace KSACPU
 
     public void Convert(ValueMode from, ValueMode to)
     {
+      if (from == to)
+        return;
       switch ((from, to))
       {
         case (ValueMode.Unsigned, ValueMode.Signed):
