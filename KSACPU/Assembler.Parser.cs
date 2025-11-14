@@ -1,0 +1,268 @@
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+
+namespace KSACPU
+{
+  public partial class Assembler
+  {
+    public class Parser
+    {
+      private readonly Lexer lexer;
+      public readonly List<Statement> Statements = [];
+
+      public Parser(string source)
+      {
+        lexer = new(source);
+      }
+
+      public void Parse()
+      {
+        while (!lexer.EOF())
+          ParseLine();
+      }
+
+      private void ParseLine()
+      {
+        while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
+        {
+          if (TakeType(TokenType.Label, out var ltoken))
+            AddLabel(ltoken);
+          else if (TakeType(TokenType.Position, out var ptoken))
+            AddPosition(ptoken);
+          else
+            break;
+        }
+        if (TakeType(TokenType.EOL, out _))
+          return;
+        if (PeekType(TokenType.Type, out _))
+          ParseDataLine();
+        else
+          ParseInstruction();
+
+        if (!TakeType(TokenType.EOL, out _))
+          Invalid();
+      }
+
+      private bool PeekType(TokenType type, out Token token) =>
+        lexer.Peek(out token) && token.Type == type;
+
+      private bool TakeType(TokenType type, out Token token) =>
+        PeekType(type, out token) && lexer.Take(out token);
+
+      private void AddLabel(Token token) =>
+        Statements.Add(new LabelStatement { Label = lexer[token][..^1] });
+
+      private void AddPosition(Token token)
+      {
+        if (!int.TryParse(lexer[token][1..], out var addr))
+          Invalid(token);
+        Statements.Add(new PositionStatement { Addr = addr });
+      }
+
+      private void ParseDataLine()
+      {
+        if (!TakeType(TokenType.Type, out var token))
+          Invalid();
+
+        if (!Enum.TryParse(lexer[token][1..], true, out DataType curType))
+          Invalid(token);
+
+        while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
+        {
+          if (TakeType(TokenType.Type, out token))
+          {
+            if (!Enum.TryParse(lexer[token][1..], true, out curType))
+              Invalid(token);
+          }
+          else if (TakeType(TokenType.Label, out token))
+            AddLabel(token);
+          else if (TakeType(TokenType.Position, out token))
+            AddPosition(token);
+          else if (TakeType(TokenType.Word, out token))
+            Statements.Add(new ValueStatement() { Type = curType, StrValue = lexer[token] });
+          else if (TakeType(TokenType.Number, out token))
+          {
+            var stmt = new ValueStatement() { Type = curType };
+            var valid = false;
+            switch (curType.VMode())
+            {
+              case ValueMode.Unsigned:
+                valid = TryParseUnsigned(lexer[token], out stmt.Value.Unsigned);
+                break;
+              case ValueMode.Signed:
+                valid = TryParseSigned(lexer[token], out stmt.Value.Signed);
+                break;
+              case ValueMode.Float:
+                valid = TryParseFloat(lexer[token], out stmt.Value.Float);
+                break;
+            }
+            if (!valid)
+              Invalid(token);
+            if (TakeType(TokenType.Width, out token))
+            {
+              if (!int.TryParse(lexer[token][1..], out stmt.Width))
+                Invalid(token);
+            }
+            Statements.Add(stmt);
+          }
+          else
+            Invalid();
+        }
+      }
+
+      private void ParseInstruction()
+      {
+        var inst = new InstructionStatement();
+
+        if (!TakeType(TokenType.Word, out var opword))
+          Invalid();
+        if (!Enum.TryParse(lexer[opword], true, out inst.Op))
+          Invalid(opword);
+
+        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(lexer[wtoken][1..], out inst.Width))
+          Invalid(wtoken);
+
+        if (TakeType(TokenType.Type, out var ttoken))
+        {
+          if (!Enum.TryParse(lexer[ttoken][1..], true, out DataType parsedType))
+            Invalid(ttoken);
+          inst.Type = parsedType;
+        }
+
+        inst.OperandA = ParseOperand();
+
+        if (!TakeType(TokenType.Comma, out _))
+          Invalid();
+
+        inst.OperandB = ParseOperand();
+
+        Statements.Add(inst);
+      }
+
+      private ParsedOperand ParseOperand()
+      {
+        if (TakeType(TokenType.Placeholder, out _))
+          return null;
+
+        var op = new ParsedOperand();
+
+        var first = ParseAddr(false);
+        if (lexer.Peek(out var token) &&
+            (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
+        {
+          op.Base = first;
+          op.Addr = ParseAddr(true);
+        }
+        else
+          op.Addr = first;
+
+        if (TakeType(TokenType.Type, out var ttoken))
+        {
+          if (!Enum.TryParse(lexer[ttoken][1..], true, out DataType type))
+            Invalid(ttoken);
+          op.Type = type;
+        }
+
+        return op;
+      }
+
+      private AddrRef ParseAddr(bool requireOffset)
+      {
+        var addr = new AddrRef();
+
+        addr.Indirect = TakeType(TokenType.IOpen, out _);
+
+        if (TakeType(TokenType.Offset, out var otoken))
+          addr.Offset = lexer[otoken];
+        else if (requireOffset)
+          Invalid();
+
+        if (TakeType(TokenType.Word, out var wtoken))
+          addr.StrAddr = lexer[wtoken];
+        else if (TakeType(TokenType.Number, out var ntoken))
+        {
+          if (!TryParseValue(lexer[ntoken], out var val, out var mode))
+            Invalid(ntoken);
+          if (mode != ValueMode.Unsigned)
+            Invalid(ntoken);
+          addr.IntAddr = (int)val.Unsigned;
+        }
+        else
+          Invalid();
+
+        if (addr.Indirect && !TakeType(TokenType.IClose, out _))
+          Invalid();
+
+        return addr;
+      }
+
+      private bool TryParseValue(string str, out Value value, out ValueMode mode)
+      {
+        if (TryParseUnsigned(str, out var uval))
+        {
+          value = new() { Unsigned = uval };
+          mode = ValueMode.Unsigned;
+          return true;
+        }
+        else if (TryParseSigned(str, out var sval))
+        {
+          value = new() { Signed = sval };
+          mode = ValueMode.Signed;
+          return true;
+        }
+        else if (TryParseFloat(str, out var fval))
+        {
+          value = new() { Float = fval };
+          mode = ValueMode.Signed;
+          return true;
+        }
+        value = default;
+        mode = default;
+        return false;
+      }
+
+      private static bool TryParseUnsigned(string str, out ulong val) =>
+        ulong.TryParse(str, NumberStyles.Integer, null, out val) ||
+        (str.StartsWith("0b") && ulong.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
+        (str.StartsWith("0x") && ulong.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
+
+      private static bool TryParseSigned(string str, out long val) =>
+        long.TryParse(str, NumberStyles.Integer, null, out val) ||
+        (str.StartsWith("0b") && long.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
+        (str.StartsWith("0x") && long.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
+
+      private static bool TryParseFloat(string str, out double val) =>
+        double.TryParse(str, NumberStyles.Float, null, out val) ||
+        (str.StartsWith("0b") && double.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
+        (str.StartsWith("0x") && double.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
+
+      private void Invalid()
+      {
+        lexer.Peek(out var token);
+        Invalid(token);
+      }
+
+      private void Invalid(Token token) =>
+        throw new InvalidOperationException($"invalid token {token.Type} '{lexer[token]}' at {token.Pos}");
+    }
+
+    public class ParsedOperand
+    {
+      public AddrRef Base;
+      public AddrRef Addr;
+      public DataType? Type;
+    }
+
+    public class AddrRef
+    {
+      public string Offset;
+
+      public string StrAddr;
+      public int IntAddr;
+
+      public bool Indirect;
+    }
+  }
+}
