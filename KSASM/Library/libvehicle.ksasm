@@ -15,7 +15,7 @@
   .macro vehicle_thrust_yaw_right 32
   .macro vehicle_thrust_yaw_left 64
 
-@120000
+.region libvehicle 1024
 
 # addr list for reading angular velocity
 _vehicle_addrs_avel: :u64 .vehicle_addr_avelx .vehicle_addr_avely .vehicle_addr_avelz

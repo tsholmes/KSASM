@@ -8,15 +8,15 @@ namespace KSASM
   {
     public class MacroParser : ITokenStream
     {
-      private readonly SourceString source;
       private readonly LexerReader baseLexer;
       private readonly List<LexerReader> macroStack = [];
 
-      private readonly Dictionary<string, MacroDef> macros = new();
+      private readonly Dictionary<string, MacroDef> macros = [];
 
-      public MacroParser(SourceString source, ITokenStream stream)
+      private int regionPos = 0x00100000;
+
+      public MacroParser(ITokenStream stream)
       {
-        this.source = source;
         this.baseLexer = new(stream);
       }
 
@@ -66,8 +66,31 @@ namespace KSASM
         {
           case "macro": DefineMacro(); break;
           case "import": RunImport(); break;
+          case "region": DefineRegion(); break;
           default: ExpandMacro(name, token); break;
         }
+      }
+
+      private void DefineRegion()
+      {
+        if (!lexer.TakeType(TokenType.Word, out var ntoken))
+          Invalid();
+
+        var name = ntoken.Str();
+
+        var endLabel = lexer.TakeType(TokenType.Offset, out var otoken) && otoken.Str() == "-";
+
+        if (!lexer.TakeType(TokenType.Number, out var sztoken))
+          Invalid();
+
+        if (!int.TryParse(sztoken.Str(), out var size))
+          Invalid(sztoken);
+
+        var pos = endLabel ? regionPos : regionPos - size;
+        regionPos -= size;
+
+        var regionSource = new SourceString($".region {name}", $"@{pos} {name}:");
+        macroStack.Add(new(new Lexer(regionSource)));
       }
 
       private void RunImport()

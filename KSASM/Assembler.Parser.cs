@@ -9,15 +9,13 @@ namespace KSASM
   {
     public class Parser
     {
-      private readonly SourceString source;
       private readonly LexerReader lexer;
       public readonly List<Statement> Statements = [];
 
       public Parser(SourceString source)
       {
-        this.source = source;
         ITokenStream stream = new Lexer(source);
-        stream = new MacroParser(source, stream);
+        stream = new MacroParser(stream);
         lexer = new(stream);
       }
 
