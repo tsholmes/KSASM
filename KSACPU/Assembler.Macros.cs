@@ -40,7 +40,11 @@ namespace KSACPU
             return false;
 
           if (token.Type != TokenType.Macro)
+          {
+            if (Debug)
+              Console.WriteLine($"{token.Type} '{token.Str()}' at {token.PosStr()}");
             return true;
+          }
 
           ParseMacro(token);
         }
@@ -123,14 +127,21 @@ namespace KSACPU
           while (!done)
           {
             var arg = new List<Token>();
+            var pdepth = 0;
             while (lexer.Take(out var token))
             {
               if (token.Type == TokenType.Comma)
                 break;
+              else if (token.Type is TokenType.POpen or TokenType.COpen)
+                pdepth++;
               else if (token.Type == TokenType.PClose)
               {
-                done = true;
-                break;
+                pdepth--;
+                if (pdepth < 0)
+                {
+                  done = true;
+                  break;
+                }
               }
               else if (token.Type == TokenType.EOL)
                 Invalid(token);

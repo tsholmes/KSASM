@@ -112,7 +112,17 @@ namespace KSACPU
 
     // private void OpDevID(ValuePointer opA, ValuePointer opB)
     // private void OpDevType(ValuePointer opA, ValuePointer opB)
-    // private void OpDevRead(ValuePointer opA, ValuePointer opB)
+
+    private void OpDevRead(ValuePointer opA, ValuePointer opB)
+    {
+      A.Init(opA.Type.VMode(), opA.Width);
+      B.Load(Memory, opB);
+      B.Convert(ValueMode.Unsigned);
+
+      OnDevRead?.Invoke(B.Values[0].Unsigned, A);
+
+      A.Store(Memory, opA);
+    }
 
     private void OpDevWrite(ValuePointer opA, ValuePointer opB)
     {

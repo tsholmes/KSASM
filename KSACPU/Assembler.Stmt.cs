@@ -63,6 +63,7 @@ namespace KSACPU
 
     public class InstructionStatement : Statement
     {
+      public Token OpToken;
       public OpCode Op;
       public int Width = 1;
       public DataType? Type;
@@ -90,18 +91,21 @@ namespace KSACPU
         }
       }
 
+      private Exception Invalid(string message) =>
+        throw new InvalidOperationException($"{message} at {OpToken.PosStr()}");
+
       private DataType AType => OperandA.Mode != ParsedOpMode.Placeholder
-        ? Type ?? OperandA.Type ?? throw new InvalidOperationException($"Missing A Type")
-        : Type ?? OperandB.Type ?? throw new InvalidOperationException($"Missing A Type");
+        ? Type ?? OperandA.Type ?? throw Invalid($"Missing A Type")
+        : Type ?? OperandB.Type ?? throw Invalid($"Missing A Type");
       private DataType BType =>
-        Type ?? OperandB.Type ?? OperandA.Type ?? throw new InvalidOperationException($"Missing B Type");
+        Type ?? OperandB.Type ?? OperandA.Type ?? throw Invalid($"Missing B Type");
 
       public override void SecondPass(State state)
       {
         var inst = new Instruction { OpCode = Op, DataWidth = (byte)Width };
 
         if (Type != null && (OperandA.Type ?? OperandB.Type) != null)
-          throw new InvalidOperationException($"Cannot have instruction-level and operand-level types");
+          throw Invalid($"Cannot have instruction-level and operand-level types");
 
         inst.AType = AType;
         inst.BType = BType;
@@ -149,7 +153,7 @@ namespace KSACPU
             inst.OffsetB -= inst.AddrBase;
             break;
           default:
-            throw new InvalidOperationException($"Invalid operand modes ({OperandA.Mode},{OperandB.Mode})");
+            throw Invalid($"Invalid operand modes ({OperandA.Mode},{OperandB.Mode})");
         }
 
         state.Emit(DataType.U64, new() { Unsigned = inst.Encode() });
@@ -161,7 +165,7 @@ namespace KSACPU
         if (addr.StrAddr != null)
         {
           if (!state.Labels.TryGetValue(addr.StrAddr, out val))
-            throw new InvalidOperationException($"Unknown name {addr.StrAddr}");
+            throw Invalid($"Unknown name {addr.StrAddr}");
         }
         if (addr.Offset == "-")
           val = -val;
@@ -202,14 +206,14 @@ namespace KSACPU
         inst.OperandMode |= OperandMode.AddrBaseOffAB;
 
         if (OperandA.Base.Offset != null)
-          throw new InvalidOperationException($"Cannot have offset base");
+          throw Invalid($"Cannot have offset base");
 
         inst.AddrBase = LookupAddr(state, OperandA.Base);
         if (OperandA.Base.Indirect)
           inst.BaseIndirect = true;
 
         if (OperandA.Addr.Offset == null)
-          throw new InvalidOperationException($"Offset addr must have offset direction");
+          throw Invalid($"Offset addr must have offset direction");
 
         inst.OffsetA = LookupAddr(state, OperandA.Addr);
         if (OperandA.Addr.Indirect)

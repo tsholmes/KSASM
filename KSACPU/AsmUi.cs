@@ -73,7 +73,7 @@ namespace KSACPU
       var stopwatch = Stopwatch.StartNew();
       try
       {
-        var proc = new Processor { OnDevWrite = OnDevWrite };
+        var proc = new Processor { OnDevWrite = OnDevWrite, OnDevRead = OnDevRead };
 
         var len = buffer.IndexOf((byte)0);
         var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
@@ -100,7 +100,53 @@ namespace KSACPU
 
     private static void OnDevWrite(ulong devId, ValArray data)
     {
-      AddOutput($"{devId}> {data}");
+      switch (devId)
+      {
+        case 1: FCWrite(data); break;
+        default: AddOutput($"{devId}> {data}"); break;
+      }
+    }
+
+    private static void OnDevRead(ulong devId, ValArray data)
+    {
+      switch (devId)
+      {
+        case 1: FCRead(data); break;
+        default: break;
+      }
+    }
+
+    private static ulong FCReadOp = 0;
+
+    private static void FCWrite(ValArray data)
+    {
+      var opv = data.Values[0];
+      opv.Convert(data.Mode, ValueMode.Unsigned);
+
+      var valv = data.Values[1];
+
+      switch (opv.Unsigned)
+      {
+        case 0: // set read mode
+          valv.Convert(data.Mode, ValueMode.Unsigned);
+          FCReadOp = valv.Unsigned;
+          break;
+        case 1: // set reference frame
+          valv.Convert(data.Mode, ValueMode.Unsigned);
+          Program.ControlledVehicle?.SetNavBallFrame((VehicleReferenceFrame)(valv.Unsigned % 4));
+          break;
+      }
+    }
+
+    private static void FCRead(ValArray data)
+    {
+      switch (FCReadOp)
+      {
+        case 1: // read reference frame
+          data.Values[0].Unsigned =
+            (ulong)(Program.ControlledVehicle?.NavBallData.Frame ?? VehicleReferenceFrame.EclBody);
+          break;
+      }
     }
 
     private static void AddOutput(string line) =>

@@ -120,10 +120,10 @@ namespace KSACPU
       {
         var inst = new InstructionStatement();
 
-        if (!TakeType(TokenType.Word, out var opword))
+        if (!TakeType(TokenType.Word, out inst.OpToken))
           Invalid();
-        if (!Enum.TryParse(opword.Str(), true, out inst.Op))
-          Invalid(opword);
+        if (!Enum.TryParse(inst.OpToken.Str(), true, out inst.Op))
+          Invalid(inst.OpToken);
 
         if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken.Str()[1..], out inst.Width))
           Invalid(wtoken);

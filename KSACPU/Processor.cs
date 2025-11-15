@@ -16,6 +16,7 @@ namespace KSACPU
     private readonly ValArray C = new();
 
     public Action<ulong, ValArray> OnDevWrite;
+    public Action<ulong, ValArray> OnDevRead;
 
     public void Step()
     {
@@ -58,7 +59,7 @@ namespace KSACPU
     private void Exec(OpCode op, ValuePointer opA, ValuePointer opB)
     {
       if (DebugOps)
-        Console.WriteLine($"{PC-8}: {op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
+        Console.WriteLine($"{PC - 8}: {op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
       switch (op)
       {
         case OpCode.Copy: OpCopy(opA, opB); break;
@@ -99,7 +100,7 @@ namespace KSACPU
         case OpCode.Sleep: OpSleep(opA, opB); break;
         case OpCode.DevID: goto default;
         case OpCode.DevType: goto default;
-        case OpCode.DevRead: goto default;
+        case OpCode.DevRead: OpDevRead(opA, opB); break;
         case OpCode.DevWrite: OpDevWrite(opA, opB); break;
         case OpCode.IHandler: goto default;
         case OpCode.IData: goto default;
