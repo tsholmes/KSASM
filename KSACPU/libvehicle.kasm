@@ -10,7 +10,7 @@
 .macro vehicle_addr_thrust_command 4
   .macro vehicle_thrust_roll_right 2
   .macro vehicle_thrust_roll_left 4
-  .macro vehicle_thrust_putch_up 8
+  .macro vehicle_thrust_pitch_up 8
   .macro vehicle_thrust_pitch_down 16
   .macro vehicle_thrust_yaw_right 32
   .macro vehicle_thrust_yaw_left 64

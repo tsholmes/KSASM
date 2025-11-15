@@ -60,8 +60,12 @@ namespace KSACPU
         Addr += type.SizeBytes();
       }
 
-      public void RegisterConst(DataType type, Value val, int width) =>
+      public void RegisterConst(DataType type, Value val, int width)
+      {
+        if (Debug)
+          Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
         ConstWidths[(type, val)] = Math.Max(width, ConstWidths.GetValueOrDefault((type, val)));
+      }
       public void RegisterConst(DataType type, string label, int width) =>
         ConstLabelWidths[(type, label)] = Math.Max(width, ConstLabelWidths.GetValueOrDefault((type, label)));
 

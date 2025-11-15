@@ -32,6 +32,10 @@ namespace KSACPU
     private static string stats = "";
     private static List<string> output = [];
 
+    private static bool doStep = false;
+
+    private static ProcSystem Current;
+
     public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
     {
       if (vehicle != Program.ControlledVehicle)
@@ -47,8 +51,24 @@ namespace KSACPU
         ImGuiInputTextFlags.None
       );
 
-      if (ImGui.Button("Execute##exec"))
-        Exec(vehicle);
+      Step(vehicle);
+
+      if (ImGui.Button("Assemble##asm"))
+        Assemble();
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Run##run"))
+        Restart();
+
+      ImGui.SameLine();
+
+      doStep = ImGui.Button("Step##step");
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Stop##stop"))
+        Stop();
 
       ImGui.SameLine(); ImGui.Text(stats);
 
@@ -65,53 +85,71 @@ namespace KSACPU
       return false;
     }
 
-    private static DeviceHandler handler;
-
-    private static void Exec(Vehicle vehicle)
+    private static void Step(Vehicle vehicle)
     {
-      if (handler?.Vehicle != vehicle)
-        handler = new(vehicle, AddOutput, new LogDevice(), new VehicleDevice(vehicle));
+      if (vehicle != Current?.Vehicle)
+        Current = new(vehicle, AddOutput);
 
-      var stopwatch = Stopwatch.StartNew();
+      var maxSteps = ProcSystem.STEPS_PER_FRAME;
+      if (doStep)
+      {
+        Current.Processor.SleepTime = 0;
+        maxSteps = 1;
+      }
+
       try
       {
-        var proc = new Processor { OnDevWrite = handler.OnDeviceWrite, OnDevRead = handler.OnDeviceRead };
-
-        var len = buffer.IndexOf((byte)0);
-        var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
-
-        var ldTime = stopwatch.Elapsed.Milliseconds;
-
-        Assembler.Assemble(new("script", source), proc.Memory);
-
-        var asmTime = stopwatch.Elapsed.Milliseconds - ldTime;
-
-        for (var i = 0; i < 10000 && proc.SleepTime == 0; i++)
-          proc.Step();
-
-        var runTime = stopwatch.Elapsed.Milliseconds - asmTime - ldTime;
-
-        stats = $"ld: {ldTime:0.##}ms, asm: {asmTime:0.##}ms, run: {runTime:0.##}ms";
+        Current.OnFrame(maxSteps);
+        stats = $"@{Current.Processor.PC} {Current.LastSteps} steps in {Current.LastMs:0.##}ms";
       }
       catch (Exception ex)
       {
-        stats = ex.Message;
+        AddOutput(ex.ToString());
       }
-      stopwatch.Stop();
+
+      if (doStep)
+        Stop();
+
+      doStep = false;
     }
 
-    private class LogDevice : IDevice
+    private static void Assemble()
     {
-      public const ulong DEVICE_ID = 0;
+      Current.Reset();
+      var stopwatch = Stopwatch.StartNew();
+      try
+      {
+        var len = buffer.IndexOf((byte)0);
+        var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
 
-      public ulong Id => DEVICE_ID;
+        Assembler.Assemble(new("script", source), Current.Processor.Memory);
 
-      public (ValueMode, Value) Read(ulong addr) => default;
-
-      public void Write(ValArray data) => AddOutput($"> {data}");
+        stopwatch.Stop();
+        AddOutput($"Assembled in {stopwatch.Elapsed.Milliseconds:0.##}ms");
+      }
+      catch (Exception ex)
+      {
+        AddOutput(ex.ToString());
+      }
     }
 
-    private static void AddOutput(string line) =>
+    private static void Restart()
+    {
+      Current.Processor.PC = 0;
+      Current.Processor.SleepTime = 0;
+    }
+
+    private static void Stop()
+    {
+      Current.Processor.SleepTime = ulong.MaxValue;
+    }
+
+    private static void AddOutput(string line)
+    {
       output.Add(line);
+      Console.WriteLine(line);
+      while (output.Count > 20)
+        output.RemoveAt(0);
+    }
   }
 }

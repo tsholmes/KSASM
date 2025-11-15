@@ -228,6 +228,8 @@ namespace KSACPU
         {
           if (!TryParseValue(ntoken.Str(), out cval.Value, out cval.Mode))
             Invalid(ntoken);
+          if (Debug)
+            Console.WriteLine($"PARSE CONST '{ntoken.Str()}' {cval.Mode} {cval.Value.Get(cval.Mode)}");
         }
         else
           Invalid();
@@ -256,7 +258,7 @@ namespace KSACPU
         else if (TryParseFloat(str, out var fval))
         {
           value = new() { Float = fval };
-          mode = ValueMode.Signed;
+          mode = ValueMode.Float;
           return true;
         }
         value = default;

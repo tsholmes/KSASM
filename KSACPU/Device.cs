@@ -73,6 +73,24 @@ namespace KSACPU
     }
   }
 
+  public class LogDevice : IDevice
+  {
+    public const ulong DEVICE_ID = 0;
+
+    public readonly Action<string> Log;
+
+    public LogDevice(Action<string> log)
+    {
+      this.Log = log;
+    }
+
+    public ulong Id => DEVICE_ID;
+
+    public (ValueMode, Value) Read(ulong addr) => default;
+
+    public void Write(ValArray data) => Log($"> {data}");
+  }
+
   public class VehicleDevice : BaseDevice
   {
     public const ulong DEVICE_ID = 2;
@@ -113,7 +131,7 @@ namespace KSACPU
           vehicle.FlightComputer.ManualThrustMode = (FlightComputerManualThrustMode)(data.UnsignedAt(1) & 1);
           break;
         case Addr.ThrustCommand:
-          SetInputs(GetInputs() with { ThrusterCommandFlags = (ThrusterMapFlags)data.UnsignedAt(0) });
+          SetInputs(GetInputs() with { ThrusterCommandFlags = (ThrusterMapFlags)data.UnsignedAt(1) });
           break;
       }
     }

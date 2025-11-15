@@ -230,6 +230,8 @@ namespace KSACPU
           if (At(index + len) is 'e' or 'E')
           {
             len++;
+            if (At(index + len) is '+' or '-')
+              len++;
             minLen = len + 1;
             while (IsDigit(At(index + len)))
               len++;
