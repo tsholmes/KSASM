@@ -6,8 +6,6 @@ using System;
 using Brutal.Numerics;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Threading;
 
 namespace KSACPU
 {
@@ -16,12 +14,11 @@ namespace KSACPU
   {
     [HarmonyPatch(typeof(FlightComputer), nameof(FlightComputer.DrawUi)), HarmonyPostfix]
     public static void FlightComputer_DrawUi_Postfix(
-      FlightComputer __instance,
       ref bool __result,
       Viewport inViewport,
       Astronomical.UiContext uiContext)
     {
-      __result |= DrawUi(__instance, inViewport, uiContext);
+      __result |= DrawUi(uiContext.Astronomical as Vehicle, inViewport, uiContext);
     }
 
     private const ImGuiWindowFlags WINDOW_FLAGS =
@@ -35,12 +32,12 @@ namespace KSACPU
     private static string stats = "";
     private static List<string> output = [];
 
-    public static bool DrawUi(FlightComputer fc, Viewport inViewport, Astronomical.UiContext uiContext)
+    public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
     {
-      if (fc != Program.ControlledVehicle?.FlightComputer)
+      if (vehicle != Program.ControlledVehicle)
         return false;
 
-      if (!ImGui.Begin($"KSASM##KSASM-{Program.ControlledVehicle.Id}", WINDOW_FLAGS))
+      if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
         return false;
 
       ImGui.InputTextMultiline(
@@ -51,7 +48,7 @@ namespace KSACPU
       );
 
       if (ImGui.Button("Execute##exec"))
-        Exec();
+        Exec(vehicle);
 
       ImGui.SameLine(); ImGui.Text(stats);
 
@@ -68,12 +65,17 @@ namespace KSACPU
       return false;
     }
 
-    private static void Exec()
+    private static DeviceHandler handler;
+
+    private static void Exec(Vehicle vehicle)
     {
+      if (handler?.Vehicle != vehicle)
+        handler = new(vehicle, AddOutput, new LogDevice(), new VehicleDevice(vehicle));
+
       var stopwatch = Stopwatch.StartNew();
       try
       {
-        var proc = new Processor { OnDevWrite = OnDevWrite, OnDevRead = OnDevRead };
+        var proc = new Processor { OnDevWrite = handler.OnDeviceWrite, OnDevRead = handler.OnDeviceRead };
 
         var len = buffer.IndexOf((byte)0);
         var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
@@ -98,55 +100,15 @@ namespace KSACPU
       stopwatch.Stop();
     }
 
-    private static void OnDevWrite(ulong devId, ValArray data)
+    private class LogDevice : IDevice
     {
-      switch (devId)
-      {
-        case 1: FCWrite(data); break;
-        default: AddOutput($"{devId}> {data}"); break;
-      }
-    }
+      public const ulong DEVICE_ID = 0;
 
-    private static void OnDevRead(ulong devId, ValArray data)
-    {
-      switch (devId)
-      {
-        case 1: FCRead(data); break;
-        default: break;
-      }
-    }
+      public ulong Id => DEVICE_ID;
 
-    private static ulong FCReadOp = 0;
+      public (ValueMode, Value) Read(ulong addr) => default;
 
-    private static void FCWrite(ValArray data)
-    {
-      var opv = data.Values[0];
-      opv.Convert(data.Mode, ValueMode.Unsigned);
-
-      var valv = data.Values[1];
-
-      switch (opv.Unsigned)
-      {
-        case 0: // set read mode
-          valv.Convert(data.Mode, ValueMode.Unsigned);
-          FCReadOp = valv.Unsigned;
-          break;
-        case 1: // set reference frame
-          valv.Convert(data.Mode, ValueMode.Unsigned);
-          Program.ControlledVehicle?.SetNavBallFrame((VehicleReferenceFrame)(valv.Unsigned % 4));
-          break;
-      }
-    }
-
-    private static void FCRead(ValArray data)
-    {
-      switch (FCReadOp)
-      {
-        case 1: // read reference frame
-          data.Values[0].Unsigned =
-            (ulong)(Program.ControlledVehicle?.NavBallData.Frame ?? VehicleReferenceFrame.EclBody);
-          break;
-      }
+      public void Write(ValArray data) => AddOutput($"> {data}");
     }
 
     private static void AddOutput(string line) =>

@@ -115,7 +115,7 @@ namespace KSACPU
 
     private void OpDevRead(ValuePointer opA, ValuePointer opB)
     {
-      A.Init(opA.Type.VMode(), opA.Width);
+      A.Load(Memory, opA);
       B.Load(Memory, opB);
       B.Convert(ValueMode.Unsigned);
 

@@ -63,7 +63,9 @@ namespace KSACPU
       }
     }
 
-    public object As(DataType type) => type.VMode() switch
+    public object As(DataType type) => Get(type.VMode());
+
+    public object Get(ValueMode mode) => mode switch
     {
       ValueMode.Unsigned => Unsigned,
       ValueMode.Signed => Signed,
@@ -95,6 +97,33 @@ namespace KSACPU
         Values[i].Convert(Mode, target);
 
       Mode = target;
+    }
+
+    public ulong UnsignedAt(int index)
+    {
+      if (index < 0 || index >= Width)
+        return 0;
+      var v = Values[index];
+      v.Convert(Mode, ValueMode.Unsigned);
+      return v.Unsigned;
+    }
+
+    public long SignedAt(int index)
+    {
+      if (index < 0 || index >= Width)
+        return 0;
+      var v = Values[index];
+      v.Convert(Mode, ValueMode.Signed);
+      return v.Signed;
+    }
+
+    public double FloatAt(int index)
+    {
+      if (index < 0 || index >= Width)
+        return 0;
+      var v = Values[index];
+      v.Convert(Mode, ValueMode.Float);
+      return v.Float;
     }
 
     public void Load(Memory mem, ValuePointer ptr)

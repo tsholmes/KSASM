@@ -15,6 +15,11 @@ namespace KSACPU
 
     public static int Main(string[] args)
     {
+      Assembler.Debug = false;
+      Memory.DebugRead = false;
+      Memory.DebugWrite = false;
+      Processor.DebugOps = false;
+
       StartDir = Directory.GetCurrentDirectory();
       Directory.SetCurrentDirectory(KSADir);
 
@@ -25,11 +30,6 @@ namespace KSACPU
         RunPatches();
         return RunGame(args);
       }
-
-      Assembler.Debug = false;
-      Memory.DebugRead = false;
-      Memory.DebugWrite = false;
-      Processor.DebugOps = false;
 
       var fname = args.Length > 0 ? args[0] : "test";
       var source = Library.LoadImport(fname);
