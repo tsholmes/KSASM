@@ -26,7 +26,7 @@ _vehicle_addrs_avel: :u64 .vehicle_addr_avelx .vehicle_addr_avely .vehicle_addr_
 .macro _vehicle_write(typ, cmd, wid, val) \
   copy typ _vehicle_cmd, $(cmd) \
   copy wid _vehicle_cmd_val typ, val \
-  devwrite*8 _vehicle_cmd typ, $(.vehicle_id):u8
+  devwrite .add(wid,1) _vehicle_cmd typ, $(.vehicle_id):u8
 
 .macro vehicle_get_avel(addr) \
   copy*3 addr, _vehicle_addrs_avel:u64 \

@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace KSASM
 {
@@ -50,13 +51,16 @@ namespace KSASM
         }
       }
 
-      private void Invalid()
+      private void PushTokens(params Token[] tokens) =>
+        macroStack.Add(new(new ListTokenStream(tokens.ToList())));
+
+      private Exception Invalid()
       {
         lexer.Peek(out var token);
-        Invalid(token);
+        return Invalid(token);
       }
 
-      private void Invalid(Token token) => throw new InvalidOperationException(
+      private Exception Invalid(Token token) => throw new InvalidOperationException(
         $"Invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
 
       private void ParseMacro(Token token)
@@ -64,14 +68,57 @@ namespace KSASM
         var name = token.Str()[1..];
         switch (name.ToLowerInvariant())
         {
-          case "macro": DefineMacro(); break;
-          case "import": RunImport(); break;
-          case "region": DefineRegion(); break;
-          default: ExpandMacro(name, token); break;
+          case "macro": MacroDefine(); break;
+          case "import": MacroImport(); break;
+          case "region": MacroRegion(); break;
+          case "add": MacroAdd(); break;
+          default: MacroExpand(name, token); break;
         }
       }
 
-      private void DefineRegion()
+      private void MacroAdd()
+      {
+        if (!lexer.TakeType(TokenType.POpen, out _))
+          Invalid();
+
+        if (!lexer.Take(out var first))
+          Invalid();
+
+        Value val;
+        ValueMode mode;
+
+        if (first.Type == TokenType.Width)
+        {
+          if (!Parser.TryParseValue(first.Str()[1..], out val, out mode))
+            Invalid(first);
+        }
+        else if (first.Type == TokenType.Number)
+        {
+          if (!Parser.TryParseValue(first.Str()[1..], out val, out mode))
+            Invalid(first);
+        }
+        else
+          throw Invalid(first);
+
+        while (lexer.TakeType(TokenType.Comma, out _))
+        {
+          if (!lexer.TakeType(TokenType.Number, out var ntoken))
+            Invalid();
+          if (!Parser.TryParseValue(ntoken.Str(), out var nval, out var nmode))
+            Invalid(ntoken);
+          nval.Convert(nmode, mode);
+          val.Add(nval, mode);
+        }
+
+        if (!lexer.TakeType(TokenType.PClose, out _))
+          Invalid();
+
+        PushTokens(
+          first with { Len = 0, OverrideStr = first.Type == TokenType.Width ? $"*{val.Get(mode)}" : $"{val.Get(mode)}" }
+        );
+      }
+
+      private void MacroRegion()
       {
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
@@ -89,14 +136,13 @@ namespace KSASM
         var pos = endLabel ? regionPos : regionPos - size;
         regionPos -= size;
 
-        macroStack.Add(new(new ListTokenStream(new()
-        {
+        PushTokens(
           ntoken with { Len = 0, Type = TokenType.Position, OverrideStr = $"@{pos}" },
-          ntoken with { Len = 0, Type = TokenType.Label, OverrideStr = $"{name}:"},
-        })));
+          ntoken with { Len = 0, Type = TokenType.Label, OverrideStr = $"{name}:" }
+        );
       }
 
-      private void RunImport()
+      private void MacroImport()
       {
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
@@ -105,7 +151,7 @@ namespace KSASM
         macroStack.Add(new(new Lexer(source)));
       }
 
-      private void DefineMacro()
+      private void MacroDefine()
       {
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
@@ -140,7 +186,7 @@ namespace KSASM
         macros[macro.Name] = macro;
       }
 
-      private void ExpandMacro(string name, Token nameToken)
+      private void MacroExpand(string name, Token nameToken)
       {
         if (!macros.TryGetValue(name, out var macro))
           Invalid(nameToken);

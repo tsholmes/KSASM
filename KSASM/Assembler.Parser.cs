@@ -238,7 +238,7 @@ namespace KSASM
         return cval;
       }
 
-      private bool TryParseValue(string str, out Value value, out ValueMode mode)
+      public static bool TryParseValue(string str, out Value value, out ValueMode mode)
       {
         str = str.ToLowerInvariant();
         if (TryParseUnsigned(str, out var uval))
