@@ -31,8 +31,9 @@ namespace KSASM
       public TokenType Type;
       public int Pos;
       public int Len;
+      public string OverrideStr;
 
-      public string Str() => Source.TokenStr(this);
+      public string Str() => OverrideStr ?? Source.TokenStr(this);
 
       public string PosStr() => Source.PosStr(Pos);
     }

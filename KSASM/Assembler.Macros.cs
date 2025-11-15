@@ -89,8 +89,11 @@ namespace KSASM
         var pos = endLabel ? regionPos : regionPos - size;
         regionPos -= size;
 
-        var regionSource = new SourceString($".region {name}", $"@{pos} {name}:");
-        macroStack.Add(new(new Lexer(regionSource)));
+        macroStack.Add(new(new ListTokenStream(new()
+        {
+          ntoken with { Len = 0, Type = TokenType.Position, OverrideStr = $"@{pos}" },
+          ntoken with { Len = 0, Type = TokenType.Label, OverrideStr = $"{name}:"},
+        })));
       }
 
       private void RunImport()
