@@ -7,7 +7,7 @@ using Brutal.Numerics;
 using System.Collections.Generic;
 using System.Diagnostics;
 
-namespace KSACPU
+namespace KSASM
 {
   [HarmonyPatch]
   public static class AsmUi
@@ -38,7 +38,7 @@ namespace KSACPU
 
     public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
     {
-      if (vehicle != Program.ControlledVehicle)
+      if (vehicle != KSA.Program.ControlledVehicle)
         return false;
 
       if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))

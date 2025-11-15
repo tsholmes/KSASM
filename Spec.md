@@ -1,4 +1,4 @@
-# KSA CPU (name TBD)
+# KSASM
 
 - no registers (other than PC)
 - all instructions take memory addrs/offsets

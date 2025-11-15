@@ -9,9 +9,9 @@
     <LangVersion>14.0</LangVersion>
 
     <OutputPath>bin\$(Configuration)</OutputPath>
-    <AssemblyName>KSACPU</AssemblyName>
+    <AssemblyName>KSASM</AssemblyName>
     <OutputType>Exe</OutputType>
-    <StartupObject>KSACPU.KSACPUMain</StartupObject>
+    <StartupObject>KSASM.Program</StartupObject>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">

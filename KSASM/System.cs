@@ -3,7 +3,7 @@ using System;
 using System.Diagnostics;
 using KSA;
 
-namespace KSACPU
+namespace KSASM
 {
   public class ProcSystem
   {

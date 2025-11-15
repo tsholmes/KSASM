@@ -6,12 +6,11 @@ using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 
-namespace KSACPU
+namespace KSASM
 {
-  public static class KSACPUMain
+  public static class Program
   {
     private const string KSADir = @"C:\Program Files\Kitten Space Agency";
-    public static string StartDir;
 
     public static int Main(string[] args)
     {
@@ -20,7 +19,8 @@ namespace KSACPU
       Memory.DebugWrite = false;
       Processor.DebugOps = false;
 
-      StartDir = Directory.GetCurrentDirectory();
+      Library.LibraryDir = Path.Join(Directory.GetCurrentDirectory(), "Library");
+
       Directory.SetCurrentDirectory(KSADir);
 
       AppDomain.CurrentDomain.AssemblyResolve += FindAssembly;
@@ -66,7 +66,7 @@ namespace KSACPU
 
     private static void RunPatches()
     {
-      var harmony = new Harmony("KSACPU");
+      var harmony = new Harmony("KSASM");
       new PatchClassProcessor(harmony, typeof(AsmUi)).Patch();
     }
 

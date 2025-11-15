@@ -1,7 +1,7 @@
 
 using System.Collections.Generic;
 
-namespace KSACPU
+namespace KSASM
 {
   public class SourceString
   {

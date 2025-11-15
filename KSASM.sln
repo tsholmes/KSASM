@@ -1,6 +1,6 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KSACPU", "KSACPU/KSACPU.csproj", "{6161a4dd-86ce-4522-94ff-74efbfad987d}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KSASM", "KSASM/KSASM.csproj", "{6161a4dd-86ce-4522-94ff-74efbfad987d}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

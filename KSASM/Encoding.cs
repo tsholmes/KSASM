@@ -1,7 +1,7 @@
 
 using System;
 
-namespace KSACPU
+namespace KSASM
 {
   public static class Encoding
   {

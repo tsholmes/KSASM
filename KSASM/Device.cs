@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using KSA;
 
-namespace KSACPU
+namespace KSASM
 {
   public interface IDevice
   {

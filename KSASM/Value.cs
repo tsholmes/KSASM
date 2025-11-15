@@ -3,7 +3,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace KSACPU
+namespace KSASM
 {
   public enum ValueMode
   {

@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace KSACPU
+namespace KSASM
 {
   public partial class Assembler
   {

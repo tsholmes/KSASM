@@ -1,5 +1,5 @@
 
-namespace KSACPU
+namespace KSASM
 {
   public partial class Assembler
   {
