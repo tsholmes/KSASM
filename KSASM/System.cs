@@ -30,8 +30,8 @@ namespace KSASM
     public void Reset()
     {
       this.Processor = new(
-        new VehicleDevice(Vehicle),
-        new FlightComputerDevice(Vehicle.FlightComputer))
+        VehicleDeviceDefinition.Make(Vehicle),
+        FlightComputerDeviceDefinition.Make(Vehicle.FlightComputer))
       {
         OnDebug = OnDebug,
         SleepTime = ulong.MaxValue

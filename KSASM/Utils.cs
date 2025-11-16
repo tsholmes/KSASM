@@ -24,10 +24,11 @@ namespace KSASM
     {
       if (length == 0)
         return new() { Offset = offset, Span = Span<T>.Empty };
+      var sstart = offset - Offset;
       return new()
       {
         Offset = offset,
-        Span = Span[(offset - Offset)..length],
+        Span = Span[sstart..(sstart + length)],
       };
     }
 

@@ -199,4 +199,10 @@ namespace KSASM
     public abstract T FromFloat(double val);
     public abstract double ToFloat(T val);
   }
+
+  public class DoubleValueConverter : FloatValueConverter<DoubleValueConverter, double>
+  {
+    public override double FromFloat(double val) => val;
+    public override double ToFloat(double val) => val;
+  }
 }
