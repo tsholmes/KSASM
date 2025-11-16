@@ -9,7 +9,7 @@ namespace KSASM
   {
     public static bool Debug = false;
 
-    public static void Assemble(SourceString source, Memory target)
+    public static void Assemble(SourceString source, MemoryAccessor target)
     {
       var parser = new Parser(source);
       parser.Parse();

@@ -15,8 +15,8 @@ namespace KSASM
     public static int Main(string[] args)
     {
       Assembler.Debug = false;
-      Memory.DebugRead = false;
-      Memory.DebugWrite = false;
+      MemoryAccessor.DebugRead = false;
+      MemoryAccessor.DebugWrite = false;
       Processor.DebugOps = false;
 
       Library.LibraryDir = Path.Join(Directory.GetCurrentDirectory(), "Library");
@@ -34,10 +34,8 @@ namespace KSASM
       var fname = args.Length > 0 ? args[0] : "test";
       var source = Library.LoadImport(fname);
 
-      var proc = new Processor()
-      {
-        OnDevWrite = (devID, val) => Console.WriteLine($"{devID}> {val}")
-      };
+      var proc = Processor.NewDefault();
+      proc.OnDevWrite = (devID, val) => Console.WriteLine($"{devID}> {val}");
 
       var stopwatch = Stopwatch.StartNew();
 

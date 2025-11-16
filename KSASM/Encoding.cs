@@ -50,115 +50,115 @@ namespace KSASM
 
     public static class U8
     {
-      public static ulong Decode(byte[] data, int offset) => Read1(data, offset);
-      public static void Encode(ulong val, byte[] data, int offset) => data[offset] = (byte)val;
+      public static ulong Decode(Span<byte> data) => Read1(data);
+      public static void Encode(ulong val, Span<byte> data) => data[0] = (byte)val;
     }
 
     public static class I16
     {
-      public static long Decode(byte[] data, int offset) => (short)Read2(data, offset);
+      public static long Decode(Span<byte> data) => (short)Read2(data);
 
-      public static void Encode(long val, byte[] data, int offset)
+      public static void Encode(long val, Span<byte> data)
       {
-        data[offset + 0] = (byte)(val >> 0);
-        data[offset + 1] = (byte)(val >> 8);
+        data[0] = (byte)(val >> 0);
+        data[1] = (byte)(val >> 8);
       }
     }
 
     public static class I32
     {
-      public static long Decode(byte[] data, int offset) => (int)Read4(data, offset);
+      public static long Decode(Span<byte> data) => (int)Read4(data);
 
-      public static void Encode(long val, byte[] data, int offset)
+      public static void Encode(long val, Span<byte> data)
       {
-        data[offset + 0] = (byte)(val >> 0);
-        data[offset + 1] = (byte)(val >> 8);
-        data[offset + 2] = (byte)(val >> 16);
-        data[offset + 3] = (byte)(val >> 24);
+        data[0] = (byte)(val >> 0);
+        data[1] = (byte)(val >> 8);
+        data[2] = (byte)(val >> 16);
+        data[3] = (byte)(val >> 24);
       }
     }
 
     public static class I64
     {
-      public static long Decode(byte[] data, int offset) => (long)Read8(data, offset);
+      public static long Decode(Span<byte> data) => (long)Read8(data);
 
-      public static void Encode(long val, byte[] data, int offset)
+      public static void Encode(long val, Span<byte> data)
       {
-        data[offset + 0] = (byte)(val >> 0);
-        data[offset + 1] = (byte)(val >> 8);
-        data[offset + 2] = (byte)(val >> 16);
-        data[offset + 3] = (byte)(val >> 24);
-        data[offset + 4] = (byte)(val >> 32);
-        data[offset + 5] = (byte)(val >> 40);
-        data[offset + 6] = (byte)(val >> 48);
-        data[offset + 7] = (byte)(val >> 56);
+        data[0] = (byte)(val >> 0);
+        data[1] = (byte)(val >> 8);
+        data[2] = (byte)(val >> 16);
+        data[3] = (byte)(val >> 24);
+        data[4] = (byte)(val >> 32);
+        data[5] = (byte)(val >> 40);
+        data[6] = (byte)(val >> 48);
+        data[7] = (byte)(val >> 56);
       }
     }
 
     public static class U64
     {
-      public static ulong Decode(byte[] data, int offset) => Read8(data, offset);
+      public static ulong Decode(Span<byte> data) => Read8(data);
 
-      public static void Encode(ulong val, byte[] data, int offset)
+      public static void Encode(ulong val, Span<byte> data)
       {
-        data[offset + 0] = (byte)(val >> 0);
-        data[offset + 1] = (byte)(val >> 8);
-        data[offset + 2] = (byte)(val >> 16);
-        data[offset + 3] = (byte)(val >> 24);
-        data[offset + 4] = (byte)(val >> 32);
-        data[offset + 5] = (byte)(val >> 40);
-        data[offset + 6] = (byte)(val >> 48);
-        data[offset + 7] = (byte)(val >> 56);
+        data[0] = (byte)(val >> 0);
+        data[1] = (byte)(val >> 8);
+        data[2] = (byte)(val >> 16);
+        data[3] = (byte)(val >> 24);
+        data[4] = (byte)(val >> 32);
+        data[5] = (byte)(val >> 40);
+        data[6] = (byte)(val >> 48);
+        data[7] = (byte)(val >> 56);
       }
     }
 
     public static class F64
     {
-      public static double Decode(byte[] data, int offset) =>
-        BitConverter.UInt64BitsToDouble(Read8(data, offset));
+      public static double Decode(Span<byte> data) =>
+        BitConverter.UInt64BitsToDouble(Read8(data));
 
-      public static void Encode(double value, byte[] data, int offset) =>
-        U64.Encode(BitConverter.DoubleToUInt64Bits(value), data, offset);
+      public static void Encode(double value, Span<byte> data) =>
+        U64.Encode(BitConverter.DoubleToUInt64Bits(value), data);
     }
 
     public static class P24
     {
-      public static ulong Decode(byte[] data, int offset) => Read3(data, offset);
+      public static ulong Decode(Span<byte> data) => Read3(data);
 
-      public static void Encode(ulong val, byte[] data, int offset)
+      public static void Encode(ulong val, Span<byte> data)
       {
-        data[offset + 0] = (byte)(val >> 0);
-        data[offset + 1] = (byte)(val >> 8);
-        data[offset + 2] = (byte)(val >> 16);
+        data[0] = (byte)(val >> 0);
+        data[1] = (byte)(val >> 8);
+        data[2] = (byte)(val >> 16);
       }
     }
 
     // TODO: use complex type for this
     public static class C128
     {
-      public static double Decode(byte[] data, int offset) =>
+      public static double Decode(Span<byte> data) =>
         throw new NotImplementedException();
 
-      public static void Encode(double value, byte[] data, int offset) =>
+      public static void Encode(double value, Span<byte> data) =>
         throw new NotImplementedException();
     }
 
-    private static ulong Read1(byte[] data, int offset) => data[offset];
+    private static ulong Read1(Span<byte> data) => data[0];
 
-    private static ulong Read2(byte[] data, int offset) =>
-      ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8);
+    private static ulong Read2(Span<byte> data) =>
+      ((ulong)data[0] << 0) | ((ulong)data[1] << 8);
 
-    private static ulong Read3(byte[] data, int offset) =>
-        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) | ((ulong)data[offset + 2] << 16);
+    private static ulong Read3(Span<byte> data) =>
+        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) | ((ulong)data[2] << 16);
 
-    private static ulong Read4(byte[] data, int offset) =>
-        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) |
-        ((ulong)data[offset + 2] << 16) | ((ulong)data[offset + 3] << 24);
+    private static ulong Read4(Span<byte> data) =>
+        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) |
+        ((ulong)data[2] << 16) | ((ulong)data[3] << 24);
 
-    private static ulong Read8(byte[] data, int offset) =>
-        ((ulong)data[offset + 0] << 0) | ((ulong)data[offset + 1] << 8) |
-        ((ulong)data[offset + 2] << 16) | ((ulong)data[offset + 3] << 24) |
-        ((ulong)data[offset + 4] << 32) | ((ulong)data[offset + 5] << 40) |
-        ((ulong)data[offset + 6] << 48) | ((ulong)data[offset + 7] << 56);
+    private static ulong Read8(Span<byte> data) =>
+        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) |
+        ((ulong)data[2] << 16) | ((ulong)data[3] << 24) |
+        ((ulong)data[4] << 32) | ((ulong)data[5] << 40) |
+        ((ulong)data[6] << 48) | ((ulong)data[7] << 56);
   }
 }

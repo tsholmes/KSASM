@@ -5,9 +5,11 @@ namespace KSASM
 {
   public partial class Processor
   {
+    public const int MAIN_MEM_SIZE = 1 << 24;
+
     public static bool DebugOps = false;
 
-    public readonly Memory Memory = new();
+    public readonly MemoryAccessor Memory;
     public int PC = 0;
     public ulong SleepTime = 0;
 
@@ -18,9 +20,16 @@ namespace KSASM
     public Action<ulong, ValArray> OnDevWrite;
     public Action<ulong, ValArray> OnDevRead;
 
+    public static Processor NewDefault() => new(new(new ByteArrayMemory(MAIN_MEM_SIZE)));
+
+    public Processor(MemoryAccessor memory)
+    {
+      this.Memory = memory;
+    }
+
     public void Step()
     {
-      var inst = Instruction.Decode(Memory.ReadU64(PC));
+      var inst = Instruction.Decode(Memory.Read(PC, DataType.U64).Unsigned);
       PC += 8;
 
       var (opA, opB) = OperandPointers(inst);
@@ -35,7 +44,7 @@ namespace KSASM
       {
         var addrBase = inst.AddrBase;
         if (inst.BaseIndirect)
-          addrBase = (int)Memory.ReadP24(addrBase);
+          addrBase = (int)Memory.Read(addrBase, DataType.P24).Unsigned;
         addrA = addrBase + inst.OffsetA;
         addrB = addrBase + inst.OffsetB;
       }
@@ -46,9 +55,9 @@ namespace KSASM
       }
 
       if (inst.OperandMode.HasFlag(OperandMode.IndirectA))
-        addrA = (int)Memory.ReadP24(addrA);
+        addrA = (int)Memory.Read(addrA, DataType.P24).Unsigned;
       if (inst.OperandMode.HasFlag(OperandMode.IndirectB))
-        addrB = (int)Memory.ReadP24(addrB);
+        addrB = (int)Memory.Read(addrB, DataType.P24).Unsigned;
 
       return (
         new ValuePointer { Address = addrA, Type = inst.AType, Width = inst.DataWidth },

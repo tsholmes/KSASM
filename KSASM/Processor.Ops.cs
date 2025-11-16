@@ -7,21 +7,21 @@ namespace KSASM
   {
     private void OpCopy(ValuePointer opA, ValuePointer opB)
     {
-      B.Load(Memory, opB);
-      B.Store(Memory, opA);
+      Memory.Read(opB, B);
+      Memory.Write(opA, B);
     }
 
     private void OpReorder(ValuePointer opA, ValuePointer opB)
     {
-      A.Load(Memory, opA);
-      B.Load(Memory, opB);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
       B.Convert(ValueMode.Unsigned);
       C.Init(A.Mode, A.Width);
 
       for (var i = 0; i < A.Width; i++)
         C.Values[i].Add(A.Values[(int)B.Values[i].Unsigned], C.Mode);
 
-      C.Store(Memory, opA);
+      Memory.Write(opA, C);
     }
 
     // private void OpBitNot(ValuePointer opA, ValuePointer opB)
@@ -37,26 +37,26 @@ namespace KSASM
 
     private void OpAdd(ValuePointer opA, ValuePointer opB)
     {
-      A.Load(Memory, opA);
-      B.Load(Memory, opB);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
       B.Convert(A.Mode);
 
       for (var i = 0; i < A.Width; i++)
         A.Values[i].Add(B.Values[i], A.Mode);
 
-      A.Store(Memory, opA);
+      Memory.Write(opA, A);
     }
 
     private void OpSubtract(ValuePointer opA, ValuePointer opB)
     {
-      A.Load(Memory, opA);
-      B.Load(Memory, opB);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
       B.Convert(A.Mode);
 
       for (var i = 0; i < A.Width; i++)
         A.Values[i].Sub(B.Values[i], A.Mode);
 
-      A.Store(Memory, opA);
+      Memory.Write(opA, A);
     }
 
     // private void OpMultiply(ValuePointer opA, ValuePointer opB)
@@ -85,7 +85,7 @@ namespace KSASM
       opA.Width = 1;
       A.Init(ValueMode.Unsigned, 1);
       A.Values[0].Unsigned = (ulong)PC;
-      A.Store(Memory, opA);
+      Memory.Write(opA, A);
 
       PC = opB.Address;
     }
@@ -93,7 +93,7 @@ namespace KSASM
     private void OpBranchIfSign(ValuePointer opA, ValuePointer opB, int sign)
     {
       opA.Width = opB.Width = 1;
-      A.Load(Memory, opA);
+      Memory.Read(opA, A);
 
       if (A.Values[0].Sign(A.Mode) == sign)
         PC = opB.Address;
@@ -103,7 +103,7 @@ namespace KSASM
 
     private void OpSleep(ValuePointer opA, ValuePointer opB)
     {
-      B.Load(Memory, opB);
+      Memory.Read(opB, B);
       B.Convert(ValueMode.Unsigned);
       SleepTime = B.Values[0].Unsigned;
       if (SleepTime == 0)
@@ -115,19 +115,19 @@ namespace KSASM
 
     private void OpDevRead(ValuePointer opA, ValuePointer opB)
     {
-      A.Load(Memory, opA);
-      B.Load(Memory, opB);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
       B.Convert(ValueMode.Unsigned);
 
       OnDevRead?.Invoke(B.Values[0].Unsigned, A);
 
-      A.Store(Memory, opA);
+      Memory.Write(opA, A);
     }
 
     private void OpDevWrite(ValuePointer opA, ValuePointer opB)
     {
-      A.Load(Memory, opA);
-      B.Load(Memory, opB);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
       B.Convert(ValueMode.Unsigned);
 
       // Console.WriteLine($"{B.Values[0].Unsigned}> {A}");

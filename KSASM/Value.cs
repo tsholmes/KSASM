@@ -126,38 +126,6 @@ namespace KSASM
       return v.Float;
     }
 
-    public void Load(Memory mem, ValuePointer ptr)
-    {
-      this.Width = ptr.Width;
-      this.Mode = ptr.Type.VMode();
-
-      var size = ptr.Type.SizeBytes();
-      var addr = ptr.Address;
-
-      for (var i = 0; i < Width; i++)
-      {
-        Values[i] = mem.Read(addr, ptr.Type);
-        addr += size;
-      }
-    }
-
-    public void Store(Memory mem, ValuePointer ptr)
-    {
-      if (ptr.Width != Width)
-        throw new InvalidOperationException($"Mismatched data width {ptr.Width} != {Width}");
-
-      Convert(ptr.Type.VMode());
-
-      var addr = ptr.Address;
-      var size = ptr.Type.SizeBytes();
-
-      for (var i = 0; i < Width; i++)
-      {
-        mem.Write(addr, ptr.Type, Values[i]);
-        addr += size;
-      }
-    }
-
     public override string ToString()
     {
       var sb = new StringBuilder();

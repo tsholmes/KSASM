@@ -31,12 +31,11 @@ namespace KSASM
 
     public void Reset()
     {
-      this.Processor = new()
-      {
-        OnDevRead = Devices.OnDeviceRead,
-        OnDevWrite = Devices.OnDeviceWrite,
-        SleepTime = ulong.MaxValue,
-      };
+      this.Processor = Processor.NewDefault();
+      this.Processor.OnDevRead = Devices.OnDeviceRead;
+      this.Processor.OnDevWrite = Devices.OnDeviceWrite;
+      this.Processor.SleepTime = ulong.MaxValue;
+
       LastSteps = 0;
       LastMs = 0;
     }
