@@ -11,7 +11,7 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
-    public readonly DeviceHandler Devices;
+    private readonly Action<string> log;
 
     public int LastSteps { get; private set; } = 0;
     public double LastMs { get; private set; } = 0;
@@ -21,9 +21,7 @@ namespace KSASM
     public ProcSystem(Vehicle vehicle, Action<string> log)
     {
       this.Vehicle = vehicle;
-      this.Devices = new(vehicle, log,
-        new LogDevice(log),
-        new VehicleDevice(vehicle));
+      this.log = log;
       stopwatch = new();
 
       Reset();
@@ -31,10 +29,13 @@ namespace KSASM
 
     public void Reset()
     {
-      this.Processor = Processor.NewDefault();
-      this.Processor.OnDevRead = Devices.OnDeviceRead;
-      this.Processor.OnDevWrite = Devices.OnDeviceWrite;
-      this.Processor.SleepTime = ulong.MaxValue;
+      this.Processor = new(
+        new VehicleDevice(Vehicle),
+        new FlightComputerDevice(Vehicle.FlightComputer))
+      {
+        OnDebug = OnDebug,
+        SleepTime = ulong.MaxValue
+      };
 
       LastSteps = 0;
       LastMs = 0;
@@ -62,5 +63,7 @@ namespace KSASM
       LastSteps = step;
       LastMs = stopwatch.Elapsed.Milliseconds;
     }
+
+    private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");
   }
 }

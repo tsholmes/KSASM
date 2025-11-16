@@ -135,8 +135,8 @@ TODO
 * TODO: figure out what this should actually look like once we have some devices to interact with
 * devid: An = devices[Bn].id
 * devtype: An = devices[Bn].type
-* devread: An = devices[B0].data[An]
-* devwrite: devices[B0].sendData(An)
+* devmap: mem[A0..A0+A1] => devices[B0].mem[B1..]
+  * set B0 to unmap range (B1 ignored)
 
 ### Interrupt Operations
 * TODO: figure out what this should actually look like

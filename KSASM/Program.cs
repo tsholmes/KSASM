@@ -34,8 +34,10 @@ namespace KSASM
       var fname = args.Length > 0 ? args[0] : "test";
       var source = Library.LoadImport(fname);
 
-      var proc = Processor.NewDefault();
-      proc.OnDevWrite = (devID, val) => Console.WriteLine($"{devID}> {val}");
+      var proc = new Processor
+      {
+        OnDebug = (A, B) => Console.WriteLine($"> {A} {B}")
+      };
 
       var stopwatch = Stopwatch.StartNew();
 

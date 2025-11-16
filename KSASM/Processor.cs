@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 
 namespace KSASM
 {
@@ -9,6 +10,8 @@ namespace KSASM
 
     public static bool DebugOps = false;
 
+    public readonly ByteArrayMemory MainMemory;
+    public readonly MappedMemory MappedMemory;
     public readonly MemoryAccessor Memory;
     public int PC = 0;
     public ulong SleepTime = 0;
@@ -17,14 +20,19 @@ namespace KSASM
     private readonly ValArray B = new();
     private readonly ValArray C = new();
 
-    public Action<ulong, ValArray> OnDevWrite;
-    public Action<ulong, ValArray> OnDevRead;
+    public Action<ValArray, ValArray> OnDebug;
 
-    public static Processor NewDefault() => new(new(new ByteArrayMemory(MAIN_MEM_SIZE)));
+    private readonly Dictionary<ulong, IDevice> deviceMap = [];
+    private readonly IDevice defaultDevice = new NullDevice();
 
-    public Processor(MemoryAccessor memory)
+    public Processor(params IDevice[] devices)
     {
-      this.Memory = memory;
+      MainMemory = new(MAIN_MEM_SIZE);
+      MappedMemory = new(MainMemory, MAIN_MEM_SIZE);
+      Memory = new(MappedMemory);
+
+      foreach (var device in devices)
+        deviceMap.Add(device.Id, device);
     }
 
     public void Step()
@@ -109,11 +117,11 @@ namespace KSASM
         case OpCode.Sleep: OpSleep(opA, opB); break;
         case OpCode.DevID: goto default;
         case OpCode.DevType: goto default;
-        case OpCode.DevRead: OpDevRead(opA, opB); break;
-        case OpCode.DevWrite: OpDevWrite(opA, opB); break;
+        case OpCode.DevMap: OpDevMap(opA, opB); break;
         case OpCode.IHandler: goto default;
         case OpCode.IData: goto default;
         case OpCode.IReturn: goto default;
+        case OpCode.Debug: OpDebug(opA, opB); break;
         default:
           throw new NotImplementedException($"{op}");
       }

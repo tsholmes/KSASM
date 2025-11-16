@@ -1,44 +1,25 @@
 # constants and macros for interacting with the Vehicle device
 
 .macro vehicle_id 2
-.macro vehicle_addr_avelx 0
-.macro vehicle_addr_avely 1
-.macro vehicle_addr_avelz 2
-.macro vehicle_addr_thrust_mode 3
-  .macro vehicle_thrust_mode_direct 0
-  .macro vehicle_thrust_mode_pulse 1
-.macro vehicle_addr_thrust_command 4
-  .macro vehicle_thrust_roll_right 2
-  .macro vehicle_thrust_roll_left 4
-  .macro vehicle_thrust_pitch_up 8
-  .macro vehicle_thrust_pitch_down 16
-  .macro vehicle_thrust_yaw_right 32
-  .macro vehicle_thrust_yaw_left 64
+.macro vehicle_thrust_roll_right 2
+.macro vehicle_thrust_roll_left 4
+.macro vehicle_thrust_pitch_up 8
+.macro vehicle_thrust_pitch_down 16
+.macro vehicle_thrust_yaw_right 32
+.macro vehicle_thrust_yaw_left 64
 
 .region libvehicle 1024
 
-# addr list for reading angular velocity
-_vehicle_addrs_avel: :u64 .vehicle_addr_avelx .vehicle_addr_avely .vehicle_addr_avelz
-# buffer for write commands
-:u64 _vehicle_cmd: 0 _vehicle_cmd_val: 0*7
+:p24 _vehicle_setup_data: vehicle_data 0 .vehicle_id 0 vehicle_data_end
 
-.macro _vehicle_read(addr, wid) devread wid addr, $(.vehicle_id):u8
-.macro _vehicle_write(typ, cmd, wid, val) \
-  copy typ _vehicle_cmd, $(cmd) \
-  copy wid _vehicle_cmd_val typ, val \
-  devwrite .add(wid,1) _vehicle_cmd typ, $(.vehicle_id):u8
+vehicle_data:
+:f64 vehicle_avelx: 0
+:f64 vehicle_avely: 0
+:f64 vehicle_avelz: 0
+:u64 vehicle_thrust_command: 0
+vehicle_data_end:
 
-.macro vehicle_get_avel(addr) \
-  copy*3 addr, _vehicle_addrs_avel:u64 \
-  ._vehicle_read(addr, *3)
-
-.macro vehicle_get_thrust_mode(addr) \
-  copy addr, $(.vehicle_addr_thrust_mode):u8 \
-  ._vehicle_read(addr)
-
-.macro vehicle_get_thrust_command(addr) \
-  copy addr, $(.vehicle_addr_thrust_command):u8 \
-  ._vehicle_read(addr)
-
-.macro vehicle_set_thrust_mode(val) ._vehicle_write(:u64, .vehicle_addr_thrust_mode, *1, val)
-.macro vehicle_set_thrust_command(val) ._vehicle_write(:u64, .vehicle_addr_thrust_command, *1, val)
+.macro vehicle_init \
+  copy:p24 _vehicle_setup_data+3, +12 \
+  subtract:p24 _vehicle_setup_data+3, +0 \
+  devmap*2:p24 _vehicle_setup_data+0, +6

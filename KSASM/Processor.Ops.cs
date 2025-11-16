@@ -1,5 +1,5 @@
 
-using System;
+using System.Collections.Generic;
 
 namespace KSASM
 {
@@ -113,29 +113,37 @@ namespace KSASM
     // private void OpDevID(ValuePointer opA, ValuePointer opB)
     // private void OpDevType(ValuePointer opA, ValuePointer opB)
 
-    private void OpDevRead(ValuePointer opA, ValuePointer opB)
+    private void OpDevMap(ValuePointer opA, ValuePointer opB)
     {
       Memory.Read(opA, A);
       Memory.Read(opB, B);
+
+      A.Convert(ValueMode.Unsigned);
       B.Convert(ValueMode.Unsigned);
 
-      OnDevRead?.Invoke(B.Values[0].Unsigned, A);
+      var memAddr = (int)A.Values[0].Unsigned;
+      var memLen = (int)A.Values[1].Unsigned;
+      var devId = B.Values[0].Unsigned;
+      var devAddr = (int)B.Values[1].Unsigned;
 
-      Memory.Write(opA, A);
-    }
-
-    private void OpDevWrite(ValuePointer opA, ValuePointer opB)
-    {
-      Memory.Read(opA, A);
-      Memory.Read(opB, B);
-      B.Convert(ValueMode.Unsigned);
-
-      // Console.WriteLine($"{B.Values[0].Unsigned}> {A}");
-      OnDevWrite?.Invoke(B.Values[0].Unsigned, A);
+      if (devId == 0)
+        MappedMemory.MapRange(memAddr, MainMemory, memAddr, memLen);
+      else
+      {
+        var device = deviceMap.GetValueOrDefault(devId) ?? defaultDevice;
+        MappedMemory.MapRange(memAddr, device, devAddr, memLen);
+      }
     }
 
     // private void OpIHandler(ValuePointer opA, ValuePointer opB)
     // private void OpIData(ValuePointer opA, ValuePointer opB)
     // private void OpIReturn(ValuePointer opA, ValuePointer opB)
+
+    private void OpDebug(ValuePointer opA, ValuePointer opB)
+    {
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
+      OnDebug?.Invoke(A, B);
+    }
   }
 }

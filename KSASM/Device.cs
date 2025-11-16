@@ -1,140 +1,142 @@
 
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using KSA;
 
 namespace KSASM
 {
-  public interface IDevice
+  public interface IDevice : IMemory
   {
     public ulong Id { get; }
-    public (ValueMode, Value) Read(ulong addr);
-    public void Write(ValArray data);
+  }
 
-    protected static (ValueMode, Value) Unsigned(ulong val) => (ValueMode.Unsigned, new() { Unsigned = val });
-    protected static (ValueMode, Value) Signed(long val) => (ValueMode.Signed, new() { Signed = val });
-    protected static (ValueMode, Value) Float(double val) => (ValueMode.Float, new() { Float = val });
+  public interface IDeviceField : IMemory
+  {
+    public int Size { get; }
   }
 
   public abstract class BaseDevice : IDevice
   {
-    protected static (ValueMode, Value) Unsigned(ulong val) => (ValueMode.Unsigned, new() { Unsigned = val });
-    protected static (ValueMode, Value) Signed(long val) => (ValueMode.Signed, new() { Signed = val });
-    protected static (ValueMode, Value) Float(double val) => (ValueMode.Float, new() { Float = val });
-
     public abstract ulong Id { get; }
-    public abstract (ValueMode, Value) Read(ulong addr);
-    public abstract void Write(ValArray data);
-  }
 
-  public class DeviceHandler
-  {
-    public static bool Debug = false;
+    private readonly MappedMemory memory;
 
-    public readonly Vehicle Vehicle;
-    private readonly Action<string> log;
-    private readonly Dictionary<ulong, IDevice> devices = [];
-
-    public DeviceHandler(Vehicle vehicle, Action<string> log, params IDevice[] devices)
+    public BaseDevice(params IDeviceField[] fields)
     {
-      this.Vehicle = vehicle;
-      this.log = log;
+      var totalSize = 0;
+      foreach (var field in fields)
+        totalSize += field.Size;
 
-      foreach (var device in devices)
-        this.devices[device.Id] = device;
-    }
-
-    public void OnDeviceWrite(ulong devId, ValArray data)
-    {
-      if (devices.TryGetValue(devId, out var device))
-        device.Write(data);
-      else
-        log.Invoke($"write to unknown device ({devId}): {data}");
-    }
-
-    public void OnDeviceRead(ulong devId, ValArray data)
-    {
-      if (devices.TryGetValue(devId, out var device))
+      memory = new(new NullDevice(), totalSize);
+      var addr = 0;
+      foreach (var field in fields)
       {
-        for (var i = 0; i < data.Width; i++)
-        {
-          var addr = data.Values[i];
-          addr.Convert(data.Mode, ValueMode.Unsigned);
-          var (mode, val) = device.Read(addr.Unsigned);
-          if (Debug)
-            log($"READ> {devId} @{addr.Unsigned}: {mode} {val.Get(mode)}");
-          val.Convert(mode, data.Mode);
-          data.Values[i] = val;
-        }
+        memory.MapRange(addr, field, 0, field.Size);
+        addr += field.Size;
       }
-      else
-        log.Invoke($"read from unknown device ({devId}): {data}");
     }
+
+    public void Read(Span<byte> buffer, int address)
+    {
+      memory.Read(buffer, address);
+    }
+    public void Write(Span<byte> data, int address) => memory.Write(data, address);
+
+    protected static Value Unsigned(ulong val) => new() { Unsigned = val };
+    protected static Value Signed(long val) => new() { Signed = val };
+    protected static Value Float(double val) => new() { Float = val };
   }
 
-  public class LogDevice : IDevice
+  public abstract class BaseDeviceField : IDeviceField
   {
-    public const ulong DEVICE_ID = 0;
+    private readonly byte[] buffer;
+    protected readonly DataType type;
 
-    public readonly Action<string> Log;
-
-    public LogDevice(Action<string> log)
+    public BaseDeviceField(DataType type)
     {
-      this.Log = log;
+      this.buffer = new byte[type.SizeBytes()];
+      this.type = type;
     }
 
-    public ulong Id => DEVICE_ID;
+    public int Size => buffer.Length;
 
-    public (ValueMode, Value) Read(ulong addr) => default;
+    public void Read(Span<byte> buffer, int address)
+    {
+      Encoding.Encode(this.buffer, type, GetValue());
+      this.buffer.AsSpan()[address..].CopyTo(buffer);
+    }
 
-    public void Write(ValArray data) => Log($"> {data}");
+    public void Write(Span<byte> data, int address)
+    {
+      Encoding.Encode(buffer, type, GetValue());
+      data.CopyTo(buffer.AsSpan()[address..]);
+      SetValue(Encoding.Decode(buffer, type));
+    }
+
+    protected abstract Value GetValue();
+    protected abstract void SetValue(Value val);
+  }
+
+  public class LambdaDeviceField<T> : BaseDeviceField
+  {
+    public delegate Value GetValueDelegate(T device);
+    public delegate void SetValueDelegate(T device, Value value);
+
+    private readonly T device;
+    private readonly GetValueDelegate getValue;
+    private readonly SetValueDelegate setValue;
+
+    public LambdaDeviceField(T device, DataType type, GetValueDelegate getValue, SetValueDelegate setValue) : base(type)
+    {
+      this.device = device;
+      this.getValue = getValue;
+      this.setValue = setValue;
+    }
+
+    protected override Value GetValue() => getValue(device);
+    protected override void SetValue(Value val) => setValue(device, val);
+  }
+
+  public class NullDevice : IDevice
+  {
+    public ulong Id => 0;
+    public void Read(Span<byte> buffer, int address) => buffer.Clear();
+    public void Write(Span<byte> data, int address) { }
   }
 
   public class VehicleDevice : BaseDevice
   {
-    public const ulong DEVICE_ID = 2;
-
-    public enum Addr : ulong
-    {
-      AVelX,
-      AVelY,
-      AVelZ,
-      ThrustMode,
-      ThrustCommand,
-    }
-
-    private readonly Vehicle vehicle;
+    public override ulong Id => 2;
 
     public VehicleDevice(Vehicle vehicle)
-    {
-      this.vehicle = vehicle;
-    }
+    : base(AVelX(vehicle), AVelY(vehicle), AVelZ(vehicle), ThrustCommand(vehicle)) { }
 
-    public override ulong Id => DEVICE_ID;
+    private static LambdaDeviceField<Vehicle> AVelX(Vehicle vehicle) => new(
+      vehicle, DataType.F64,
+      v => Float(vehicle.LastKinematicStates.BodyRates.X),
+      (v, val) => { }
+    );
 
-    public override (ValueMode, Value) Read(ulong addr) => (Addr)addr switch
-    {
-      Addr.AVelX => Float(vehicle.LastKinematicStates.BodyRates.X),
-      Addr.AVelY => Float(vehicle.LastKinematicStates.BodyRates.Y),
-      Addr.AVelZ => Float(vehicle.LastKinematicStates.BodyRates.Z),
-      Addr.ThrustMode => Unsigned((ulong)vehicle.FlightComputer.ManualThrustMode),
-      Addr.ThrustCommand => Unsigned((ulong)GetInputs().ThrusterCommandFlags),
-      _ => default,
-    };
+    private static LambdaDeviceField<Vehicle> AVelY(Vehicle vehicle) => new(
+      vehicle, DataType.F64,
+      v => Float(vehicle.LastKinematicStates.BodyRates.Y),
+      (v, val) => { }
+    );
 
-    public override void Write(ValArray data)
-    {
-      switch ((Addr)data.SignedAt(0))
+    private static LambdaDeviceField<Vehicle> AVelZ(Vehicle vehicle) => new(
+      vehicle, DataType.F64,
+      v => Float(vehicle.LastKinematicStates.BodyRates.Z),
+      (v, val) => { }
+    );
+
+    private static LambdaDeviceField<Vehicle> ThrustCommand(Vehicle vehicle) => new(
+      vehicle, DataType.U64,
+      v => Unsigned((ulong)GetInputs(v).ThrusterCommandFlags),
+      (v, val) => SetInputs(vehicle, GetInputs(vehicle) with
       {
-        case Addr.ThrustMode:
-          vehicle.FlightComputer.ManualThrustMode = (FlightComputerManualThrustMode)(data.UnsignedAt(1) & 1);
-          break;
-        case Addr.ThrustCommand:
-          SetInputs(GetInputs() with { ThrusterCommandFlags = (ThrusterMapFlags)data.UnsignedAt(1) });
-          break;
-      }
-    }
+        ThrusterCommandFlags = (ThrusterMapFlags)val.Unsigned
+      })
+    );
 
     private static FieldInfo _inputsField;
     private static FieldInfo InputsField =>
@@ -142,7 +144,23 @@ namespace KSASM
         "_manualControlInputs",
         BindingFlags.Instance | BindingFlags.NonPublic);
 
-    private ManualControlInputs GetInputs() => (ManualControlInputs)InputsField.GetValue(vehicle);
-    private void SetInputs(ManualControlInputs inputs) => InputsField.SetValue(vehicle, inputs);
+    private static ManualControlInputs GetInputs(Vehicle vehicle) =>
+      (ManualControlInputs)InputsField.GetValue(vehicle);
+    private static void SetInputs(Vehicle vehicle, ManualControlInputs inputs) =>
+      InputsField.SetValue(vehicle, inputs);
+  }
+
+  public class FlightComputerDevice : BaseDevice
+  {
+    public override ulong Id => 3;
+
+    public FlightComputerDevice(FlightComputer fc)
+    : base(ThrustMode(fc)) { }
+
+    private static LambdaDeviceField<FlightComputer> ThrustMode(FlightComputer fc) => new(
+      fc, DataType.U64,
+      fc => Unsigned((ulong)fc.ManualThrustMode),
+      (fc, val) => fc.SetManualThrustMode((FlightComputerManualThrustMode)val.Unsigned)
+    );
   }
 }

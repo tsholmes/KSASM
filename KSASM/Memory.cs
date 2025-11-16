@@ -49,13 +49,10 @@ namespace KSASM
       public int Length;
     }
 
-    private readonly IMemory main;
     private readonly List<MemRange> ranges = [];
 
     public MappedMemory(IMemory main, int mainSize)
     {
-      this.main = main;
-
       ranges.Add(new() { Addr = 0, Memory = main, MemAddr = 0, Length = mainSize });
     }
 
@@ -91,14 +88,12 @@ namespace KSASM
       SetRanges(newRanges);
     }
 
-    public void UnmapRange(int addr, int len) => MapRange(addr, main, addr, len);
-
     private void SetRanges(List<MemRange> newRanges)
     {
       ranges.Clear();
       var prev = newRanges[0];
       ranges.Add(prev);
-      for (var i = 1; i < ranges.Count; i++)
+      for (var i = 1; i < newRanges.Count; i++)
       {
         var range = newRanges[i];
         if (range.Memory == prev.Memory &&
@@ -114,11 +109,15 @@ namespace KSASM
           ranges.Add(range);
         }
       }
+      // Console.WriteLine($"RANGES:");
+      // foreach (var range in ranges)
+      //   Console.WriteLine($"  {range.Addr}+{range.Length} => {range.Memory}@{range.MemAddr}");
     }
 
     public void Read(Span<byte> buffer, int address)
     {
-      for (var idx = FindStartIndex(address); idx < ranges.Count && buffer.Length > 0; idx++)
+      var start = FindStartIndex(address);
+      for (var idx = start; idx < ranges.Count && buffer.Length > 0; idx++)
       {
         var range = ranges[idx];
         var offset = address - range.Addr;
@@ -149,19 +148,19 @@ namespace KSASM
     private int FindStartIndex(int address)
     {
       var lo = 0;
-      var hi = ranges.Count;
-      while (lo + 1 < hi)
+      var hi = ranges.Count - 1;
+      while (lo <= hi)
       {
-        var mid = (lo + hi) / 2;
+        var mid = lo + ((hi - lo) >> 1);
         var range = ranges[mid];
         if (address < range.Addr)
-          lo = mid + 1;
-        else if (address >= range.Addr + range.Length)
           hi = mid - 1;
+        else if (address >= range.Addr + range.Length)
+          lo = mid + 1;
         else
           return mid;
       }
-      return lo;
+      return ranges.Count;
     }
   }
 
@@ -230,34 +229,7 @@ namespace KSASM
 
     private Value DecodeAt(int index, DataType type)
     {
-      var val = default(Value);
-      switch (type)
-      {
-        case DataType.U8:
-          val.Unsigned = Encoding.U8.Decode(From(index));
-          break;
-        case DataType.I16:
-          val.Signed = Encoding.I16.Decode(From(index));
-          break;
-        case DataType.I32:
-          val.Signed = Encoding.I32.Decode(From(index));
-          break;
-        case DataType.I64:
-          val.Signed = Encoding.I64.Decode(From(index));
-          break;
-        case DataType.U64:
-          val.Unsigned = Encoding.U64.Decode(From(index));
-          break;
-        case DataType.F64:
-          val.Float = Encoding.F64.Decode(From(index));
-          break;
-        case DataType.P24:
-          val.Unsigned = Encoding.P24.Decode(From(index));
-          break;
-        case DataType.C128:
-        default:
-          throw new InvalidOperationException($"Invalid DataType {type}");
-      }
+      var val = Encoding.Decode(From(index), type);
       if (DebugRead)
         Console.WriteLine($"  {index} {type} = {val.As(type)}");
       return val;
@@ -265,33 +237,7 @@ namespace KSASM
 
     private void EncodeAt(int index, DataType type, Value val)
     {
-      switch (type)
-      {
-        case DataType.U8:
-          Encoding.U8.Encode(val.Unsigned, From(index));
-          break;
-        case DataType.I16:
-          Encoding.I16.Encode(val.Signed, From(index));
-          break;
-        case DataType.I32:
-          Encoding.I32.Encode(val.Signed, From(index));
-          break;
-        case DataType.I64:
-          Encoding.I64.Encode(val.Signed, From(index));
-          break;
-        case DataType.U64:
-          Encoding.U64.Encode(val.Unsigned, From(index));
-          break;
-        case DataType.F64:
-          Encoding.F64.Encode(val.Float, From(index));
-          break;
-        case DataType.P24:
-          Encoding.P24.Encode(val.Unsigned, From(index));
-          break;
-        case DataType.C128:
-        default:
-          throw new InvalidOperationException($"Invalid DataType {type}");
-      }
+      Encoding.Encode(From(index), type, val);
       if (DebugWrite)
         Console.WriteLine($"  {index} {type} = {val.As(type)}");
     }

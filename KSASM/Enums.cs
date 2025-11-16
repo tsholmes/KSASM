@@ -83,14 +83,16 @@ namespace KSASM
     // TODO: redesign after some use
     DevID,
     DevType,
-    DevRead,
-    DevWrite,
+    DevMap,
 
     // Interrupt Operations
     // TODO: redesign after some use
     IHandler,
     IData,
     IReturn,
+
+    // debug instructions
+    Debug = 127,
   }
 
   // TODO: assign static values once more finalized

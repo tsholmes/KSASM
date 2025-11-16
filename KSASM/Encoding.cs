@@ -160,5 +160,69 @@ namespace KSASM
         ((ulong)data[2] << 16) | ((ulong)data[3] << 24) |
         ((ulong)data[4] << 32) | ((ulong)data[5] << 40) |
         ((ulong)data[6] << 48) | ((ulong)data[7] << 56);
+
+    public static Value Decode(Span<byte> data, DataType type)
+    {
+      var val = default(Value);
+      switch (type)
+      {
+        case DataType.U8:
+          val.Unsigned = U8.Decode(data);
+          break;
+        case DataType.I16:
+          val.Signed = I16.Decode(data);
+          break;
+        case DataType.I32:
+          val.Signed = I32.Decode(data);
+          break;
+        case DataType.I64:
+          val.Signed = I64.Decode(data);
+          break;
+        case DataType.U64:
+          val.Unsigned = U64.Decode(data);
+          break;
+        case DataType.F64:
+          val.Float = F64.Decode(data);
+          break;
+        case DataType.P24:
+          val.Unsigned = P24.Decode(data);
+          break;
+        case DataType.C128:
+        default:
+          throw new InvalidOperationException($"Invalid DataType {type}");
+      }
+      return val;
+    }
+
+    public static void Encode(Span<byte> buffer, DataType type, Value val)
+    {
+      switch (type)
+      {
+        case DataType.U8:
+          U8.Encode(val.Unsigned, buffer);
+          break;
+        case DataType.I16:
+          I16.Encode(val.Signed, buffer);
+          break;
+        case DataType.I32:
+          I32.Encode(val.Signed, buffer);
+          break;
+        case DataType.I64:
+          I64.Encode(val.Signed, buffer);
+          break;
+        case DataType.U64:
+          U64.Encode(val.Unsigned, buffer);
+          break;
+        case DataType.F64:
+          F64.Encode(val.Float, buffer);
+          break;
+        case DataType.P24:
+          P24.Encode(val.Unsigned, buffer);
+          break;
+        case DataType.C128:
+        default:
+          throw new InvalidOperationException($"Invalid DataType {type}");
+      }
+    }
   }
 }
