@@ -1,6 +1,5 @@
 
 using System;
-using System.Collections.Generic;
 
 namespace KSASM
 {
@@ -41,126 +40,74 @@ namespace KSASM
 
   public class MappedMemory : IMemory
   {
-    private struct MemRange
+    private struct MemRange : IRange<MemRange>
     {
-      public int Addr;
+      public int Offset { get; set; }
+      public int Length { get; set; }
+
       public IMemory Memory;
       public int MemAddr;
-      public int Length;
-    }
 
-    private readonly List<MemRange> ranges = [];
 
-    public MappedMemory(IMemory main, int mainSize)
-    {
-      ranges.Add(new() { Addr = 0, Memory = main, MemAddr = 0, Length = mainSize });
-    }
-
-    public void MapRange(int addr, IMemory mem, int memAddr, int len)
-    {
-      var newRanges = new List<MemRange>();
-      var newRange = new MemRange { Addr = addr, Memory = mem, MemAddr = memAddr, Length = len };
-      var newEnd = addr + len;
-
-      foreach (var range in ranges)
+      public MemRange Slice(int offset, int length) => new()
       {
-        var end = range.Addr + range.Length;
-        if (range.Addr >= newEnd || end <= addr)
+        Offset = offset,
+        Length = length,
+        Memory = Memory,
+        MemAddr = MemAddr + offset - Offset,
+      };
+
+      public bool TryMerge(MemRange next, out MemRange merged)
+      {
+        if (next.Offset != Offset + Length || next.Memory != Memory || next.MemAddr != MemAddr + Length)
         {
-          // no overlap
-          newRanges.Add(range);
-          continue;
+          merged = default;
+          return false;
         }
-        if (addr > range.Addr)
-        {
-          // take start chunk
-          newRanges.Add(range with { Length = addr - range.Addr });
-        }
-        newRanges.Add(newRange);
-        if (newEnd < end)
-        {
-          // take end chunk
-          var endLen = end - newEnd;
-          var endRem = range.Length - endLen;
-          newRanges.Add(range with { Addr = newEnd, MemAddr = range.MemAddr + endRem, Length = endLen });
-        }
+        merged = this with { Length = Length + next.Length };
+        return true;
       }
-      SetRanges(newRanges);
     }
 
-    private void SetRanges(List<MemRange> newRanges)
-    {
-      ranges.Clear();
-      var prev = newRanges[0];
-      ranges.Add(prev);
-      for (var i = 1; i < newRanges.Count; i++)
+    private readonly RangeList<MemRange> ranges = new();
+
+    public MappedMemory() { }
+
+    public void MapRange(int addr, IMemory mem, int memAddr, int len) =>
+      ranges.AddRange(new()
       {
-        var range = newRanges[i];
-        if (range.Memory == prev.Memory &&
-            range.Addr == prev.Addr + prev.Length &&
-            range.MemAddr == prev.MemAddr + prev.Length)
-        {
-          prev.Length += range.Length;
-          ranges[^1] = prev;
-        }
-        else
-        {
-          prev = range;
-          ranges.Add(range);
-        }
-      }
-      // Console.WriteLine($"RANGES:");
-      // foreach (var range in ranges)
-      //   Console.WriteLine($"  {range.Addr}+{range.Length} => {range.Memory}@{range.MemAddr}");
-    }
+        Offset = addr,
+        Length = len,
+        Memory = mem,
+        MemAddr = memAddr,
+      });
 
     public void Read(Span<byte> buffer, int address)
     {
-      var start = FindStartIndex(address);
-      for (var idx = start; idx < ranges.Count && buffer.Length > 0; idx++)
+      var iter = ranges.Overlap(new SpanRange<byte>
       {
-        var range = ranges[idx];
-        var offset = address - range.Addr;
-        var len = buffer.Length;
-        if (offset + len > range.Length)
-          len = range.Length - offset;
-        range.Memory.Read(buffer[..len], range.MemAddr + offset);
-        address += len;
-        buffer = buffer[len..];
+        Span = buffer,
+        Offset = address,
+      });
+
+      while (iter.Next(out var mrange, out var brange))
+      {
+        mrange.Memory.Read(brange.Span, mrange.MemAddr);
       }
     }
 
     public void Write(Span<byte> data, int address)
     {
-      for (var idx = FindStartIndex(address); idx < ranges.Count && data.Length > 0; idx++)
+      var iter = ranges.Overlap(new SpanRange<byte>
       {
-        var range = ranges[idx];
-        var offset = address - range.Addr;
-        var len = data.Length;
-        if (offset + len > range.Length)
-          len = range.Length - offset;
-        range.Memory.Write(data[..len], range.MemAddr + offset);
-        address += len;
-        data = data[len..];
-      }
-    }
+        Span = data,
+        Offset = address,
+      });
 
-    private int FindStartIndex(int address)
-    {
-      var lo = 0;
-      var hi = ranges.Count - 1;
-      while (lo <= hi)
+      while (iter.Next(out var mrange, out var brange))
       {
-        var mid = lo + ((hi - lo) >> 1);
-        var range = ranges[mid];
-        if (address < range.Addr)
-          hi = mid - 1;
-        else if (address >= range.Addr + range.Length)
-          lo = mid + 1;
-        else
-          return mid;
+        mrange.Memory.Write(brange.Span, mrange.MemAddr);
       }
-      return ranges.Count;
     }
   }
 

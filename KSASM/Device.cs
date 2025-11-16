@@ -19,15 +19,10 @@ namespace KSASM
   {
     public abstract ulong Id { get; }
 
-    private readonly MappedMemory memory;
+    private readonly MappedMemory memory = new();
 
     public BaseDevice(params IDeviceField[] fields)
     {
-      var totalSize = 0;
-      foreach (var field in fields)
-        totalSize += field.Size;
-
-      memory = new(new NullDevice(), totalSize);
       var addr = 0;
       foreach (var field in fields)
       {
@@ -36,10 +31,7 @@ namespace KSASM
       }
     }
 
-    public void Read(Span<byte> buffer, int address)
-    {
-      memory.Read(buffer, address);
-    }
+    public void Read(Span<byte> buffer, int address) => memory.Read(buffer, address);
     public void Write(Span<byte> data, int address) => memory.Write(data, address);
 
     protected static Value Unsigned(ulong val) => new() { Unsigned = val };

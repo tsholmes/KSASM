@@ -28,8 +28,10 @@ namespace KSASM
     public Processor(params IDevice[] devices)
     {
       MainMemory = new(MAIN_MEM_SIZE);
-      MappedMemory = new(MainMemory, MAIN_MEM_SIZE);
+      MappedMemory = new();
       Memory = new(MappedMemory);
+
+      MappedMemory.MapRange(0, MainMemory, 0, MAIN_MEM_SIZE);
 
       foreach (var device in devices)
         deviceMap.Add(device.Id, device);

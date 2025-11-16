@@ -148,4 +148,55 @@ namespace KSASM
       return sb.ToString();
     }
   }
+
+
+  public interface IValueConverter<T>
+  {
+    public ValueMode Mode();
+    public T FromValue(Value val);
+    public Value ToValue(T val);
+  }
+
+  public abstract class BaseValueConverter<C, T> : IValueConverter<T>
+    where C : BaseValueConverter<C, T>, new()
+  {
+    public static C Instance { get; } = new();
+
+    public abstract ValueMode Mode();
+    public abstract T FromValue(Value val);
+    public abstract Value ToValue(T val);
+  }
+
+  public abstract class UnsignedValueConverter<C, T> : BaseValueConverter<C, T>
+    where C : UnsignedValueConverter<C, T>, new()
+  {
+    public override ValueMode Mode() => ValueMode.Unsigned;
+    public override T FromValue(Value val) => FromUnsigned(val.Unsigned);
+    public override Value ToValue(T val) => new() { Unsigned = ToUnsigned(val) };
+
+    public abstract T FromUnsigned(ulong val);
+    public abstract ulong ToUnsigned(T val);
+  }
+
+  public abstract class SignedValueConverter<C, T> : BaseValueConverter<C, T>
+    where C : SignedValueConverter<C, T>, new()
+  {
+    public override ValueMode Mode() => ValueMode.Signed;
+    public override T FromValue(Value val) => FromSigned(val.Signed);
+    public override Value ToValue(T val) => new() { Signed = ToSigned(val) };
+
+    public abstract T FromSigned(long val);
+    public abstract long ToSigned(T val);
+  }
+
+  public abstract class FloatValueConverter<C, T> : BaseValueConverter<C, T>
+    where C : FloatValueConverter<C, T>, new()
+  {
+    public override ValueMode Mode() => ValueMode.Float;
+    public override T FromValue(Value val) => FromFloat(val.Float);
+    public override Value ToValue(T val) => new() { Float = ToFloat(val) };
+
+    public abstract T FromFloat(double val);
+    public abstract double ToFloat(T val);
+  }
 }
