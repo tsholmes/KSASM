@@ -8,8 +8,9 @@ namespace KSASM
   {
     public override ulong GetId(CelestialSystem device) => 1;
 
-    public override RootDeviceField<CelestialSystem> RootField { get; } = new(AstronomicalSearch);
+    public override RootDeviceField<CelestialSystem> RootField { get; } = new(Time, AstronomicalSearch);
 
+    public static readonly DoubleDeviceField<CelestialSystem> Time = new((ref _) => Universe.GetElapsedSeconds());
     public static readonly SearchViewDeviceField<CelestialSystem> AstronomicalSearch = new(new AstronomicalField());
 
     private static Astronomical SearchAstronomical(ref SearchView<CelestialSystem> search, Span<byte> _) =>

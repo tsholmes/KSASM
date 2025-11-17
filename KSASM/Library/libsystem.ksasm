@@ -8,6 +8,7 @@
 .region libsystem 1024
 
 system_data:
+:f64 system_time: 0
 :u64 system_hash_param: 0
 :u64 system_hash: 0
 system_orbit:
