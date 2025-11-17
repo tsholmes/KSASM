@@ -23,6 +23,13 @@ vehicle_avel:
   :f64 vehicle_avelz: 0
 vehicle_inputs:
   :u64 vehicle_thrust_command: 0
+vehicle_patches:
+  :u64 vehicle_patch_count: 0
+  :u64 vehicle_patch_index: 0
+  vehicle_patch:
+    :f64 vehicle_patch_start_time: 0
+    :f64 vehicle_patch_end_time: 0
+    :u64 vehicle_patch_orbit: 0*4
 vehicle_data_end:
 
 .macro vehicle_init .setup_device($(.vehicle_id), $(vehicle_data), $(vehicle_data_end))

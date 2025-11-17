@@ -8,11 +8,14 @@ namespace KSASM
   public class VehicleDeviceDefinition : DeviceDefinition<Vehicle, VehicleDeviceDefinition>
   {
     public override ulong GetId(Vehicle device) => 2;
-    public override RootDeviceField<Vehicle> RootField { get; } = new(Hash, AVel, Inputs);
+    public override RootDeviceField<Vehicle> RootField { get; } = new(Hash, AVel, Inputs, Patches);
 
     public static readonly UintDeviceField<Vehicle> Hash = new((ref v) => v.Hash);
     public static readonly Double3DeviceField<Vehicle> AVel = new((ref v, _) => v.BodyRates);
     public static readonly InputsField Inputs = new();
+    public static readonly ListViewDeviceField<Vehicle> Patches = new(
+      v => v.FlightPlan.Patches.Count,
+      new PatchDeviceField<ListView<Vehicle>>((ref v, _) => v.Parent.FlightPlan.Patches[(int)v.Index]));
 
     public class InputsField()
     : ValueCompositeDeviceField<Vehicle, ManualControlInputs>(GetValue, SetValue, ThrustCommand)
