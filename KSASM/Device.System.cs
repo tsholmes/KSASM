@@ -8,11 +8,10 @@ namespace KSASM
   {
     public override ulong GetId(CelestialSystem device) => 1;
 
-    public override IDeviceField<CelestialSystem> RootField { get; } =
-      new RootDeviceField<CelestialSystem>(AstronomicalSearch);
+    public override RootDeviceField<CelestialSystem> RootField { get; } = new(AstronomicalSearch);
 
     public static readonly SearchViewDeviceField<CelestialSystem, Astronomical> AstronomicalSearch =
-      new(0, new AstronomicalField(0).Nullable(), SearchAstronomical);
+      new(0, new AstronomicalField(0), SearchAstronomical);
 
     private static Astronomical SearchAstronomical(
       ref SearchView<CelestialSystem> search,
@@ -20,23 +19,11 @@ namespace KSASM
     ) => search.Key == 0 ? search.Parent.GetWorldSun() : search.Parent.Get((uint)search.Key);
 
     public class AstronomicalField(int offset)
-    : CompositeDeviceField<Astronomical, Astronomical>(offset, Hash, Orbit)
+    : CompositeDeviceField<Astronomical, Astronomical>(offset, (ref v, _) => v, Hash, Orbit)
     {
-      protected override Astronomical GetValue(ref Astronomical parent, Span<byte> deviceBuf) => parent;
-
-      public static readonly HashField Hash = new();
-      public static readonly OrbitField Orbit = new();
-
-      public class HashField() : ReadOnlyUintDeviceField<Astronomical>(0)
-      {
-        protected override uint GetValue(ref Astronomical parent) => parent.Hash;
-      }
-
-      public class OrbitField() : OrbitDeviceField<Astronomical>(Hash.End())
-      {
-        protected override Orbit GetValue(ref Astronomical parent, Span<byte> deviceBuf) =>
-          (parent as IOrbiting)?.Orbit;
-      }
+      public static readonly UintDeviceField<Astronomical> Hash = new(0, (ref a) => a?.Hash ?? 0);
+      public static readonly IDeviceField<Astronomical> Orbit =
+        new OrbitDeviceField<Astronomical>(Hash.End(), (ref a, _) => (a as IOrbiting)?.Orbit);
     }
   }
 }

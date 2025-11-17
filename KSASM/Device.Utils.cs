@@ -6,7 +6,6 @@ namespace KSASM
   public static class DeviceFieldExtensions
   {
     public static ReadOnlyDeviceField<T> ReadOnly<T>(this IDeviceField<T> field) => new(field);
-    public static NullableDeviceField<T> Nullable<T>(this IDeviceField<T> field) where T : class => new(field);
     public static int End<T>(this IDeviceField<T> field) => field.Offset + field.Length;
   }
 
@@ -18,26 +17,6 @@ namespace KSASM
       inner.Read(ref parent, deviceBuf, readBuf, offset);
 
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) { }
-  }
-
-  public class NullableDeviceField<T>(IDeviceField<T> inner) : IDeviceField<T> where T : class
-  {
-    public int Offset => inner.Offset;
-    public int Length => inner.Length;
-
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
-    {
-      if (parent == null)
-        readBuf.Clear();
-      else
-        inner.Read(ref parent, deviceBuf, readBuf, offset);
-    }
-
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
-    {
-      if (parent != null)
-        inner.Write(ref parent, deviceBuf, writeBuf, offset);
-    }
   }
 
   public class ProxyDeviceField<T, V>(
@@ -70,11 +49,12 @@ namespace KSASM
     ProxyDeviceField<SearchView<T>, V>.InnerAccessor resultAccessor
   ) : CompositeDeviceField<T, SearchView<T>>(
     offset,
+    GetValue,
     KeyParam,
     new ProxyDeviceField<SearchView<T>, V>(KeyParam.End(), resultField, resultAccessor)
   )
   {
-    protected override SearchView<T> GetValue(ref T parent, Span<byte> deviceBuf)
+    private static SearchView<T> GetValue(ref T parent, Span<byte> deviceBuf)
     {
       var key = KeyParam.GetValue(deviceBuf);
       return new()
