@@ -1,0 +1,16 @@
+.ifndef libdevice
+.macro libdevice
+
+.region libdevice 12
+
+_device_setup_data:
+:p24 _device_setup_addr: 0 _device_setup_len: 0 _device_setup_id: 0 0
+
+.macro setup_device(id, addr, end) \
+  copy:p24 _device_setup_addr, addr \
+  copy:p24 _device_setup_len, end \
+  subtract:p24 _device_setup_len, _device_setup_addr \
+  copy:p24 _device_setup_id, id \
+  devmap*2:p24 _device_setup_data+0, +6
+
+.endif

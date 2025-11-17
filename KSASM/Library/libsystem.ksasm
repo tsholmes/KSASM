@@ -1,10 +1,11 @@
 # constants and macros for interacting with the System device
+.import libdevice
+
+.ifndef libsystem
 
 .macro system_id 1
 
 .region libsystem 1024
-
-:p24 _system_setup_data: system_data 0 .system_id 0 system_data_end
 
 system_data:
 :u64 system_hash_param: 0
@@ -16,7 +17,6 @@ system_orbit:
   :f64 system_period: 0
 system_data_end:
 
-.macro system_init \
-  copy:p24 _system_setup_data+3, +12 \
-  subtract:p24 _system_setup_data+3, +0 \
-  devmap*2:p24 _system_setup_data+0, +6
+.macro system_init .setup_device($(.system_id), $(system_data), $(system_data_end))
+
+.endif

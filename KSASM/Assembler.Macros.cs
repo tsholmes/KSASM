@@ -15,6 +15,7 @@ namespace KSASM
       private readonly Dictionary<string, MacroDef> macros = [];
 
       private int regionPos = 0x00100000;
+      private int ifDepth = 0;
 
       public MacroParser(ITokenStream stream)
       {
@@ -72,8 +73,47 @@ namespace KSASM
           case "import": MacroImport(); break;
           case "region": MacroRegion(); break;
           case "add": MacroAdd(); break;
+          case "ifdef": MacroIf(false); break;
+          case "ifndef": MacroIf(true); break;
+          case "endif": MacroEndIf(token); break;
           default: MacroExpand(name, token); break;
         }
+      }
+
+      private void MacroIf(bool not)
+      {
+        if (!lexer.TakeType(TokenType.Word, out var wtoken))
+          throw Invalid();
+
+        var name = wtoken.Str();
+        if (macros.ContainsKey(name) != not)
+        {
+          ifDepth++;
+          return;
+        }
+
+        var skipDepth = 1;
+        while (skipDepth > 0)
+        {
+          if (lexer.TakeType(TokenType.Macro, out var mtoken))
+          {
+            skipDepth += mtoken.Str()[1..] switch
+            {
+              "ifdef" or "ifndef" => 1,
+              "endif" => -1,
+              _ => 0,
+            };
+          }
+          else if (!lexer.Take(out _))
+            throw Invalid();
+        }
+      }
+
+      private void MacroEndIf(Token token)
+      {
+        if (ifDepth <= 0)
+          throw Invalid(token);
+        ifDepth--;
       }
 
       private void MacroAdd()

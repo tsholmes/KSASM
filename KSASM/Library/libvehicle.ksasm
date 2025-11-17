@@ -1,4 +1,8 @@
 # constants and macros for interacting with the Vehicle device
+.import libdevice
+
+.ifndef libvehicle
+.macro libvehicle
 
 .macro vehicle_id 2
 # thrust command flags
@@ -11,8 +15,6 @@
 
 .region libvehicle 1024
 
-:p24 _vehicle_setup_data: vehicle_data 0 .vehicle_id 0 vehicle_data_end
-
 vehicle_data:
 :u64 vehicle_hash: 0
 vehicle_avel:
@@ -23,7 +25,6 @@ vehicle_inputs:
   :u64 vehicle_thrust_command: 0
 vehicle_data_end:
 
-.macro vehicle_init \
-  copy:p24 _vehicle_setup_data+3, +12 \
-  subtract:p24 _vehicle_setup_data+3, +0 \
-  devmap*2:p24 _vehicle_setup_data+0, +6
+.macro vehicle_init .setup_device($(.vehicle_id), $(vehicle_data), $(vehicle_data_end))
+
+.endif
