@@ -1,0 +1,22 @@
+# constants and macros for interacting with the System device
+
+.macro system_id 1
+
+.region libsystem 1024
+
+:p24 _system_setup_data: system_data 0 .system_id 0 system_data_end
+
+system_data:
+:u64 system_hash_param: 0
+:u64 system_hash: 0
+system_orbit:
+  :u64 system_parent: 0
+  :f64 system_periapsis: 0
+  :f64 system_apoapsis: 0
+  :f64 system_period: 0
+system_data_end:
+
+.macro system_init \
+  copy:p24 _system_setup_data+3, +12 \
+  subtract:p24 _system_setup_data+3, +0 \
+  devmap*2:p24 _system_setup_data+0, +6

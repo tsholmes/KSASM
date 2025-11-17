@@ -134,6 +134,10 @@ namespace KSASM
             ParseBConst(state, ref inst);
             inst.OffsetB -= inst.AddrBase;
             break;
+          case (ParsedOpMode.Addr, ParsedOpMode.Placeholder):
+            ParseASimple(state, ref inst);
+            CopyAToB(state, ref inst);
+            break;
           case (ParsedOpMode.BaseOffset, ParsedOpMode.Offset):
             ParseABaseOffset(state, ref inst);
             ParseBSimple(state, ref inst);

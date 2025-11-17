@@ -205,4 +205,10 @@ namespace KSASM
     public override double FromFloat(double val) => val;
     public override double ToFloat(double val) => val;
   }
+
+  public class UintValueConverter : UnsignedValueConverter<UintValueConverter, uint>
+  {
+    public override uint FromUnsigned(ulong val) => (uint)val;
+    public override ulong ToUnsigned(uint val) => val;
+  }
 }
