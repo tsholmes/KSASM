@@ -17,12 +17,6 @@ namespace KSASM
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset);
   }
 
-  public static class DeviceFieldExtensions
-  {
-    public static IDeviceField<T> ReadOnly<T>(this IDeviceField<T> field) => new ReadOnlyDeviceField<T>(field);
-    public static int End<T>(this IDeviceField<T> field) => field.Offset + field.Length;
-  }
-
   public struct DeviceFieldRange<T> : IRange<DeviceFieldRange<T>>
   {
     public int Offset { get; set; }
@@ -42,63 +36,43 @@ namespace KSASM
     }
   }
 
-  public abstract class LeafDeviceField<T, V> : IDeviceField<T>
+  public abstract class LeafDeviceField<T, V>(DataType type, int offset, IValueConverter<V> converter)
+  : IDeviceField<T>
   {
-    public int Offset { get; }
-    public readonly DataType Type;
-    public readonly IValueConverter<V> Converter;
-
-    public LeafDeviceField(DataType type, int offset, IValueConverter<V> converter)
-    {
-      this.Offset = offset;
-      this.Type = type;
-      this.Converter = converter;
-    }
-
-    public int Length => Type.SizeBytes();
+    public int Offset => offset;
+    public int Length => type.SizeBytes();
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
-      Encoding.Encode(deviceBuf, Type, Converter.ToValue(GetValue(ref parent)));
+      Encoding.Encode(deviceBuf, type, converter.ToValue(GetValue(ref parent)));
       deviceBuf[offset..(offset + readBuf.Length)].CopyTo(readBuf);
     }
 
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
-      Encoding.Encode(deviceBuf, Type, Converter.ToValue(GetValue(ref parent)));
+      Encoding.Encode(deviceBuf, type, converter.ToValue(GetValue(ref parent)));
       writeBuf.CopyTo(deviceBuf[offset..]);
-      SetValue(ref parent, Converter.FromValue(Encoding.Decode(deviceBuf, Type)));
+      SetValue(ref parent, converter.FromValue(Encoding.Decode(deviceBuf, type)));
     }
 
     protected abstract V GetValue(ref T parent);
     protected abstract void SetValue(ref T parent, V value);
   }
 
-  public class ParamDeviceField<T, V> : IDeviceField<T>
+  public class ParamDeviceField<T, V>(DataType type, int offset, IValueConverter<V> converter) : IDeviceField<T>
   {
-    public int Offset { get; }
-    public readonly DataType Type;
-    public readonly IValueConverter<V> Converter;
-
-    public ParamDeviceField(DataType type, int offset, IValueConverter<V> converter)
-    {
-      this.Offset = offset;
-      this.Type = type;
-      this.Converter = converter;
-    }
-
-    public int Length => Type.SizeBytes();
+    public int Offset => offset;
+    public int Length => type.SizeBytes();
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) =>
       deviceBuf[offset..(offset + readBuf.Length)].CopyTo(readBuf);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) =>
       writeBuf.CopyTo(deviceBuf[offset..]);
 
-
     public V GetValue(Span<byte> deviceBuf) =>
-      Converter.FromValue(Encoding.Decode(deviceBuf, Type));
+      converter.FromValue(Encoding.Decode(deviceBuf, type));
     public void SetValue(Span<byte> deviceBuf, V value) =>
-      Encoding.Encode(deviceBuf, Type, Converter.ToValue(value));
+      Encoding.Encode(deviceBuf, type, converter.ToValue(value));
   }
 
   public abstract class CompositeDeviceField<T, V> : IDeviceField<T>
@@ -169,13 +143,9 @@ namespace KSASM
     protected abstract V GetValue(ref T parent, Span<byte> deviceBuf);
   }
 
-  public abstract class ValueCompositeDeviceField<T, V> : CompositeDeviceField<T, V>
+  public abstract class ValueCompositeDeviceField<T, V>(int offset, params IDeviceField<V>[] children)
+  : CompositeDeviceField<T, V>(offset, children)
   {
-    protected ValueCompositeDeviceField(
-      int offset,
-      params IDeviceField<V>[] children
-    ) : base(offset, children) { }
-
     public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       var self = GetValue(ref parent, deviceBuf);
@@ -186,25 +156,8 @@ namespace KSASM
     protected abstract void SetValue(ref T parent, V self);
   }
 
-  public class ReadOnlyDeviceField<T> : IDeviceField<T>
+  public class RootDeviceField<T>(params IDeviceField<T>[] children) : CompositeDeviceField<T, T>(0, children)
   {
-    public readonly IDeviceField<T> Field;
-
-    public ReadOnlyDeviceField(IDeviceField<T> field) => this.Field = field;
-
-
-    public int Offset => Field.Offset;
-    public int Length => Field.Length;
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) =>
-      Field.Read(ref parent, deviceBuf, readBuf, offset);
-
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) { }
-  }
-
-  public class RootDeviceField<T> : CompositeDeviceField<T, T>
-  {
-    public RootDeviceField(params IDeviceField<T>[] children) : base(0, children) { }
-
     protected override T GetValue(ref T parent, Span<byte> deviceBuf) => parent;
   }
 

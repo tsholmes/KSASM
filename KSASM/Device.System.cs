@@ -9,46 +9,34 @@ namespace KSASM
     public override ulong GetId(CelestialSystem device) => 1;
 
     public override IDeviceField<CelestialSystem> RootField { get; } =
-      new RootDeviceField<CelestialSystem>(SystemQuery);
+      new RootDeviceField<CelestialSystem>(AstronomicalSearch);
 
-    public static readonly SystemQueryField SystemQuery = new();
+    public static readonly SearchViewDeviceField<CelestialSystem, Astronomical> AstronomicalSearch =
+      new(0, new AstronomicalField(0).Nullable(), SearchAstronomical);
 
-    public class SystemQueryField()
-    : CompositeDeviceField<CelestialSystem, SystemQueryView>(0, HashParam, Hash, Orbit)
+    private static Astronomical SearchAstronomical(
+      ref SearchView<CelestialSystem> search,
+      Span<byte> deviceBuf
+    ) => search.Key == 0 ? search.Parent.GetWorldSun() : search.Parent.Get((uint)search.Key);
+
+    public class AstronomicalField(int offset)
+    : CompositeDeviceField<Astronomical, Astronomical>(offset, Hash, Orbit)
     {
-      protected override SystemQueryView GetValue(ref CelestialSystem parent, Span<byte> deviceBuf)
-      {
-        var hash = HashParam.GetValue(deviceBuf);
-        var current = hash == 0 ? parent.GetWorldSun() : parent.Get(hash);
-        return new()
-        {
-          System = parent,
-          Current = current,
-        };
-      }
+      protected override Astronomical GetValue(ref Astronomical parent, Span<byte> deviceBuf) => parent;
 
-      public static ParamDeviceField<SystemQueryView, uint> HashParam =
-        new(DataType.U64, 0, UintValueConverter.Instance);
       public static readonly HashField Hash = new();
       public static readonly OrbitField Orbit = new();
 
-      public class HashField() : UintDeviceField<SystemQueryView>(HashParam.End())
+      public class HashField() : ReadOnlyUintDeviceField<Astronomical>(0)
       {
-        protected override uint GetValue(ref SystemQueryView parent) => parent.Current?.Hash ?? 0;
-        protected override void SetValue(ref SystemQueryView parent, uint value) { }
+        protected override uint GetValue(ref Astronomical parent) => parent.Hash;
       }
 
-      public class OrbitField() : OrbitDeviceField<SystemQueryView>(Hash.End())
+      public class OrbitField() : OrbitDeviceField<Astronomical>(Hash.End())
       {
-        protected override Orbit GetValue(ref SystemQueryView parent, Span<byte> deviceBuf) =>
-          (parent.Current as IOrbiting)?.Orbit;
+        protected override Orbit GetValue(ref Astronomical parent, Span<byte> deviceBuf) =>
+          (parent as IOrbiting)?.Orbit;
       }
-    }
-
-    public struct SystemQueryView
-    {
-      public CelestialSystem System;
-      public Astronomical Current;
     }
   }
 }

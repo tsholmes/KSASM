@@ -28,13 +28,10 @@ namespace KSASM
     public static readonly Element Y = new(1);
     public static readonly Element Z = new(2);
 
-    public class Element : DoubleDeviceField<double3>
+    public class Element(int index) : DoubleDeviceField<double3>(index * DataType.F64.SizeBytes())
     {
-      public readonly int Index;
-      public Element(int index) : base(index * DataType.F64.SizeBytes()) { this.Index = index; }
-
-      protected override double GetValue(ref double3 parent) => parent[Index];
-      protected override void SetValue(ref double3 parent, double value) => parent[Index] = value;
+      protected override double GetValue(ref double3 parent) => parent[index];
+      protected override void SetValue(ref double3 parent, double value) => parent[index] = value;
     }
   }
 }
