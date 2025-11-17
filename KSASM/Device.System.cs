@@ -10,16 +10,14 @@ namespace KSASM
 
     public override RootDeviceField<CelestialSystem> RootField { get; } = new(AstronomicalSearch);
 
-    public static readonly SearchViewDeviceField<CelestialSystem, Astronomical> AstronomicalSearch =
-      new(0, new AstronomicalField(0), SearchAstronomical);
+    public static readonly SearchViewDeviceField<CelestialSystem> AstronomicalSearch =
+      new(0, new AstronomicalField(0));
 
-    private static Astronomical SearchAstronomical(
-      ref SearchView<CelestialSystem> search,
-      Span<byte> deviceBuf
-    ) => search.Key == 0 ? search.Parent.GetWorldSun() : search.Parent.Get((uint)search.Key);
+    private static Astronomical SearchAstronomical(ref SearchView<CelestialSystem> search, Span<byte> _) =>
+      search.Key == 0 ? search.Parent.GetWorldSun() : search.Parent.Get((uint)search.Key);
 
     public class AstronomicalField(int offset)
-    : CompositeDeviceField<Astronomical, Astronomical>(offset, (ref v, _) => v, Hash, Orbit)
+    : CompositeDeviceField<SearchView<CelestialSystem>, Astronomical>(offset, SearchAstronomical, Hash, Orbit)
     {
       public static readonly UintDeviceField<Astronomical> Hash = new(0, (ref a) => a?.Hash ?? 0);
       public static readonly IDeviceField<Astronomical> Orbit =
