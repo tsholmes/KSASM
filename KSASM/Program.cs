@@ -20,6 +20,7 @@ namespace KSASM
       Processor.DebugOps = false;
 
       Library.LibraryDir = Path.Join(Directory.GetCurrentDirectory(), "Library");
+      Library.RefreshIndex();
 
       Directory.SetCurrentDirectory(KSADir);
 

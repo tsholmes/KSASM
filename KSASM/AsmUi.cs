@@ -44,6 +44,24 @@ namespace KSASM
       if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
         return false;
 
+      if (ImGui.BeginCombo("##Library", "Load Library Script"))
+      {
+        for (var i = 0; i < Library.Index.Count; i++)
+        {
+          var name = Library.Index[i];
+          ImGui.PushID(i);
+          if (ImGui.Selectable(name))
+          {
+            var source = Library.LoadImport(name);
+            var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
+            sbytes.CopyTo(buffer);
+            buffer[sbytes.Length] = 0;
+          }
+          ImGui.PopID();
+        }
+        ImGui.EndCombo();
+      }
+
       ImGui.InputTextMultiline(
         "###source",
         buffer.AsSpan(),
