@@ -10,30 +10,10 @@ namespace KSASM
 
   public interface IDeviceField<T>
   {
-    public int Offset { get; }
     public int Length { get; }
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset);
-  }
-
-  public struct DeviceFieldRange<T> : IRange<DeviceFieldRange<T>>
-  {
-    public int Offset { get; set; }
-    public int Length { get; set; }
-    public IDeviceField<T> Field;
-
-    public DeviceFieldRange<T> Slice(int offset, int length) => this with
-    {
-      Offset = offset,
-      Length = length,
-    };
-
-    public bool TryMerge(DeviceFieldRange<T> next, out DeviceFieldRange<T> merged)
-    {
-      merged = default;
-      return false;
-    }
   }
 
   public delegate V DeviceFieldGetter<T, V>(ref T parent);
@@ -42,13 +22,11 @@ namespace KSASM
 
   public class LeafDeviceField<T, V>(
     DataType type,
-    int offset,
     IValueConverter<V> converter,
     DeviceFieldGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue = null
   ) : IDeviceField<T>
   {
-    public int Offset => offset;
     public int Length => type.SizeBytes();
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
@@ -65,9 +43,8 @@ namespace KSASM
     }
   }
 
-  public class ParamDeviceField<T, V>(DataType type, int offset, IValueConverter<V> converter) : IDeviceField<T>
+  public class ParamDeviceField<T, V>(DataType type, IValueConverter<V> converter) : IDeviceField<T>
   {
-    public int Offset => offset;
     public int Length => type.SizeBytes();
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) =>
@@ -83,14 +60,12 @@ namespace KSASM
 
   public class CompositeDeviceField<T, V> : IDeviceField<T>
   {
-    public int Offset { get; }
     public int Length { get; }
 
     protected readonly DeviceFieldBufGetter<T, V> getValue;
-    private readonly RangeList<DeviceFieldRange<V>> fieldRanges = new();
+    private readonly RangeList<DeviceFieldRange> fieldRanges = new();
 
     public CompositeDeviceField(
-      int offset,
       DeviceFieldBufGetter<T, V> getValue,
       params IDeviceField<V>[] children)
     {
@@ -100,15 +75,13 @@ namespace KSASM
       {
         fieldRanges.AddRange(new()
         {
-          Offset = child.Offset,
+          StartOffset = len,
+          Offset = len,
           Length = child.Length,
           Field = child,
         });
-        var end = child.Offset + child.Length;
-        if (end > len)
-          len = end;
+        len += child.Length;
       }
-      Offset = offset;
       Length = len;
     }
 
@@ -124,8 +97,8 @@ namespace KSASM
       while (iter.Next(out var frange, out var brange))
       {
         var field = frange.Field;
-        var fbuf = deviceBuf[field.Offset..field.End()];
-        field.Read(ref self, fbuf, brange.Span, frange.Offset - field.Offset);
+        var fbuf = deviceBuf[frange.StartOffset..][..field.Length];
+        field.Read(ref self, fbuf, brange.Span, frange.Offset - frange.StartOffset);
       }
     }
 
@@ -146,18 +119,37 @@ namespace KSASM
       while (iter.Next(out var frange, out var brange))
       {
         var field = frange.Field;
-        var fbuf = deviceBuf[field.Offset..(field.Offset + field.Length)];
-        field.Write(ref self, fbuf, brange.Span, frange.Offset - field.Offset);
+        var fbuf = deviceBuf[frange.StartOffset..][..field.Length];
+        field.Write(ref self, fbuf, brange.Span, frange.Offset - frange.StartOffset);
+      }
+    }
+
+    public struct DeviceFieldRange : IRange<DeviceFieldRange>
+    {
+      public int StartOffset;
+      public int Offset { get; set; }
+      public int Length { get; set; }
+      public IDeviceField<V> Field;
+
+      public DeviceFieldRange Slice(int offset, int length) => this with
+      {
+        Offset = offset,
+        Length = length,
+      };
+
+      public bool TryMerge(DeviceFieldRange next, out DeviceFieldRange merged)
+      {
+        merged = default;
+        return false;
       }
     }
   }
 
   public class ValueCompositeDeviceField<T, V>(
-    int offset,
     DeviceFieldBufGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue,
     params IDeviceField<V>[] children)
-  : CompositeDeviceField<T, V>(offset, getValue, children)
+  : CompositeDeviceField<T, V>(getValue, children)
   {
     public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
@@ -168,7 +160,7 @@ namespace KSASM
   }
 
   public class RootDeviceField<T>(params IDeviceField<T>[] children)
-  : CompositeDeviceField<T, T>(0, (ref v, _) => v, children)
+  : CompositeDeviceField<T, T>((ref v, _) => v, children)
   { }
 
   public abstract class DeviceDefinition<T, Def> where Def : DeviceDefinition<T, Def>, new()
@@ -181,34 +173,17 @@ namespace KSASM
     public static Device<T> Make(T device) => new(Instance.GetId(device), device, Instance.RootField);
   }
 
-  public class Device<T> : IDevice
+  public class Device<T>(ulong id, T instance, IDeviceField<T> root) : IDevice
   {
-    public ulong Id { get; }
-    private T instance;
-    public readonly IDeviceField<T> Root;
+    public ulong Id { get; } = id;
 
-    private readonly byte[] devBuffer;
+    private readonly byte[] devBuffer = new byte[root.Length];
 
-    public Device(ulong id, T instance, IDeviceField<T> root)
-    {
-      this.Id = id;
-      this.instance = instance;
-      this.Root = root;
-      this.devBuffer = new byte[root.Length];
+    public void Read(Span<byte> buffer, int address) =>
+      root.Read(ref instance, devBuffer, buffer, address);
 
-      if (root.Offset != 0)
-        throw new InvalidOperationException($"{root}");
-    }
-
-    public void Read(Span<byte> buffer, int address)
-    {
-      Root.Read(ref instance, devBuffer, buffer, address);
-    }
-
-    public void Write(Span<byte> data, int address)
-    {
-      Root.Write(ref instance, devBuffer, data, address);
-    }
+    public void Write(Span<byte> data, int address) =>
+      root.Write(ref instance, devBuffer, data, address);
   }
 
   public class NullDevice : IDevice

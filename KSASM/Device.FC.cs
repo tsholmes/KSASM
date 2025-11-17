@@ -10,7 +10,6 @@ namespace KSASM
 
     public static readonly LeafDeviceField<FlightComputer, FlightComputerManualThrustMode> ThrustMode = new(
       DataType.U64,
-      0,
       ThrustModeConverter.Instance,
       (ref fc) => fc.ManualThrustMode,
       (ref fc, mode) => fc.SetManualThrustMode(mode));

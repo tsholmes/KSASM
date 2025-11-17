@@ -1,7 +1,6 @@
 
 using System;
 using System.Reflection;
-using Brutal.Numerics;
 using KSA;
 
 namespace KSASM
@@ -11,15 +10,15 @@ namespace KSASM
     public override ulong GetId(Vehicle device) => 2;
     public override RootDeviceField<Vehicle> RootField { get; } = new(Hash, AVel, Inputs);
 
-    public static readonly UintDeviceField<Vehicle> Hash = new(0, (ref v) => v.Hash);
-    public static readonly Double3DeviceField<Vehicle> AVel = new(Hash.End(), (ref v, _) => v.BodyRates);
+    public static readonly UintDeviceField<Vehicle> Hash = new((ref v) => v.Hash);
+    public static readonly Double3DeviceField<Vehicle> AVel = new((ref v, _) => v.BodyRates);
     public static readonly InputsField Inputs = new();
 
     public class InputsField()
-    : ValueCompositeDeviceField<Vehicle, ManualControlInputs>(AVel.End(), GetValue, SetValue, ThrustCommand)
+    : ValueCompositeDeviceField<Vehicle, ManualControlInputs>(GetValue, SetValue, ThrustCommand)
     {
       public static readonly LeafDeviceField<ManualControlInputs, ThrusterMapFlags> ThrustCommand = new(
-        DataType.U64, 0, ThrustCommandConverter.Instance,
+        DataType.U64, ThrustCommandConverter.Instance,
         (ref v) => v.ThrusterCommandFlags, (ref v, cmd) => v.ThrusterCommandFlags = cmd);
 
       private static FieldInfo _field;
