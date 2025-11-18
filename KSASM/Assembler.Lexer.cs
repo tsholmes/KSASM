@@ -260,7 +260,7 @@ namespace KSASM
 
       private static bool IsDigit(char c) => char.IsAsciiDigit(c);
 
-      private static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c);
+      private static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
 
       private static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
     }

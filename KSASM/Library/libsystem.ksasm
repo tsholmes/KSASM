@@ -1,23 +1,22 @@
-# constants and macros for interacting with the System device
 .import libdevice
+.import libtypes
 
-.ifndef libsystem
+# constants and macros for interacting with the System device
+.ifndef libsystem .macro libsystem
+.ns system.
 
-.macro system_id 1
+.macro id 1
 
-.region libsystem 1024
+.region data 1024
 
-system_data:
-:f64 system_time: 0
-:u64 system_hash_param: 0
-:u64 system_hash: 0
-system_orbit:
-  :u64 system_parent: 0
-  :f64 system_periapsis: 0
-  :f64 system_apoapsis: 0
-  :f64 system_period: 0
-system_data_end:
+data:
+  :f64 time: 0
+  :u64 hash_param: 0
+  :u64 hash: 0
+  orbit: .types.orbit(orbit.)
+data_end:
 
-.macro system_init .setup_device($(.system_id), $(system_data), $(system_data_end))
+.macro init .device.setup($(.system.id), $(system.data), $(system.data_end))
 
+.endns
 .endif

@@ -1,37 +1,33 @@
 # constants and macros for interacting with the Vehicle device
 .import libdevice
 
-.ifndef libvehicle
-.macro libvehicle
+.ifndef libvehicle .macro libvehicle
+.ns vehicle.
 
-.macro vehicle_id 2
+.macro id 2
 # thrust command flags
-  .macro vehicle_thrust_roll_right 2
-  .macro vehicle_thrust_roll_left 4
-  .macro vehicle_thrust_pitch_up 8
-  .macro vehicle_thrust_pitch_down 16
-  .macro vehicle_thrust_yaw_right 32
-  .macro vehicle_thrust_yaw_left 64
+.ns thrust.
+  .macro roll_right 2
+  .macro roll_left 4
+  .macro pitch_up 8
+  .macro pitch_down 16
+  .macro yaw_right 32
+  .macro yaw_left 64
+.endns
 
-.region libvehicle 1024
+.region data 1024
 
-vehicle_data:
-:u64 vehicle_hash: 0
-vehicle_avel:
-  :f64 vehicle_avelx: 0
-  :f64 vehicle_avely: 0
-  :f64 vehicle_avelz: 0
-vehicle_inputs:
-  :u64 vehicle_thrust_command: 0
-vehicle_patches:
-  :u64 vehicle_patch_count: 0
-  :u64 vehicle_patch_index: 0
-  vehicle_patch:
-    :f64 vehicle_patch_start_time: 0
-    :f64 vehicle_patch_end_time: 0
-    :u64 vehicle_patch_orbit: 0*4
-vehicle_data_end:
+data:
+  :u64 hash: 0
+  avel: .types.double3(avel.)
+  inputs: .ns inputs.
+    :u64 thrust_command: 0
+  .endns
+  patches: .types.listview(patches.)
+  patch: .types.patch(patch.)
+data_end:
 
-.macro vehicle_init .setup_device($(.vehicle_id), $(vehicle_data), $(vehicle_data_end))
+.macro init .device.setup($(.vehicle.id), $(vehicle.data), $(vehicle.data_end))
 
+.endns
 .endif

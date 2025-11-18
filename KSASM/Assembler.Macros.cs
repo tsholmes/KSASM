@@ -11,11 +11,13 @@ namespace KSASM
     {
       private readonly LexerReader baseLexer;
       private readonly List<LexerReader> macroStack = [];
+      private readonly List<string> nsStack = [];
 
       private readonly Dictionary<string, MacroDef> macros = [];
 
       private int regionPos = 0x00100000;
       private int ifDepth = 0;
+      private string curNs = "";
 
       public MacroParser(ITokenStream stream)
       {
@@ -43,6 +45,8 @@ namespace KSASM
 
           if (token.Type != TokenType.Macro)
           {
+            if (token.Type == TokenType.Label && curNs.Length > 0)
+              token.OverrideStr = curNs + token.Str();
             if (Debug)
               Console.WriteLine($"{token.Type} '{token.Str()}' at {token.PosStr()}");
             return true;
@@ -76,8 +80,28 @@ namespace KSASM
           case "ifdef": MacroIf(false); break;
           case "ifndef": MacroIf(true); break;
           case "endif": MacroEndIf(token); break;
+          case "ns": MacroNs(); break;
+          case "endns": MacroEndNs(token); break;
           default: MacroExpand(name, token); break;
         }
+      }
+
+      private void MacroNs()
+      {
+        if (!lexer.TakeType(TokenType.Word, out var wtoken))
+          throw Invalid();
+        nsStack.Add(wtoken.Str());
+
+        curNs = string.Join("", nsStack);
+      }
+
+      private void MacroEndNs(Token token)
+      {
+        if (nsStack.Count == 0)
+          throw Invalid(token);
+        nsStack.RemoveAt(nsStack.Count - 1);
+
+        curNs = string.Join("", nsStack);
       }
 
       private void MacroIf(bool not)
@@ -163,7 +187,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
 
-        var name = ntoken.Str();
+        var name = curNs + ntoken.Str();
 
         var endLabel = lexer.TakeType(TokenType.Offset, out var otoken) && otoken.Str() == "-";
 
@@ -196,7 +220,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
 
-        var macro = new MacroDef { Name = ntoken.Str() };
+        var macro = new MacroDef { Name = curNs + ntoken.Str() };
 
         if (lexer.TakeType(TokenType.POpen, out _))
         {

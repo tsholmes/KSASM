@@ -1,48 +1,43 @@
-.ifndef libfc
-.macro libfc
+.import libdevice
+.import libtypes
 
-.macro fc_id 3
+# Data and macros for interacting with FlightComputer device
+.ifndef libfc .macro libfc
+.ns fc.
+
+.macro id 3
 # thrust mode enum
-  .macro fc_thrust_mode_direct 0
-  .macro fc_thrust_mode_pulse 1
+.ns thrust_mode.
+  .macro direct 0
+  .macro pulse 1
+.endns
 
-.region libfc 1024
+.region data 1024
 
-fc_data:
-:u64 fc_thrust_mode: 0
-fc_burns:
-  :u64 fc_burn_count: 0
-  :u64 fc_burn_index: 0
-  fc_burn:
-    :f64 fc_burn_time: 0
-    fc_burn_deltav:
-      :f64 fc_burn_deltav_x: 0
-      :f64 fc_burn_deltav_y: 0
-      :f64 fc_burn_deltav_z: 0
-    fc_burn_flightplan:
-      :u64 fc_burn_patch_count: 0
-      :u64 fc_burn_patch_index: 0
-      fc_burn_patch:
-        :f64 fc_burn_patch_start_time: 0
-        :f64 fc_burn_patch_end_time: 0
-        fc_burn_patch_orbit:
-          :u64 fc_burn_patch_orbit_parent: 0
-          :f64 fc_burn_patch_orbit_periapsis: 0
-          :f64 fc_burn_patch_orbit_apoapsis: 0
-          :f64 fc_burn_patch_orbit_period: 0
-  :u8 fc_burn_outdated: 0
-  :f64 fc_burn_add_time: 0
-fc_data_end:
+data:
+:u64 thrust_mode: 0
+burns: .types.listview(burns.)
+burn: .ns burn.
+  :f64 time: 0
+  deltav: .types.double3(deltav.)
+  flightplan:
+    .types.listview(patches.)
+    patch: .types.patch(patch.)
+  :u8 outdated: 0
+  :f64 add_time: 0
+.endns
+data_end:
 
-.macro fc_init .setup_device($(.fc_id), $(fc_data), $(fc_data_end))
+.macro init .device.setup($(.fc.id), $(fc.data), $(fc.data_end))
 
-.macro fc_burn_wait \
-  call:p24 _fc_burn_wait_ret, _fc_burn_wait
+.macro burn_wait \
+  call:p24 fc._burn_wait_ret, fc._burn_wait
 
-:p24 _fc_burn_wait_ret: 0
-_fc_burn_wait:
-  branchifzero fc_burn_outdated:u8, [_fc_burn_wait_ret]:p24
+:p24 _burn_wait_ret: 0
+_burn_wait:
+  branchifzero fc.burn.outdated:u8, [fc._burn_wait_ret]:p24
   sleep:u8 _, $(1)
-  jump:p24 _fc_burn_wait, _
+  jump:p24 fc._burn_wait, _
 
+.endns
 .endif
