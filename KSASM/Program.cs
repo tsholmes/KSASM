@@ -46,7 +46,7 @@ namespace KSASM
 
       var asmTime = stopwatch.Elapsed.Milliseconds;
 
-      for (var i = 0; i < 10000 && proc.SleepTime == 0; i++)
+      for (var i = 0; i < 1000000 && proc.SleepTime == 0; i++)
         proc.Step();
 
       var runTime = stopwatch.Elapsed.Milliseconds - asmTime;

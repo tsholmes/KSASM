@@ -6,179 +6,134 @@ namespace KSASM
 {
   public partial class Processor
   {
-    private void UnaryBToA(ValuePointer opA, ValuePointer opB, out ValueOps ops)
+    private delegate void UnaryOp(ValueOps ops, ref Value b);
+    private void UnaryBToA(ValuePointer opA, ValuePointer opB, UnaryOp op)
     {
       var mode = opA.Type.VMode();
-      ops = mode.Ops();
+      var ops = mode.Ops();
 
       Memory.Read(opB, B);
       B.Convert(mode);
+
+      for (var i = 0; i < B.Width; i++)
+        op(ops, ref B.Values[i]);
+
+      Memory.Write(opA, B);
     }
 
-    private void BinaryBToA(ValuePointer opA, ValuePointer opB, out ValueOps ops)
+    private delegate void BinaryOp(ValueOps ops, ref Value a, Value b);
+    private void BinaryBToA(ValuePointer opA, ValuePointer opB, BinaryOp op)
     {
       var mode = opA.Type.VMode();
-      ops = mode.Ops();
+      var ops = mode.Ops();
 
       Memory.Read(opA, A);
       Memory.Read(opB, B);
       B.Convert(mode);
+
+      for (var i = 0; i < A.Width; i++)
+        op(ops, ref A.Values[i], B.Values[i]);
+
+      Memory.Write(opA, A);
     }
 
-    private void ReduceAAtB(ValuePointer opA, ValuePointer opB, out ValueOps ops)
+    private void ReduceAAtB(ValuePointer opA, ValuePointer opB, BinaryOp op)
     {
       var mode = opA.Type.VMode();
-      ops = mode.Ops();
+      var ops = mode.Ops();
 
       Memory.Read(opA, A);
       Memory.Read(opB, B);
       B.Convert(ValueMode.Unsigned);
       C.Init(mode, A.Width);
-    }
 
-    private void OpCopy(ValuePointer opA, ValuePointer opB)
-    {
-      UnaryBToA(opA, opB, out _);
-
-      Memory.Write(opA, B);
-    }
-
-    private void OpReorder(ValuePointer opA, ValuePointer opB)
-    {
-      ReduceAAtB(opA, opB, out var ops);
+      Span<bool> used = stackalloc bool[8];
 
       for (var i = 0; i < A.Width; i++)
-        ops.Add(ref C.Values[i], A.Values[(int)B.Values[i].Unsigned]);
+      {
+        var n = (int)(B.Values[i].Unsigned & 0x7);
+        if (used[n])
+          op(ops, ref C.Values[n], A.Values[i]);
+        else
+        {
+          used[n] = true;
+          C.Values[n] = A.Values[i];
+        }
+      }
 
       Memory.Write(opA, C);
     }
 
-    private void OpBitNot(ValuePointer opA, ValuePointer opB)
+    private void OpCopy(ValuePointer opA, ValuePointer opB) => UnaryBToA(opA, opB, (ops, ref b) => { });
+
+    private void OpReorder(ValuePointer opA, ValuePointer opB)
     {
-      UnaryBToA(opA, opB, out var ops);
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
+      B.Convert(ValueMode.Unsigned);
+      C.Init(A.Mode, A.Width);
 
-      for (var i = 0; i < B.Width; i++)
-        ops.BitNot(ref B.Values[i]);
+      for (var i = 0; i < A.Width; i++)
+        C.Values[i] = A.Values[(int)B.Values[i].Unsigned & 0x7];
 
-      Memory.Write(opA, B);
+      Memory.Write(opA, C);
     }
 
-    private void OpNegate(ValuePointer opA, ValuePointer opB)
-    {
-      UnaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.Negate(ref B.Values[i]);
-
-      Memory.Write(opA, B);
-    }
+    private void OpBitNot(ValuePointer opA, ValuePointer opB) =>
+      UnaryBToA(opA, opB, (ops, ref b) => ops.BitNot(ref b));
+    private void OpNegate(ValuePointer opA, ValuePointer opB) =>
+      UnaryBToA(opA, opB, (ops, ref b) => ops.Negate(ref b));
 
     private void OpConjugate(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
 
-    private void OpSign(ValuePointer opA, ValuePointer opB)
-    {
-      UnaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.Sign(ref B.Values[i]);
-
-      Memory.Write(opA, B);
-    }
-
-    private void OpAbs(ValuePointer opA, ValuePointer opB)
-    {
-      UnaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.Abs(ref B.Values[i]);
-
-      Memory.Write(opA, B);
-    }
-
-    private void OpBitAnd(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.BitAnd(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
-
-    private void OpBitOr(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.BitOr(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
-
-    private void OpBitXor(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < B.Width; i++)
-        ops.BitXor(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
+    private void OpSign(ValuePointer opA, ValuePointer opB) =>
+      UnaryBToA(opA, opB, (ops, ref b) => ops.Sign(ref b));
+    private void OpAbs(ValuePointer opA, ValuePointer opB) =>
+      UnaryBToA(opA, opB, (ops, ref b) => ops.Abs(ref b));
+    private void OpBitAnd(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.BitAnd(ref A, B));
+    private void OpBitOr(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.BitOr(ref A, B));
+    private void OpBitXor(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.BitXor(ref A, B));
 
     private void OpShiftLeft(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
     private void OpShiftRight(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
 
-    private void OpAdd(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < A.Width; i++)
-        ops.Add(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
-
-    private void OpSubtract(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < A.Width; i++)
-        ops.Sub(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
-
-    private void OpMultiply(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < A.Width; i++)
-        ops.Mul(ref A.Values[i], B.Values[i]);
-
-      Memory.Write(opA, A);
-    }
-
-    private void OpDivide(ValuePointer opA, ValuePointer opB)
-    {
-      BinaryBToA(opA, opB, out var ops);
-
-      for (var i = 0; i < A.Width; i++)
-        ops.Div(ref A.Values[i], B.Values[i]);
-    }
+    private void OpAdd(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Add(ref A, B));
+    private void OpSubtract(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Sub(ref A, B));
+    private void OpMultiply(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Mul(ref A, B));
+    private void OpDivide(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Div(ref A, B));
 
     private void OpRemainder(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
     private void OpModulus(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
     private void OpPower(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpMax(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpMin(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+
+    private void OpMax(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Max(ref A, B));
+    private void OpMin(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Min(ref A, B));
+
     private void OpUFpu(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAll(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAny(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpParity(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpSum(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpProduct(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpMinAll(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpMaxAll(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+
+    private void OpAll(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.BitAnd(ref A, B));
+    private void OpAny(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.BitOr(ref A, B));
+    private void OpParity(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.BitXor(ref A, B));
+    private void OpSum(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.Add(ref A, B));
+    private void OpProduct(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.Mul(ref A, B));
+    private void OpMinAll(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.Min(ref A, B));
+    private void OpMaxAll(ValuePointer opA, ValuePointer opB) =>
+      ReduceAAtB(opA, opB, (ops, ref A, B) => ops.Max(ref A, B));
 
     private void OpJump(ValuePointer opA, ValuePointer opB)
     {
