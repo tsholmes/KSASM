@@ -59,7 +59,18 @@ namespace KSASM
       Memory.Write(opA, A);
     }
 
-    // private void OpMultiply(ValuePointer opA, ValuePointer opB)
+    private void OpMultiply(ValuePointer opA, ValuePointer opB)
+    {
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
+      B.Convert(A.Mode);
+
+      for (var i = 0; i < A.Width; i++)
+        A.Values[i].Mul(B.Values[i], A.Mode);
+
+      Memory.Write(opA, A);
+    }
+
     // private void OpDivide(ValuePointer opA, ValuePointer opB)
     // private void OpRemainder(ValuePointer opA, ValuePointer opB)
     // private void OpModulus(ValuePointer opA, ValuePointer opB)

@@ -95,7 +95,7 @@ namespace KSASM
         case OpCode.ShiftRight: goto default;
         case OpCode.Add: OpAdd(opA, opB); break;
         case OpCode.Subtract: OpSubtract(opA, opB); break;
-        case OpCode.Multiply: goto default;
+        case OpCode.Multiply: OpMultiply(opA, opB); break;
         case OpCode.Divide: goto default;
         case OpCode.Remainder: goto default;
         case OpCode.Modulus: goto default;

@@ -25,9 +25,24 @@ fc_burns:
       fc_burn_patch:
         :f64 fc_burn_patch_start_time: 0
         :f64 fc_burn_patch_end_time: 0
-        :u64 fc_burn_patch_orbit: 0*4
+        fc_burn_patch_orbit:
+          :u64 fc_burn_patch_orbit_parent: 0
+          :f64 fc_burn_patch_orbit_periapsis: 0
+          :f64 fc_burn_patch_orbit_apoapsis: 0
+          :f64 fc_burn_patch_orbit_period: 0
+  :u8 fc_burn_outdated: 0
+  :f64 fc_burn_add_time: 0
 fc_data_end:
 
 .macro fc_init .setup_device($(.fc_id), $(fc_data), $(fc_data_end))
+
+.macro fc_burn_wait \
+  call:p24 _fc_burn_wait_ret, _fc_burn_wait
+
+:p24 _fc_burn_wait_ret: 0
+_fc_burn_wait:
+  branchifzero fc_burn_outdated:u8, [_fc_burn_wait_ret]:p24
+  sleep:u8 _, $(1)
+  jump:p24 _fc_burn_wait, _
 
 .endif

@@ -32,7 +32,7 @@ namespace KSASM
       this.Processor = new(
         SystemDeviceDefinition.Make(Vehicle.System),
         VehicleDeviceDefinition.Make(Vehicle),
-        FlightComputerDeviceDefinition.Make(Vehicle.FlightComputer))
+        FlightComputerDeviceDefinition.Make(Vehicle))
       {
         OnDebug = OnDebug,
         SleepTime = ulong.MaxValue

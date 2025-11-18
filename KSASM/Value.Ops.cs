@@ -43,6 +43,25 @@ namespace KSASM
       }
     }
 
+    public void Mul(Value other, ValueMode mode)
+    {
+      switch (mode)
+      {
+        case ValueMode.Unsigned:
+          this.Unsigned *= other.Unsigned;
+          break;
+        case ValueMode.Signed:
+          this.Signed *= other.Signed;
+          break;
+        case ValueMode.Float:
+          this.Float *= other.Float;
+          break;
+        case ValueMode.Complex:
+        default:
+          throw new NotImplementedException($"{mode}");
+      }
+    }
+
     public int Sign(ValueMode mode) => mode switch
     {
       ValueMode.Unsigned => Unsigned == 0 ? 0 : 1,

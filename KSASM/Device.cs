@@ -226,7 +226,7 @@ namespace KSASM
     {
       var self = getValue(ref parent, deviceBuf);
       base.WriteSelf(ref self, deviceBuf, writeBuf, offset);
-      setValue(ref parent, self);
+      setValue?.Invoke(ref parent, self);
     }
   }
 

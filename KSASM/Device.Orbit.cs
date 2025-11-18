@@ -29,9 +29,12 @@ namespace KSASM
       .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
     );
 
-    public B Burn(DeviceFieldBufGetter<V, Burn> getter) => Composite(getter, b => b
-      .Double((ref b) => b.Time.Seconds())
-      .Double3((ref b, _) => b.DeltaVVlf)
+    public B Burn(
+      DeviceFieldBufGetter<V, Burn> getter,
+      DeviceFieldSetter<V, Burn> setter = null
+    ) => ValueComposite(getter, setter, b => b
+      .Double((ref b) => b.Time.Seconds(), (ref b, v) => b.Time = new(v))
+      .Double3((ref b, _) => b.DeltaVVlf, (ref b, v) => b.DeltaVVlf = v)
       .FlightPlan((ref b, _) => b.FlightPlan)
     );
   }

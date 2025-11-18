@@ -1,18 +1,37 @@
 
+using Brutal.Numerics;
 using KSA;
 
 namespace KSASM
 {
-  public class FlightComputerDeviceDefinition : DeviceDefinition<FlightComputer, FlightComputerDeviceDefinition>
+  public struct VehicleFC
   {
-    public override ulong GetId(FlightComputer device) => 3;
+    public Vehicle Vehicle;
+    public FlightComputer FC => Vehicle.FlightComputer;
 
-    public override IDeviceFieldBuilder<FlightComputer> Build(RootDeviceFieldBuilder<FlightComputer> b) => b
+    public static implicit operator VehicleFC(Vehicle vehicle) => new() { Vehicle = vehicle };
+  }
+
+  public class FlightComputerDeviceDefinition : DeviceDefinition<VehicleFC, FlightComputerDeviceDefinition>
+  {
+    public override ulong GetId(VehicleFC device) => 3;
+
+    public override IDeviceFieldBuilder<VehicleFC> Build(RootDeviceFieldBuilder<VehicleFC> b) => b
       .Leaf(DataType.U64, ThrustModeConverter.Instance,
-        (ref fc) => fc.ManualThrustMode, (ref fc, mode) => fc.SetManualThrustMode(mode))
+        (ref fc) => fc.FC.ManualThrustMode, (ref fc, mode) => fc.FC.SetManualThrustMode(mode))
       .ListView(
-        fc => fc.BurnPlan.BurnCount,
-        b => b.Burn((ref v, _) => v.Parent.BurnPlan.TryGetBurn((int)v.Index, out var burn) ? burn : null));
+        fc => fc.FC.BurnPlan.BurnCount,
+        b => b.Burn(
+          (ref v, _) => v.Parent.FC.BurnPlan.TryGetBurn((int)v.Index, out var burn) ? burn : null,
+          (ref v, b) => v.Parent.FC.BurnUpdated(b)))
+      .Bool((ref fc) => fc.FC.BurnPlan.FlightPlansOutOfDate)
+      .Double((ref fc) => 0, (ref fc, v) => AddBurn(fc, v));
+
+    private static void AddBurn(VehicleFC fc, double time)
+    {
+      var burn = Burn.Create(OrbitPointCce.Zero, time, double3.Zero, fc.Vehicle.Patch, fc.Vehicle);
+      fc.FC.AddBurn(burn);
+    }
 
     private class ThrustModeConverter : UnsignedValueConverter<ThrustModeConverter, FlightComputerManualThrustMode>
     {

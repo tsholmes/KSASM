@@ -5,6 +5,9 @@ namespace KSASM
 {
   public partial class DeviceFieldBuilder<B, T, V>
   {
+    public B Bool(DeviceFieldGetter<V, bool> getter, DeviceFieldSetter<V, bool> setter = null) =>
+      Leaf(DataType.U8, BoolValueConverter.Instance, getter, setter);
+
     public B Uint(DeviceFieldGetter<V, uint> getter, DeviceFieldSetter<V, uint> setter = null) =>
       Leaf(DataType.U64, UintValueConverter.Instance, getter, setter);
 
@@ -20,5 +23,23 @@ namespace KSASM
         .Double((ref d3) => d3[1], (ref d3, v) => d3[1] = v)
         .Double((ref d3) => d3[2], (ref d3, v) => d3[2] = v)
       );
+  }
+
+  public class BoolValueConverter : UnsignedValueConverter<BoolValueConverter, bool>
+  {
+    public override bool FromUnsigned(ulong val) => val != 0;
+    public override ulong ToUnsigned(bool val) => val ? 1u : 0u;
+  }
+
+  public class UintValueConverter : UnsignedValueConverter<UintValueConverter, uint>
+  {
+    public override uint FromUnsigned(ulong val) => (uint)val;
+    public override ulong ToUnsigned(uint val) => val;
+  }
+
+  public class DoubleValueConverter : FloatValueConverter<DoubleValueConverter, double>
+  {
+    public override double FromFloat(double val) => val;
+    public override double ToFloat(double val) => val;
   }
 }
