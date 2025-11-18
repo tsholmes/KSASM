@@ -1,0 +1,33 @@
+.ifndef libfc
+.macro libfc
+
+.macro fc_id 3
+# thrust mode enum
+  .macro fc_thrust_mode_direct 0
+  .macro fc_thrust_mode_pulse 1
+
+.region libfc 1024
+
+fc_data:
+:u64 fc_thrust_mode: 0
+fc_burns:
+  :u64 fc_burn_count: 0
+  :u64 fc_burn_index: 0
+  fc_burn:
+    :f64 fc_burn_time: 0
+    fc_burn_deltav:
+      :f64 fc_burn_deltav_x: 0
+      :f64 fc_burn_deltav_y: 0
+      :f64 fc_burn_deltav_z: 0
+    fc_burn_flightplan:
+      :u64 fc_burn_patch_count: 0
+      :u64 fc_burn_patch_index: 0
+      fc_burn_patch:
+        :f64 fc_burn_patch_start_time: 0
+        :f64 fc_burn_patch_end_time: 0
+        :u64 fc_burn_patch_orbit: 0*4
+fc_data_end:
+
+.macro fc_init .setup_device($(.fc_id), $(fc_data), $(fc_data_end))
+
+.endif

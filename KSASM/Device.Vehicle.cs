@@ -13,10 +13,7 @@ namespace KSASM
       .ValueComposite((ref v, _) => InputField.Get(v), (ref v, i) => InputField.Set(v, i), b => b
         .Leaf(DataType.U64, ThrustCommandConverter.Instance,
         (ref v) => v.ThrusterCommandFlags, (ref v, cmd) => v.ThrusterCommandFlags = cmd))
-      .ListView(
-        v => v.FlightPlan.Patches.Count,
-        (ref v, _) => v.Parent.FlightPlan.Patches[(int)v.Index],
-        b => b.Patch((ref v, _) => v));
+      .FlightPlan((ref v, _) => v.FlightPlan);
 
     public readonly FieldWrapper<Vehicle, ManualControlInputs> InputField = new("_manualControlInputs");
 

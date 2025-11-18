@@ -22,10 +22,9 @@ namespace KSASM
 
     public B Switch(ChildBuilder<SwitchDeviceFieldBuilder<V>> build) => Field(build(new()));
 
-    public B ListView<V2>(
+    public B ListView(
       Func<V, int> getLength,
-      DeviceFieldBufGetter<ListView<V>, V2> getValue,
-      ChildBuilder<CompositeDeviceFieldBuilder<ListView<V>, V2>> build)
+      ChildBuilder<CompositeDeviceFieldBuilder<ListView<V>, ListView<V>>> build)
     {
       ParamDeviceField<ListView<V>, uint> indexParam = null;
       return Composite(
@@ -37,7 +36,7 @@ namespace KSASM
         }, b => b
           .Uint((ref v) => (uint)getLength(v.Parent))
           .UintParameter(out indexParam)
-          .Switch(sb => sb.Case(v => v.Index < v.Length, getValue, build))
+          .Switch(sb => sb.Case(v => v.Index < v.Length, (ref v, _) => v, build))
       );
     }
   }

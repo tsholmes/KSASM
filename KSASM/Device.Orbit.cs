@@ -18,9 +18,21 @@ namespace KSASM
       .Orbit((ref p, _) => p?.Orbit)
     );
 
+    public B FlightPlan(DeviceFieldBufGetter<V, FlightPlan> getter) => Composite(getter, b => b
+      .ListView(
+        v => v.Patches.Count,
+        b => b.Patch((ref v, _) => v.Parent.Patches[(int)v.Index]))
+    );
+
     public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => Composite(getter, b => b
       .Uint((ref a) => a?.Hash ?? 0)
       .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
+    );
+
+    public B Burn(DeviceFieldBufGetter<V, Burn> getter) => Composite(getter, b => b
+      .Double((ref b) => b.Time.Seconds())
+      .Double3((ref b, _) => b.DeltaVVlf)
+      .FlightPlan((ref b, _) => b.FlightPlan)
     );
   }
 }
