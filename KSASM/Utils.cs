@@ -1,9 +1,18 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace KSASM
 {
+  public class FieldWrapper<T, F>(string name)
+  {
+    public readonly FieldInfo Field = typeof(T).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+
+    public F Get(T obj) => (F)Field.GetValue(obj);
+    public void Set(T obj, F val) => Field.SetValue(obj, val);
+  }
+
   public interface IRange<T> where T : IRange<T>, allows ref struct
   {
     public int Offset { get; }

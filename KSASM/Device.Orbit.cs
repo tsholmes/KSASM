@@ -3,20 +3,24 @@ using KSA;
 
 namespace KSASM
 {
-  public class OrbitDeviceField<T>(DeviceFieldBufGetter<T, Orbit> getValue)
-  : CompositeDeviceField<T, Orbit>(getValue, Parent, Periapsis, Apoapsis, Period)
+  public partial class DeviceFieldBuilder<B, T, V>
   {
-    public static readonly UintDeviceField<Orbit> Parent = new((ref o) => o?.Parent?.Hash ?? 0);
-    public static readonly DoubleDeviceField<Orbit> Periapsis = new((ref o) => o?.Periapsis ?? 0);
-    public static readonly DoubleDeviceField<Orbit> Apoapsis = new((ref o) => o?.Apoapsis ?? 0);
-    public static readonly DoubleDeviceField<Orbit> Period = new((ref o) => o?.Period ?? 0);
-  }
+    public B Orbit(DeviceFieldBufGetter<V, Orbit> getter) => Composite(getter, b => b
+      .Uint((ref o) => o?.Parent?.Hash ?? 0)
+      .Double((ref o) => o?.Periapsis ?? 0)
+      .Double((ref o) => o?.Apoapsis ?? 0)
+      .Double((ref o) => o?.Period ?? 0)
+    );
 
-  public class PatchDeviceField<T>(DeviceFieldBufGetter<T, PatchedConic> getValue)
-  : CompositeDeviceField<T, PatchedConic>(getValue, StartTime, EndTime, Orbit)
-  {
-    public static readonly DoubleDeviceField<PatchedConic> StartTime = new((ref p) => p?.StartTime.Seconds() ?? 0);
-    public static readonly DoubleDeviceField<PatchedConic> EndTime = new((ref p) => p?.EndTime.Seconds() ?? 0);
-    public static readonly OrbitDeviceField<PatchedConic> Orbit = new((ref p, _) => p?.Orbit);
+    public B Patch(DeviceFieldBufGetter<V, PatchedConic> getter) => Composite(getter, b => b
+      .Double((ref p) => p?.StartTime.Seconds() ?? 0)
+      .Double((ref p) => p?.EndTime.Seconds() ?? 0)
+      .Orbit((ref p, _) => p?.Orbit)
+    );
+
+    public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => Composite(getter, b => b
+      .Uint((ref a) => a?.Hash ?? 0)
+      .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
+    );
   }
 }

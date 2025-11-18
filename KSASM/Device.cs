@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 
 namespace KSASM
 {
@@ -14,6 +15,76 @@ namespace KSASM
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset);
+  }
+
+  public interface IDeviceFieldBuilder<T>
+  {
+    IDeviceField<T> Build();
+  }
+
+  public delegate B2 ChildBuilder<B2>(B2 builder);
+
+  public abstract partial class DeviceFieldBuilder<B, T, V> : IDeviceFieldBuilder<T>
+    where B : DeviceFieldBuilder<B, T, V>
+  {
+    public abstract IDeviceField<T> Build();
+    protected abstract void Add(IDeviceField<V> field);
+
+    protected B Self => (B)this;
+
+    public B Field(IDeviceField<V> field) { Add(field); return Self; }
+    public B Field(IDeviceFieldBuilder<V> field) => Field(field.Build());
+
+    public B Composite<V2>(
+      DeviceFieldBufGetter<V, V2> getValue,
+      ChildBuilder<CompositeDeviceFieldBuilder<V, V2>> build
+    ) => Field(build(new(getValue)));
+
+    public B ValueComposite<V2>(
+      DeviceFieldBufGetter<V, V2> getValue,
+      DeviceFieldSetter<V, V2> setValue,
+      ChildBuilder<ValueCompositeDeviceFieldBuilder<V, V2>> build
+    ) => Field(build(new(getValue, setValue)));
+
+    public B Leaf<V2>(
+      DataType type,
+      IValueConverter<V2> converter,
+      DeviceFieldGetter<V, V2> getter,
+      DeviceFieldSetter<V, V2> setter = null
+    ) => Field(new LeafDeviceField<V, V2>(type, converter, getter, setter));
+
+    public B Parameter<V2>(
+      DataType type,
+      IValueConverter<V2> converter,
+      out ParamDeviceField<V, V2> param
+    ) => Field(param = new ParamDeviceField<V, V2>(type, converter));
+
+    public B Chain(ChildBuilder<B> build) => build(Self);
+  }
+
+  public class CompositeDeviceFieldBuilder<T, V>(DeviceFieldBufGetter<T, V> getValue)
+  : DeviceFieldBuilder<CompositeDeviceFieldBuilder<T, V>, T, V>
+  {
+    protected readonly List<IDeviceField<V>> fields = [];
+
+    public override IDeviceField<T> Build() => new CompositeDeviceField<T, V>(getValue, fields);
+    protected override void Add(IDeviceField<V> field) => fields.Add(field);
+  }
+
+  public class ValueCompositeDeviceFieldBuilder<T, V>(
+    DeviceFieldBufGetter<T, V> getValue,
+    DeviceFieldSetter<T, V> setValue = null
+  ) : DeviceFieldBuilder<ValueCompositeDeviceFieldBuilder<T, V>, T, V>
+  {
+    private readonly List<IDeviceField<V>> fields = [];
+
+    public override IDeviceField<T> Build() => new ValueCompositeDeviceField<T, V>(getValue, setValue, fields);
+    protected override void Add(IDeviceField<V> field) => fields.Add(field);
+  }
+
+  public class RootDeviceFieldBuilder<T>() : CompositeDeviceFieldBuilder<T, T>((ref t, _) => t)
+  {
+    public override IDeviceField<T> Build() => new RootDeviceField<T>(fields);
   }
 
   public delegate V DeviceFieldGetter<T, V>(ref T parent);
@@ -67,7 +138,7 @@ namespace KSASM
 
     public CompositeDeviceField(
       DeviceFieldBufGetter<T, V> getValue,
-      params IDeviceField<V>[] children)
+      params List<IDeviceField<V>> children)
     {
       this.getValue = getValue;
       var len = 0;
@@ -148,7 +219,7 @@ namespace KSASM
   public class ValueCompositeDeviceField<T, V>(
     DeviceFieldBufGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue,
-    params IDeviceField<V>[] children)
+    params List<IDeviceField<V>> children)
   : CompositeDeviceField<T, V>(getValue, children)
   {
     public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
@@ -159,7 +230,7 @@ namespace KSASM
     }
   }
 
-  public class RootDeviceField<T>(params IDeviceField<T>[] children)
+  public class RootDeviceField<T>(params List<IDeviceField<T>> children)
   : CompositeDeviceField<T, T>((ref v, _) => v, children)
   { }
 
@@ -168,7 +239,11 @@ namespace KSASM
     public static Def Instance { get; } = new();
 
     public abstract ulong GetId(T device);
-    public abstract RootDeviceField<T> RootField { get; }
+
+    private IDeviceField<T> _rootField;
+    public IDeviceField<T> RootField => _rootField ??= Build(new()).Build();
+
+    public abstract IDeviceFieldBuilder<T> Build(RootDeviceFieldBuilder<T> b);
 
     public static Device<T> Make(T device) => new(Instance.GetId(device), device, Instance.RootField);
   }
