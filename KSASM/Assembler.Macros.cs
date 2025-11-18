@@ -171,7 +171,7 @@ namespace KSASM
           if (!Parser.TryParseValue(ntoken.Str(), out var nval, out var nmode))
             Invalid(ntoken);
           nval.Convert(nmode, mode);
-          val.Add(nval, mode);
+          mode.Ops().Add(ref val, nval);
         }
 
         if (!lexer.TakeType(TokenType.PClose, out _))
