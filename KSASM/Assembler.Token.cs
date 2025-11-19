@@ -26,6 +26,8 @@ namespace KSASM
       String, // "string"
       BOpen, // {
       BClose, // }
+      Mult, // * when not part of width
+      Div, // /
     }
 
     public struct Token

@@ -1,18 +1,13 @@
 .ifndef libdevice .macro libdevice
 .ns device.
 
-.region data 12
-
-_setup_data: .ns _setup.
-  :p24 addr: 0 len: 0 id: 0 0
-.endns
-
-.macro setup(id, addr, end) \
-  copy:p24 device._setup.addr, addr \
-  copy:p24 device._setup.len, end \
-  subtract:p24 device._setup.len, device._setup.addr \
-  copy:p24 device._setup.id, id \
-  devmap*2:p24 device._setup_data+0, +6
+.macro define(id, fields) {
+  data:
+    fields
+  data.end:
+  :p24 _setup_data: .addns(data) $(.addns(data.end) - .addns(data)) id 0
+  .macro init devmap*2:p24 ..addns(_setup_data)+0, +6
+}
 
 .endns
 .endif

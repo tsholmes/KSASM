@@ -61,6 +61,23 @@ namespace KSASM
       }
     }
 
+    public class ExprValueStatement : Statement
+    {
+      public DataType Type;
+      public int Width = 1;
+      public ConstExpr Expr;
+
+      public override void FirstPass(State state) =>
+        state.Addr += Type.SizeBytes() * Width;
+
+      public override void SecondPass(State state)
+      {
+        var val = state.EvalExpr(Expr, Type.VMode());
+        for (var i = 0; i < Width; i++)
+          state.Emit(Type, val);
+      }
+    }
+
     public class InstructionStatement : Statement
     {
       public Token OpToken;
@@ -79,16 +96,9 @@ namespace KSASM
         state.Addr += DataType.U64.SizeBytes();
       }
 
-      private void RegisterConst(State state, ConstVal cval, DataType type)
+      private void RegisterConst(State state, ConstExpr cval, DataType type)
       {
-        if (cval.StringVal != null)
-          state.RegisterConst(type, cval.StringVal, Width);
-        else
-        {
-          var val = cval.Value;
-          val.Convert(cval.Mode, type.VMode());
-          state.RegisterConst(type, val, Width);
-        }
+        state.RegisterConst(type, cval, Width);
       }
 
       private Exception Invalid(string message) =>
@@ -234,14 +244,9 @@ namespace KSASM
         inst.OffsetB = LookupConst(state, OperandB.Const, inst.BType);
       }
 
-      private int LookupConst(State state, ConstVal cval, DataType type)
+      private int LookupConst(State state, ConstExpr cval, DataType type)
       {
-        if (cval.StringVal != null)
-          return state.ConstLabelAddrs[(type, cval.StringVal)];
-
-        var val = cval.Value;
-        val.Convert(cval.Mode, type.VMode());
-        return state.ConstAddrs[(type, val)];
+        return state.ConstExprAddrs[(type, cval)];
       }
     }
   }

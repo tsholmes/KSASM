@@ -298,7 +298,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
 
-        var name = curNs + ntoken.Str();
+        var name = ntoken.Str();
 
         var endLabel = lexer.TakeType(TokenType.Offset, out var otoken) && otoken.Str() == "-";
 
@@ -308,13 +308,21 @@ namespace KSASM
         if (!int.TryParse(sztoken.Str(), out var size))
           Invalid(sztoken);
 
-        var pos = endLabel ? regionPos : regionPos - size;
-        regionPos -= size;
+        var startPos = regionPos - size;
+        var endPos = regionPos;
+        regionPos = startPos;
 
-        PushTokens(
-          ntoken with { Len = 0, Type = TokenType.Position, OverrideStr = $"@{pos}" },
-          ntoken with { Len = 0, Type = TokenType.Label, OverrideStr = $"{name}:" }
-        );
+        if (endLabel)
+          PushTokens(
+            ntoken with { Type = TokenType.Position, OverrideStr = $"@{endPos}" },
+            ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" },
+            ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" }
+          );
+        else
+          PushTokens(
+            ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" },
+            ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" }
+          );
       }
 
       private void MacroImport()

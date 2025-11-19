@@ -46,11 +46,8 @@ namespace KSASM
       public readonly Dictionary<string, int> Labels = [];
       public readonly List<(int, DataType, Value)> Values = [];
 
-      public readonly Dictionary<(DataType, Value), int> ConstWidths = [];
-      public readonly Dictionary<(DataType, Value), int> ConstAddrs = [];
-
-      public readonly Dictionary<(DataType, string), int> ConstLabelWidths = [];
-      public readonly Dictionary<(DataType, string), int> ConstLabelAddrs = [];
+      public readonly List<(DataType, ConstExpr, int)> ConstExprs = [];
+      public readonly Dictionary<(DataType, ConstExpr), int> ConstExprAddrs = [];
 
       public int Addr = 0;
 
@@ -60,49 +57,97 @@ namespace KSASM
         Addr += type.SizeBytes();
       }
 
-      public void RegisterConst(DataType type, Value val, int width)
+      public void RegisterConst(DataType type, ConstExpr expr, int width)
       {
-        if (Debug)
-          Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
-        ConstWidths[(type, val)] = Math.Max(width, ConstWidths.GetValueOrDefault((type, val)));
+        // if (Debug)
+        //   Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
+        ConstExprs.Add((type, expr, width));
       }
-      public void RegisterConst(DataType type, string label, int width) =>
-        ConstLabelWidths[(type, label)] = Math.Max(width, ConstLabelWidths.GetValueOrDefault((type, label)));
 
       public void EmitConstants()
       {
-        // register label consts as regular consts
-        foreach (var ((type, label), width) in ConstLabelWidths)
+        var vals = new Dictionary<(DataType, ConstExpr), Value>();
+        var maxWidths = new Dictionary<(DataType, Value), int>();
+        foreach (var (type, expr, wid) in ConstExprs)
         {
-          if (!Labels.TryGetValue(label, out var laddr))
-            throw new InvalidOperationException($"Unknown const label {label}");
-          var val = new Value { Unsigned = (ulong)laddr };
-          val.Convert(ValueMode.Unsigned, type.VMode());
-          RegisterConst(type, val, width);
+          var val = EvalExpr(expr, type.VMode());
+          vals[(type, expr)] = val;
+
+          maxWidths[(type, val)] = Math.Max(maxWidths.GetValueOrDefault((type, val)), wid);
         }
 
-        if (ConstWidths.Count == 0)
+        if (maxWidths.Count == 0)
           return;
 
         if (!Labels.TryGetValue("CONST", out var caddr))
           throw new InvalidOperationException("Cannot emit inlined constants without CONST label");
 
         Addr = caddr;
-        foreach (var ((type, val), width) in ConstWidths)
+        var constAddrs = new Dictionary<(DataType, Value), int>();
+        foreach (var ((type, val), width) in maxWidths)
         {
-          ConstAddrs[(type, val)] = Addr;
+          constAddrs[(type, val)] = Addr;
           for (var i = 0; i < width; i++)
             Emit(type, val);
         }
 
-        // build label mapping
-        foreach (var ((type, label), width) in ConstLabelWidths)
+        foreach (var (type, expr, _) in ConstExprs)
         {
-          var val = new Value { Unsigned = (ulong)Labels[label] };
-          val.Convert(ValueMode.Unsigned, type.VMode());
-          ConstLabelAddrs[(type, label)] = ConstAddrs[(type, val)];
+          var val = vals[(type, expr)];
+          ConstExprAddrs[(type, expr)] = constAddrs[(type, val)];
         }
       }
+
+      public Value EvalExpr(ConstExpr expr, ValueMode mode)
+      {
+        Value left = default, right = default;
+        switch (expr.Op)
+        {
+          case ConstOp.Leaf:
+            if (expr.Val.StringVal != null)
+            {
+              if (!Labels.TryGetValue(expr.Val.StringVal, out var lpos))
+                throw Invalid(expr.Token);
+              left.Unsigned = (ulong)lpos;
+              left.Convert(ValueMode.Unsigned, mode);
+            }
+            else
+            {
+              left = expr.Val.Value;
+              left.Convert(expr.Val.Mode, mode);
+            }
+            return left;
+          case ConstOp.Neg:
+            right = EvalExpr(expr.Right, mode);
+            mode.Ops().Negate(ref right);
+            return right;
+          case ConstOp.Add:
+            left = EvalExpr(expr.Left, mode);
+            right = EvalExpr(expr.Right, mode);
+            mode.Ops().Add(ref left, right);
+            return left;
+          case ConstOp.Sub:
+            left = EvalExpr(expr.Left, mode);
+            right = EvalExpr(expr.Right, mode);
+            mode.Ops().Sub(ref left, right);
+            return left;
+          case ConstOp.Mul:
+            left = EvalExpr(expr.Left, mode);
+            right = EvalExpr(expr.Right, mode);
+            mode.Ops().Mul(ref left, right);
+            return left;
+          case ConstOp.Div:
+            left = EvalExpr(expr.Left, mode);
+            right = EvalExpr(expr.Right, mode);
+            mode.Ops().Div(ref left, right);
+            return left;
+          default:
+            throw new InvalidOperationException($"{expr.Op}");
+        }
+      }
+
+      private Exception Invalid(Token token) => throw new InvalidOperationException(
+        $"invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
     }
   }
 }

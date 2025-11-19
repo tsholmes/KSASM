@@ -136,6 +136,20 @@ namespace KSASM
               Statements.Add(new ValueStatement() { Type = DataType.U8, Value = new() { Unsigned = c } });
             }
           }
+          else if (PeekType(TokenType.COpen, out _))
+          {
+            var stmt = new ExprValueStatement
+            {
+              Type = curType,
+              Expr = ParseConst(),
+            };
+            if (TakeType(TokenType.Width, out token))
+            {
+              if (!int.TryParse(token.Str()[1..], out stmt.Width))
+                throw Invalid(token);
+            }
+            Statements.Add(stmt);
+          }
           else
             Invalid();
         }
@@ -240,29 +254,98 @@ namespace KSASM
         return addr;
       }
 
-      private ConstVal ParseConst()
+      private ConstExpr ParseConst()
       {
         if (!TakeType(TokenType.COpen, out _))
-          Invalid();
+          throw Invalid();
 
-        var cval = new ConstVal();
-
-        if (TakeType(TokenType.Word, out var wtoken))
-          cval.StringVal = wtoken.Str();
-        else if (TakeType(TokenType.Number, out var ntoken))
-        {
-          if (!TryParseValue(ntoken.Str(), out cval.Value, out cval.Mode))
-            Invalid(ntoken);
-          if (Debug)
-            Console.WriteLine($"PARSE CONST '{ntoken.Str()}' {cval.Mode} {cval.Value.Get(cval.Mode)}");
-        }
-        else
-          Invalid();
+        var cexpr = ParseConstInner();
 
         if (!TakeType(TokenType.PClose, out _))
-          Invalid();
+          throw Invalid();
 
-        return cval;
+        return cexpr;
+      }
+
+      private ConstExpr ParseConstInner()
+      {
+        ConstExpr parseAddSub()
+        {
+          var left = parseMulDiv();
+          while (true)
+          {
+            if (TakeType(TokenType.Offset, out var otoken))
+            {
+              var right = parseMulDiv();
+              left = new()
+              {
+                Op = otoken.Str() == "-" ? ConstOp.Sub : ConstOp.Add,
+                Left = left,
+                Right = right,
+                Token = otoken
+              };
+            }
+            else
+              break;
+          }
+          return left;
+        }
+        ConstExpr parseMulDiv()
+        {
+          var left = parseGroup();
+          while (true)
+          {
+            if (TakeType(TokenType.Mult, out var mtoken))
+            {
+              var right = parseGroup();
+              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = mtoken };
+            }
+            else if (TakeType(TokenType.Div, out var dtoken))
+            {
+              var right = parseGroup();
+              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = mtoken };
+            }
+            else if (TakeType(TokenType.Width, out var wtoken))
+            {
+              if (!TryParseValue(wtoken.Str()[1..], out var val, out var mode))
+                throw Invalid(wtoken);
+              var right = new ConstExpr() { Op = ConstOp.Leaf, Val = new() { Value = val, Mode = mode } };
+              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = wtoken };
+            }
+            else
+              break;
+          }
+          return left;
+        }
+        ConstExpr parseGroup()
+        {
+          if (TakeType(TokenType.POpen, out _))
+          {
+            var res = parseAddSub();
+            if (!TakeType(TokenType.PClose, out _))
+              throw Invalid();
+            return res;
+          }
+          else if (TakeType(TokenType.Word, out var wtoken))
+            return new() { Op = ConstOp.Leaf, Val = new() { StringVal = wtoken.Str() }, Token = wtoken };
+          else if (TakeType(TokenType.Offset, out var otoken))
+          {
+            var inner = parseAddSub();
+            if (otoken.Str() == "-")
+              return new() { Op = ConstOp.Neg, Right = inner, Token = otoken };
+            else
+              return inner;
+          }
+          else if (TakeType(TokenType.Number, out var ntoken))
+          {
+            if (!TryParseValue(ntoken.Str(), out var val, out var mode))
+              throw Invalid(ntoken);
+            return new() { Op = ConstOp.Leaf, Val = new() { Value = val, Mode = mode } };
+          }
+          else
+            throw Invalid();
+        }
+        return parseAddSub();
       }
 
       public static bool TryParseValue(string str, out Value value, out ValueMode mode)
@@ -330,7 +413,7 @@ namespace KSASM
       public ParsedOpMode Mode;
       public AddrRef Base;
       public AddrRef Addr;
-      public ConstVal Const;
+      public ConstExpr Const;
       public DataType? Type;
     }
 
@@ -350,5 +433,16 @@ namespace KSASM
       public ValueMode Mode;
       public Value Value;
     }
+
+    public class ConstExpr
+    {
+      public ConstOp Op;
+      public ConstExpr Left;
+      public ConstExpr Right;
+      public ConstVal Val;
+      public Token Token;
+    }
+
+    public enum ConstOp { Leaf, Neg, Add, Sub, Mul, Div }
   }
 }

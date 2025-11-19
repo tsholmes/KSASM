@@ -17,7 +17,7 @@
 
 .region data 1024
 
-data:
+.device.define(.vehicle.id,
   :u64 hash: 0
   avel: .types.double3(avel.)
   inputs: .ns inputs.
@@ -25,9 +25,7 @@ data:
   .endns
   patches: .types.listview(patches.)
   patch: .types.patch(patch.)
-data_end:
-
-.macro init .device.setup($(.vehicle.id), $(vehicle.data), $(vehicle.data_end))
+)
 
 .endns
 .endif

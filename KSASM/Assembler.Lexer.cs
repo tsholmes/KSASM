@@ -99,6 +99,7 @@ namespace KSASM
           ')' => TakeNext(TokenType.PClose, 1, out token),
           '{' => TakeNext(TokenType.BOpen, 1, out token),
           '}' => TakeNext(TokenType.BClose, 1, out token),
+          '/' => TakeNext(TokenType.Div, 1, out token),
           _ when IsWordStart(c) => TakeWordLike(out token),
           '@' => TakePosition(out token),
           '*' => TakeWidth(out token),
@@ -192,7 +193,7 @@ namespace KSASM
           len++;
 
         if (len == 1)
-          return TakeNext(TokenType.Invalid, 1, out token);
+          return TakeNext(TokenType.Mult, 1, out token);
         else
           return TakeNext(TokenType.Width, len, out token);
       }

@@ -9,13 +9,11 @@
 
 .region data 1024
 
-data:
+.device.define(.system.id,
   :f64 time: 0
   :u64 hash_param: 0
   .types.astronomical
-data_end:
-
-.macro init .device.setup($(.system.id), $(system.data), $(system.data_end))
+)
 
 .endns
 .endif
