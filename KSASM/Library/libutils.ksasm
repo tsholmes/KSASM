@@ -10,4 +10,15 @@
   .macro name(ns) { .withns(ns, vals) }
 }
 
+.macro fn(name) {
+  ..macro _retname ..concat(_ name _ret)
+  ..macro _retname_full ..addns(._retname)
+  :p24 .label(.._retname) 0
+  .macro fnret [.._retname_full]:p24
+  .macro name call:p24 .._retname_full, ..addns(name)
+  ..unmacro _retname_full
+  ..unmacro _retname
+  .label(name)
+}
+
 .endif

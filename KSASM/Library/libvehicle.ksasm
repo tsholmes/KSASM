@@ -1,5 +1,6 @@
 # constants and macros for interacting with the Vehicle device
 .import libdevice
+.import libtypes
 
 .ifndef libvehicle .macro libvehicle
 .ns vehicle.

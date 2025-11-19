@@ -1,7 +1,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace KSASM
 {
@@ -107,6 +106,7 @@ namespace KSASM
           case "addns": MacroAddNs(); break;
           case "tomacro": MacroToMacro(); break;
           case "concat": MacroConcat(); break;
+          case "label": MacroLabel(); break;
           default: MacroExpand(name, token); break;
         }
       }
@@ -180,16 +180,37 @@ namespace KSASM
         if (!lexer.Take(out var token))
           throw Invalid();
 
-        if (token.Type is not TokenType.Word and not TokenType.Macro)
+        if (token.Type is not TokenType.Word and not TokenType.Macro and not TokenType.Placeholder)
           throw Invalid(token);
 
-        while (lexer.TakeType(TokenType.Word, out var itoken) || lexer.TakeType(TokenType.Macro, out itoken))
+        while (lexer.TakeType(TokenType.Word, out var itoken)
+            || lexer.TakeType(TokenType.Macro, out itoken)
+            || lexer.TakeType(TokenType.Placeholder, out itoken))
           token = token with { OverrideStr = $"{token.Str()}{itoken.Str()}" };
 
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
+        if (token.Type == TokenType.Placeholder && token.Str().Length > 1)
+          token.Type = TokenType.Word;
+
         PushTokens(token);
+      }
+
+      private void MacroLabel()
+      {
+        if (!lexer.TakeType(TokenType.POpen, out _))
+          throw Invalid();
+
+        if (!NextInner(out var token))
+          throw Invalid();
+        else if (token.Type != TokenType.Word)
+          throw Invalid(token);
+
+        if (!lexer.TakeType(TokenType.PClose, out _))
+          throw Invalid();
+
+        PushTokens(token with { Type = TokenType.Label, OverrideStr = $"{token.Str()}:" });
       }
 
       private void MacroIf(bool not)
@@ -410,7 +431,7 @@ namespace KSASM
 
       private void MacroExpand(string name, Token nameToken)
       {
-        if (!macros.TryGetValue(name, out var macro))
+        if (!macros.TryGetValue(name, out var macro) && !macros.TryGetValue(curNs + name, out macro))
           Invalid(nameToken);
 
         var args = new List<List<Token>>();

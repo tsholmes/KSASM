@@ -31,21 +31,15 @@
   .endns
 )
 
-.macro burn_wait \
-  call:p24 fc._burn_wait_ret, fc._burn_wait
-:p24 _burn_wait_ret: 0
-_burn_wait:
-  branchifzero fc.burns.outdated:u8, [fc._burn_wait_ret]:p24
+.fn(burn_wait)
+  branchifzero fc.burns.outdated:u8, .fnret
   sleep:u8 _, $(1)
-  jump:p24 fc._burn_wait, _
+  jump:p24 fc.burn_wait, _
 
-.macro burn_clear \
-  call:p24 fc._burn_clear_ret, fc._burn_clear
-:p24 _burn_clear_ret: 0
-_burn_clear:
+.fn(burn_clear)
   copy:u64 fc.burns.index, $(0)
   _burn_clear_loop:
-    branchifzero fc.burns.count:u64, [fc._burn_clear_ret]:p24
+    branchifzero fc.burns.count:u64, .fnret
     copy:u8 fc.burn.delete, $(1)
     jump:p24 fc._burn_clear_loop, _
 
