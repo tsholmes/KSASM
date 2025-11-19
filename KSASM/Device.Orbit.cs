@@ -5,23 +5,21 @@ namespace KSASM
 {
   public partial class DeviceFieldBuilder<B, T, V>
   {
-    public B Orbit(DeviceFieldBufGetter<V, Orbit> getter) => Composite(getter, b => b
-      .Uint((ref o) => o?.Parent?.Hash ?? 0)
-      .Double((ref o) => o?.Periapsis ?? 0)
-      .Double((ref o) => o?.Apoapsis ?? 0)
-      .Double((ref o) => o?.Period ?? 0)
+    public B Orbit(DeviceFieldBufGetter<V, Orbit> getter) => NonNull(getter, b => b
+      .Hash((ref o) => o.Parent)
+      .Double((ref o) => o.Periapsis)
+      .Double((ref o) => o.Apoapsis)
+      .Double((ref o) => o.Period)
     );
 
-    public B Patch(DeviceFieldBufGetter<V, PatchedConic> getter) => Composite(getter, b => b
-      .Double((ref p) => p?.StartTime.Seconds() ?? 0)
-      .Double((ref p) => p?.EndTime.Seconds() ?? 0)
-      .Orbit((ref p, _) => p?.Orbit)
+    public B Patch(DeviceFieldBufGetter<V, PatchedConic> getter) => NonNull(getter, b => b
+      .Double((ref p) => p.StartTime.Seconds())
+      .Double((ref p) => p.EndTime.Seconds())
+      .Orbit((ref p, _) => p.Orbit)
     );
 
     public B FlightPlan(DeviceFieldBufGetter<V, FlightPlan> getter) => Composite(getter, b => b
-      .ListView(
-        v => v.Patches.Count,
-        b => b.Patch((ref v, _) => v.Parent.Patches[(int)v.Index]))
+      .List((ref v) => v.Patches, (b, get) => b.Patch(get))
     );
 
     public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => Composite(getter, b => b

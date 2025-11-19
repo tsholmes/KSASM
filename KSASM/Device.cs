@@ -37,7 +37,7 @@ namespace KSASM
 
     public B Composite<V2>(
       DeviceFieldBufGetter<V, V2> getValue,
-      ChildBuilder<CompositeDeviceFieldBuilder<V, V2>> build
+      CompositeBuildFunc<V, V2> build
     ) => Field(build(new(getValue)));
 
     public B ValueComposite<V2>(
@@ -62,6 +62,8 @@ namespace KSASM
     public B Chain(ChildBuilder<B> build) => build(Self);
   }
 
+  public delegate CompositeDeviceFieldBuilder<T, V> CompositeBuildFunc<T, V>(
+    CompositeDeviceFieldBuilder<T, V> builder);
   public class CompositeDeviceFieldBuilder<T, V>(DeviceFieldBufGetter<T, V> getValue)
   : DeviceFieldBuilder<CompositeDeviceFieldBuilder<T, V>, T, V>
   {

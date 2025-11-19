@@ -1,30 +1,35 @@
 
 using System;
 using System.Collections.Generic;
+using KSA;
 
 namespace KSASM
 {
+  public delegate CompositeDeviceFieldBuilder<T, V> CompositeChildBuildFunc<T, V, V2>(
+    CompositeDeviceFieldBuilder<T, V> builder,
+    DeviceFieldBufGetter<V, V2> getter
+  );
   public partial class DeviceFieldBuilder<B, T, V>
   {
     public B Null(int length) => Field(new NullDeviceField<V>(length));
 
     public B SearchView(
-      ChildBuilder<CompositeDeviceFieldBuilder<V, SearchView<V>>> build)
+      CompositeBuildFunc<V, SearchView<V>> build)
     {
       ParamDeviceField<SearchView<V>, uint> keyParam = null;
       return Composite(
         (ref v, buf) => new SearchView<V> { Parent = v, Key = keyParam.GetValue(buf) },
         b => b
           .UintParameter(out keyParam)
-          .Chain(build)
+          .Chain(new(build))
       );
     }
 
-    public B Switch(ChildBuilder<SwitchDeviceFieldBuilder<V>> build) => Field(build(new()));
+    public B Switch(SwitchBuildFunc<V> build) => Field(build(new()));
 
     public B ListView(
       Func<V, int> getLength,
-      ChildBuilder<CompositeDeviceFieldBuilder<ListView<V>, ListView<V>>> build)
+      CompositeBuildFunc<ListView<V>, ListView<V>> build)
     {
       ParamDeviceField<ListView<V>, uint> indexParam = null;
       return Composite(
@@ -39,6 +44,21 @@ namespace KSASM
           .Switch(sb => sb.Case(v => v.Index < v.Length, (ref v, _) => v, build))
       );
     }
+
+    public B List<V2>(
+      DeviceFieldGetter<V, List<V2>> getter,
+      CompositeChildBuildFunc<ListView<V>, ListView<V>, V2> build
+    ) => ListView(
+      v => getter(ref v).Count,
+      b => build(b, (ref v, _) => { var p = v.Parent; return getter(ref p)[(int)v.Index]; })
+    );
+
+    public B NonNull<V2>(
+      DeviceFieldBufGetter<V, V2> getter,
+      CompositeBuildFunc<V2, V2> build
+    ) => Composite(getter, b => b.Switch(sb => sb.Case(v => v != null, (ref v, _) => v, build)));
+
+    public B Hash(DeviceFieldGetter<V, IKeyed> getter) => Uint((ref v) => getter(ref v)?.Hash ?? 0);
   }
 
   public class NullDeviceField<T>(int length) : IDeviceField<T>
@@ -48,6 +68,7 @@ namespace KSASM
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) { }
   }
 
+  public delegate SwitchDeviceFieldBuilder<T> SwitchBuildFunc<T>(SwitchDeviceFieldBuilder<T> builder);
   public class SwitchDeviceFieldBuilder<T> : IDeviceFieldBuilder<T>
   {
     private readonly List<(FilterFunc<T>, IDeviceField<T>)> cases = [];
@@ -56,19 +77,19 @@ namespace KSASM
     public SwitchDeviceFieldBuilder<T> Case<V>(
       FilterFunc<T> filter,
       DeviceFieldBufGetter<T, V> getValue,
-      ChildBuilder<CompositeDeviceFieldBuilder<T, V>> build)
+      CompositeBuildFunc<T, V> build)
     {
-      cases.Add((filter, build(new CompositeDeviceFieldBuilder<T, V>(getValue)).Build()));
+      cases.Add((filter, build(new(getValue)).Build()));
       return this;
     }
 
     public SwitchDeviceFieldBuilder<T> Default<V>(
       DeviceFieldBufGetter<T, V> getValue,
-      ChildBuilder<CompositeDeviceFieldBuilder<T, V>> build)
+      CompositeBuildFunc<T, V> build)
     {
       if (defaultCase != null)
         throw new InvalidOperationException("Duplicate default case");
-      defaultCase = build(new CompositeDeviceFieldBuilder<T, V>(getValue)).Build();
+      defaultCase = build(new(getValue)).Build();
       return this;
     }
 
