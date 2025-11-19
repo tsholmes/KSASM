@@ -15,6 +15,13 @@
 
 .type(orbit,
   :u64 parent: 0
+  :f64 time_at_periapsis: 0
+  :f64 eccentricity: 0
+  :f64 semi_major_axis: 0
+  :f64 semi_minor_axis: 0
+  :f64 inclination: 0
+  :f64 longitude_of_ascending_node: 0
+  :f64 argument_of_periapsis: 0
   :f64 periapsis: 0
   :f64 apoapsis: 0
   :f64 period: 0
@@ -24,6 +31,13 @@
   :f64 start_time: 0
   :f64 end_time: 0
   .types.orbit(orbit.)
+)
+
+.type(astronomical,
+  :u64 hash: 0
+  .types.orbit(orbit.)
+  .types.listview(children.)
+  :u64 child.hash: 0
 )
 
 .endns

@@ -59,6 +59,7 @@ namespace KSASM
     ) => Composite(getter, b => b.Switch(sb => sb.Case(v => v != null, (ref v, _) => v, build)));
 
     public B Hash(DeviceFieldGetter<V, IKeyed> getter) => Uint((ref v) => getter(ref v)?.Hash ?? 0);
+    public B ChildHash(DeviceFieldBufGetter<V, IKeyed> getter) => NonNull(getter, b => b.Uint((ref v) => v.Hash));
   }
 
   public class NullDeviceField<T>(int length) : IDeviceField<T>

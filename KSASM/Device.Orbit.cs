@@ -7,6 +7,13 @@ namespace KSASM
   {
     public B Orbit(DeviceFieldBufGetter<V, Orbit> getter) => NonNull(getter, b => b
       .Hash((ref o) => o.Parent)
+      .Double((ref o) => o.TimeAtPeriapsis.Seconds())
+      .Double((ref o) => o.Eccentricity)
+      .Double((ref o) => o.SemiMajorAxis)
+      .Double((ref o) => o.SemiMinorAxis)
+      .Double((ref o) => o.Inclination)
+      .Double((ref o) => o.LongitudeOfAscendingNode)
+      .Double((ref o) => o.ArgumentOfPeriapsis)
       .Double((ref o) => o.Periapsis)
       .Double((ref o) => o.Apoapsis)
       .Double((ref o) => o.Period)
@@ -22,9 +29,10 @@ namespace KSASM
       .List((ref v) => v.Patches, (b, get) => b.Patch(get))
     );
 
-    public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => Composite(getter, b => b
-      .Uint((ref a) => a?.Hash ?? 0)
+    public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => NonNull(getter, b => b
+      .Uint((ref a) => a.Hash)
       .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
+      .List((ref a) => a.Children, (b, get) => b.ChildHash(new(get)))
     );
 
     public B Burn(

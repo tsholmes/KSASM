@@ -12,8 +12,7 @@
 data:
   :f64 time: 0
   :u64 hash_param: 0
-  :u64 hash: 0
-  orbit: .types.orbit(orbit.)
+  .types.astronomical
 data_end:
 
 .macro init .device.setup($(.system.id), $(system.data), $(system.data_end))
