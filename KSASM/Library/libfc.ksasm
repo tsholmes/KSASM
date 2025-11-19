@@ -16,15 +16,18 @@
 
 data:
 :u64 thrust_mode: 0
-burns: .types.listview(burns.)
+burns: .ns burns.
+  :u8 outdated: 0
+  :f64 add_time: 0
+  .types.listview
+.endns
 burn: .ns burn.
   :f64 time: 0
   deltav: .types.double3(deltav.)
   flightplan:
     .types.listview(patches.)
     patch: .types.patch(patch.)
-  :u8 outdated: 0
-  :f64 add_time: 0
+  :u8 delete: 0
 .endns
 data_end:
 
@@ -32,12 +35,21 @@ data_end:
 
 .macro burn_wait \
   call:p24 fc._burn_wait_ret, fc._burn_wait
-
 :p24 _burn_wait_ret: 0
 _burn_wait:
-  branchifzero fc.burn.outdated:u8, [fc._burn_wait_ret]:p24
+  branchifzero fc.burns.outdated:u8, [fc._burn_wait_ret]:p24
   sleep:u8 _, $(1)
   jump:p24 fc._burn_wait, _
+
+.macro burn_clear \
+  call:p24 fc._burn_clear_ret, fc._burn_clear
+:p24 _burn_clear_ret: 0
+_burn_clear:
+  copy:u64 fc.burns.index, $(0)
+  _burn_clear_loop:
+    branchifzero fc.burns.count:u64, [fc._burn_clear_ret]:p24
+    copy:u8 fc.burn.delete, $(1)
+    jump:p24 fc._burn_clear_loop, _
 
 .endns
 .endif

@@ -19,13 +19,13 @@ namespace KSASM
     public override IDeviceFieldBuilder<VehicleFC> Build(RootDeviceFieldBuilder<VehicleFC> b) => b
       .Leaf(DataType.U64, ThrustModeConverter.Instance,
         (ref fc) => fc.FC.ManualThrustMode, (ref fc, mode) => fc.FC.SetManualThrustMode(mode))
+      .Bool((ref fc) => fc.FC.BurnPlan.FlightPlansOutOfDate)
+      .Double((ref fc) => 0, (ref fc, v) => AddBurn(fc, v))
       .ListView(
         fc => fc.FC.BurnPlan.BurnCount,
         b => b.Burn(
           (ref v, _) => v.Parent.FC.BurnPlan.TryGetBurn((int)v.Index, out var burn) ? burn : null,
-          (ref v, b) => v.Parent.FC.BurnUpdated(b)))
-      .Bool((ref fc) => fc.FC.BurnPlan.FlightPlansOutOfDate)
-      .Double((ref fc) => 0, (ref fc, v) => AddBurn(fc, v));
+          (ref v, b) => v.Parent.FC.BurnUpdated(b)));
 
     private static void AddBurn(VehicleFC fc, double time)
     {

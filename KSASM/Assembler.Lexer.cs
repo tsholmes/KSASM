@@ -97,6 +97,8 @@ namespace KSASM
           '$' when At(index + 1) == '(' => TakeNext(TokenType.COpen, 2, out token),
           '(' => TakeNext(TokenType.POpen, 1, out token),
           ')' => TakeNext(TokenType.PClose, 1, out token),
+          '{' => TakeNext(TokenType.BOpen, 1, out token),
+          '}' => TakeNext(TokenType.BClose, 1, out token),
           _ when IsWordStart(c) => TakeWordLike(out token),
           '@' => TakePosition(out token),
           '*' => TakeWidth(out token),

@@ -24,6 +24,8 @@ namespace KSASM
       PClose, // )
       Macro, // .macroname
       String, // "string"
+      BOpen, // {
+      BClose, // }
     }
 
     public struct Token

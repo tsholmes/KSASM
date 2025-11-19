@@ -36,6 +36,7 @@ namespace KSASM
       .Double((ref b) => b.Time.Seconds(), (ref b, v) => b.Time = new(v))
       .Double3((ref b, _) => b.DeltaVVlf, (ref b, v) => b.DeltaVVlf = v)
       .FlightPlan((ref b, _) => b.FlightPlan)
+      .Bool((ref b) => false, (ref b, del) => { if (del) b.Vehicle.FlightComputer.RemoveBurn(b); })
     );
   }
 }

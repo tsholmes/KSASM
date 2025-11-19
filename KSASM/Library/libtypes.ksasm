@@ -1,32 +1,30 @@
+.import libutils
+
 # defines layouts of common types to be embedded
 .ifndef libtypes .macro libtypes
 .ns types.
 
-.macro listview(ns) \
-  .ns ns \
-    :u64 count: 0 \
-    :u64 index: 0 \
-  .endns
+.type(listview,
+  :u64 count: 0
+  :u64 index: 0
+)
 
-.macro double3(ns) \
-  .ns ns \
-    :f64 x: 0 y: 0 z: 0 \
-  .endns
+.type(double3,
+  :f64 x: 0 y: 0 z: 0
+)
 
-.macro orbit(ns) \
-  .ns ns \
-    :u64 parent: 0 \
-    :f64 periapsis: 0 \
-    :f64 apoapsis: 0 \
-    :f64 period: 0 \
-  .endns
+.type(orbit,
+  :u64 parent: 0
+  :f64 periapsis: 0
+  :f64 apoapsis: 0
+  :f64 period: 0
+)
 
-.macro patch(ns) \
-  .ns ns \
-    :f64 start_time: 0 \
-    :f64 end_time: 0 \
-    .types.orbit(orbit.) \
-  .endns
+.type(patch,
+  :f64 start_time: 0
+  :f64 end_time: 0
+  .types.orbit(orbit.)
+)
 
 .endns
 .endif

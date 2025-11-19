@@ -1,0 +1,9 @@
+.ifndef libutils .macro libutils
+
+.macro withns(ns, inner) .if(ns) .ns ns .endif inner .if(ns) .endns .endif
+
+.macro type(name, vals) {
+  .macro name(ns) { .withns(ns, vals) }
+}
+
+.endif

@@ -15,6 +15,7 @@ namespace KSASM
     public static int Main(string[] args)
     {
       Assembler.Debug = false;
+      Assembler.MacroParser.DebugMacros = false;
       MemoryAccessor.DebugRead = false;
       MemoryAccessor.DebugWrite = false;
       Processor.DebugOps = false;
