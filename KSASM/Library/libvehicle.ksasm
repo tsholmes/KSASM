@@ -18,7 +18,7 @@
 
 .region data 1024
 
-.device.define(.vehicle.id,
+.device.define(.vehicle.id, {
   :u64 hash: 0
   avel: .types.double3(avel.)
   inputs: .ns inputs.
@@ -26,7 +26,7 @@
   .endns
   patches: .types.listview(patches.)
   patch: .types.patch(patch.)
-)
+})
 
 .endns
 .endif

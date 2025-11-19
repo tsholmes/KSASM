@@ -4,16 +4,16 @@
 .ifndef libtypes .macro libtypes
 .ns types.
 
-.type(listview,
+.type(listview, {
   :u64 count: 0
   :u64 index: 0
-)
+})
 
-.type(double3,
+.type(double3, {
   :f64 x: 0 y: 0 z: 0
-)
+})
 
-.type(orbit,
+.type(orbit, {
   :u64 parent: 0
   :f64 time_at_periapsis: 0
   :f64 eccentricity: 0
@@ -25,20 +25,20 @@
   :f64 periapsis: 0
   :f64 apoapsis: 0
   :f64 period: 0
-)
+})
 
-.type(patch,
+.type(patch, {
   :f64 start_time: 0
   :f64 end_time: 0
   .types.orbit(orbit.)
-)
+})
 
-.type(astronomical,
+.type(astronomical, {
   :u64 hash: 0
   .types.orbit(orbit.)
   .types.listview(children.)
   :u64 child.hash: 0
-)
+})
 
 .endns
 .endif

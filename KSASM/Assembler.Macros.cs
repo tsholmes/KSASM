@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace KSASM
 {
@@ -39,8 +40,10 @@ namespace KSASM
 
       public bool Next(out Token token)
       {
-        if (NextInner(out token))
+        while (NextInner(out token))
         {
+          if (token.Type == TokenType.EscapedEOL)
+            continue;
           if (Debug)
             Console.WriteLine($"{token.Type} '{token.Str()}' at {token.PosStr()}");
           return true;
@@ -248,21 +251,12 @@ namespace KSASM
           return;
         }
 
-        var skipDepth = 1;
-        while (skipDepth > 0)
-        {
-          if (lexer.TakeType(TokenType.Macro, out var mtoken))
-          {
-            skipDepth += mtoken.Str()[1..] switch
-            {
-              "ifdef" or "ifndef" or "if" => 1,
-              "endif" => -1,
-              _ => 0,
-            };
-          }
-          else if (!lexer.Take(out _))
-            throw Invalid();
-        }
+        var chunk = new ChunkReader { P = this, TrackIf = true, EndIf = true };
+        while (chunk.Take(out _)) ;
+        if (!lexer.TakeType(TokenType.Macro, out var token))
+          throw Invalid();
+        else if (token.Str() != ".endif")
+          throw Invalid(token);
       }
 
       private void MacroEndIf(Token token)
@@ -394,37 +388,19 @@ namespace KSASM
           }
         }
 
+        var chunk = new ChunkReader { P = this };
         if (lexer.TakeType(TokenType.BOpen, out _))
-        {
-          // take tokens until we find unmatched }
-          var depth = 0;
-          while (true)
-          {
-            if (!lexer.Take(out var token))
-              throw Invalid();
-            if (token.Type == TokenType.BOpen)
-              depth++;
-            else if (token.Type == TokenType.BClose)
-            {
-              if (depth == 0)
-                break;
-              depth--;
-            }
-            macro.Tokens.Add(token);
-          }
-        }
+          chunk.TrackB = chunk.EndBClose = true;
         else
-        {
-          // take tokens until we find unescaped EOL
-          while (lexer.Peek(out var token) && token.Type != TokenType.EOL)
-          {
-            if (!lexer.Take(out token))
-              throw new InvalidOperationException();
-            if (token.Type == TokenType.EscapedEOL)
-              token.Type = TokenType.EOL;
-            macro.Tokens.Add(token);
-          }
-        }
+          chunk.EndLine = true;
+
+        while (chunk.Take(out var token))
+          macro.Tokens.Add(token);
+
+        if (chunk.TrackB && !lexer.TakeType(TokenType.BClose, out _))
+          throw Invalid();
+        else if (!chunk.TrackB && !lexer.TakeType(TokenType.EOL, out _))
+          throw Invalid();
 
         macros[macro.Name] = macro;
       }
@@ -442,26 +418,22 @@ namespace KSASM
           while (!done)
           {
             var arg = new List<Token>();
-            var pdepth = 0;
-            while (lexer.Take(out var token))
-            {
-              if (token.Type == TokenType.Comma)
-                break;
-              else if (token.Type is TokenType.POpen or TokenType.COpen)
-                pdepth++;
-              else if (token.Type == TokenType.PClose)
-              {
-                pdepth--;
-                if (pdepth < 0)
-                {
-                  done = true;
-                  break;
-                }
-              }
-              else if (token.Type == TokenType.EscapedEOL)
-                token.Type = TokenType.EOL;
+            var chunk = new ChunkReader { P = this, TrackP = true, TrackB = true };
+            if (lexer.TakeType(TokenType.BOpen, out _))
+              chunk.EndBClose = true;
+            else
+              chunk.EndComma = chunk.EndPClose = chunk.EndLine = true;
+
+            while (chunk.Take(out var token))
               arg.Add(token);
-            }
+
+            if (chunk.EndBClose && !lexer.TakeType(TokenType.BClose, out _))
+              throw Invalid();
+
+            if (lexer.TakeType(TokenType.PClose, out _))
+              done = true;
+            else if (!lexer.TakeType(TokenType.Comma, out _))
+              throw Invalid();
             args.Add(arg);
           }
         }
@@ -477,8 +449,6 @@ namespace KSASM
             expanded.AddRange(args[argIdx]);
             continue;
           }
-          else if (token.Type == TokenType.EscapedEOL)
-            token.Type = TokenType.EOL;
           expanded.Add(token);
         }
 
@@ -516,17 +486,69 @@ namespace KSASM
         public Dictionary<string, int> Args = [];
         public List<Token> Tokens = [];
       }
+
+      private struct ChunkReader
+      {
+        public MacroParser P;
+        public bool EndComma;
+        public bool EndPClose, TrackP;
+        public bool EndBClose, TrackB;
+        public bool EndIf, TrackIf;
+        public bool EndLine;
+
+        public int IfDepth;
+        public int PDepth;
+        public int BDepth;
+
+        public bool Take(out Token token)
+        {
+          if (!IsInner)
+          {
+            if (EndComma && P.lexer.PeekType(TokenType.Comma, out token))
+              return false;
+            if (EndPClose && P.lexer.PeekType(TokenType.PClose, out token))
+              return false;
+            if (EndBClose && P.lexer.PeekType(TokenType.BClose, out token))
+              return false;
+            if (EndIf && P.lexer.PeekType(TokenType.Macro, out token) && token.Str() is ".endif")
+              return false;
+            if (EndLine && P.lexer.PeekType(TokenType.EOL, out token))
+              return false;
+          }
+          if (!P.lexer.Take(out token))
+            throw P.Invalid();
+
+          if (TrackP)
+          {
+            if (token.Type is TokenType.POpen or TokenType.COpen)
+              PDepth++;
+            else if (token.Type is TokenType.PClose && --PDepth < 0)
+              throw P.Invalid(token);
+          }
+          if (TrackB)
+          {
+            if (token.Type is TokenType.BOpen)
+              BDepth++;
+            else if (token.Type is TokenType.BClose && --BDepth < 0)
+              throw P.Invalid(token);
+          }
+          if (TrackIf)
+          {
+            if (token.Type is TokenType.Macro && token.Str() is ".if" or ".ifdef" or ".ifndef")
+              IfDepth++;
+            else if (token.Type is TokenType.Macro && token.Str() is ".endif" && --IfDepth < 0)
+              throw P.Invalid(token);
+          }
+          return true;
+        }
+
+        public bool IsInner => IfDepth > 0 || PDepth > 0 || BDepth > 0;
+      }
     }
 
-    public class ListTokenStream : ITokenStream
+    public class ListTokenStream(List<Token> tokens) : ITokenStream
     {
-      private readonly List<Token> tokens;
       private int index = 0;
-
-      public ListTokenStream(List<Token> tokens)
-      {
-        this.tokens = tokens;
-      }
 
       public bool Next(out Token token)
       {

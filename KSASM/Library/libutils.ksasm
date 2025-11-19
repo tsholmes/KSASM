@@ -7,7 +7,7 @@
 }
 
 .macro type(name, vals) {
-  .macro name(ns) { .withns(ns, vals) }
+  .macro name(ns) { .withns(ns, { vals }) }
 }
 
 .macro fn(name) {

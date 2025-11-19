@@ -14,7 +14,7 @@
 
 .region data 1024
 
-.device.define(.fc.id,
+.device.define(.fc.id, {
   :u64 thrust_mode: 0
   burns: .ns burns.
     :u8 outdated: 0
@@ -29,7 +29,7 @@
       patch: .types.patch(patch.)
     :u8 delete: 0
   .endns
-)
+})
 
 .fn(burn_wait)
   branchifzero fc.burns.outdated:u8, .fnret
