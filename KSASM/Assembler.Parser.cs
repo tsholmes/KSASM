@@ -109,6 +109,33 @@ namespace KSASM
             }
             Statements.Add(stmt);
           }
+          else if (TakeType(TokenType.String, out token))
+          {
+            if (curType != DataType.U8)
+              Invalid(token);
+
+            var str = token.Str()[1..^1];
+            for (var i = 0; i < str.Length; i++)
+            {
+              var c = str[i];
+              if (c == '\\')
+              {
+                if (i == str.Length - 1)
+                  Invalid(token);
+                var cn = str[i + 1];
+                c = cn switch
+                {
+                  'n' => '\n',
+                  'r' => '\r',
+                  '\\' => '\\',
+                  't' => '\t',
+                  _ => throw Invalid(token),
+                };
+                i++;
+              }
+              Statements.Add(new ValueStatement() { Type = DataType.U8, Value = new() { Unsigned = c } });
+            }
+          }
           else
             Invalid();
         }
@@ -279,13 +306,13 @@ namespace KSASM
         (str.StartsWith("0b") && double.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
         (str.StartsWith("0x") && double.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
 
-      private void Invalid()
+      private Exception Invalid()
       {
         lexer.Peek(out var token);
-        Invalid(token);
+        return Invalid(token);
       }
 
-      private void Invalid(Token token) => throw new InvalidOperationException(
+      private Exception Invalid(Token token) => throw new InvalidOperationException(
         $"invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
     }
 

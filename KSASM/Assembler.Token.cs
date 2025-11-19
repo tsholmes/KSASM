@@ -23,6 +23,7 @@ namespace KSASM
       POpen, // (
       PClose, // )
       Macro, // .macroname
+      String, // "string"
     }
 
     public struct Token

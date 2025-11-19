@@ -146,6 +146,10 @@ TODO
   * A1..An = interrupt data
 * ireturn: PC = CurrentInterrupt.return
 
+### Debug Operations
+* debug: debug output An, Bn
+* debugstr: debug output strings mem[An..An+Bn]
+
 ## UFPU
 ### Rounding functions
 - floor(x)

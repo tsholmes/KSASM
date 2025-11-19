@@ -92,7 +92,8 @@ namespace KSASM
     IReturn,
 
     // debug instructions
-    Debug = 127,
+    Debug = 126,
+    DebugStr = 127,
   }
 
   // TODO: assign static values once more finalized

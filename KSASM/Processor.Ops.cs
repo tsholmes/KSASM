@@ -205,5 +205,25 @@ namespace KSASM
       Memory.Read(opB, B);
       OnDebug?.Invoke(A, B);
     }
+
+    private void OpDebugStr(ValuePointer opA, ValuePointer opB)
+    {
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
+      A.Convert(ValueMode.Unsigned);
+      B.Convert(ValueMode.Unsigned);
+
+      Span<byte> buf = stackalloc byte[256];
+
+      for (var i = 0; i < A.Width; i++)
+      {
+        var addr = (int)A.Values[i].Unsigned;
+        var len = (int)(B.Values[i].Unsigned & 0xFF);
+
+        MappedMemory.Read(buf[..len], addr);
+
+        OnDebugStr?.Invoke(System.Text.Encoding.ASCII.GetString(buf[..len]));
+      }
+    }
   }
 }

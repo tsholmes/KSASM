@@ -35,6 +35,7 @@ namespace KSASM
         FlightComputerDeviceDefinition.Make(Vehicle))
       {
         OnDebug = OnDebug,
+        OnDebugStr = OnDebugStr,
         SleepTime = ulong.MaxValue
       };
 
@@ -66,5 +67,6 @@ namespace KSASM
     }
 
     private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");
+    private void OnDebugStr(string str) => log?.Invoke($"> {str}");
   }
 }

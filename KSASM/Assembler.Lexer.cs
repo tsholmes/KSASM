@@ -103,6 +103,7 @@ namespace KSASM
           ':' => TakeType(out token),
           _ when IsDigit(c) => TakeNumber(out token),
           '.' => TakeMacro(out token),
+          '"' => TakeString(out token),
           _ => TakeNext(TokenType.Invalid, 1, out token),
         };
       }
@@ -153,6 +154,20 @@ namespace KSASM
           return TakeNext(TokenType.Invalid, 1, out token);
         else
           return TakeNext(TokenType.Macro, len, out token);
+      }
+
+      private bool TakeString(out Token token)
+      {
+        var len = 1;
+        while (index + len < source.Length && At(index + len) is not '"' and not '\n')
+          len++;
+
+        len++;
+
+        if (At(index + len - 1) != '"')
+          return TakeNext(TokenType.Invalid, len, out token);
+        else
+          return TakeNext(TokenType.String, len, out token);
       }
 
       private bool TakePosition(out Token token)

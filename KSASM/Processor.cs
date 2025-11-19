@@ -21,6 +21,7 @@ namespace KSASM
     private readonly ValArray C = new();
 
     public Action<ValArray, ValArray> OnDebug;
+    public Action<string> OnDebugStr;
 
     private readonly Dictionary<ulong, IDevice> deviceMap = [];
     private readonly IDevice defaultDevice = new NullDevice();
@@ -124,6 +125,7 @@ namespace KSASM
         case OpCode.IData: OpIData(opA, opB); break;
         case OpCode.IReturn: OpIReturn(opA, opB); break;
         case OpCode.Debug: OpDebug(opA, opB); break;
+        case OpCode.DebugStr: OpDebugStr(opA, opB); break;
         default:
           throw new InvalidOperationException($"{op}");
       }
