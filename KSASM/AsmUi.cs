@@ -28,9 +28,9 @@ namespace KSASM
       ImGuiWindowFlags.AlwaysAutoResize |
       ImGuiWindowFlags.NoSavedSettings;
 
-    private static byte[] buffer = new byte[65536];
+    private static readonly byte[] buffer = new byte[65536];
     private static string stats = "";
-    private static List<string> output = [];
+    private static readonly List<string> output = [];
 
     private static bool doStep = false;
 
@@ -100,10 +100,10 @@ namespace KSASM
 
     public static void LoadLibrary(string name)
     {
-            var source = Library.LoadImport(name);
-            var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
-            sbytes.CopyTo(buffer);
-            buffer[sbytes.Length] = 0;
+      var source = Library.LoadImport(name);
+      var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
+      sbytes.CopyTo(buffer);
+      buffer[sbytes.Length] = 0;
     }
 
     private static void Step(Vehicle vehicle)

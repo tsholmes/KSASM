@@ -63,7 +63,7 @@ namespace KSASM
 
       stopwatch.Stop();
       LastSteps = step;
-      LastMs = stopwatch.Elapsed.Milliseconds;
+      LastMs = stopwatch.Elapsed.TotalMilliseconds;
     }
 
     private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");

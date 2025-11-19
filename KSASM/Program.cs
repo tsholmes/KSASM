@@ -51,12 +51,12 @@ namespace KSASM
 
       Assembler.Assemble(source, proc.Memory);
 
-      var asmTime = stopwatch.Elapsed.Milliseconds;
+      var asmTime = stopwatch.Elapsed.TotalMilliseconds;
 
-      for (var i = 0; i < 1000000 && proc.SleepTime == 0; i++)
+      for (var i = 0; i < 10000000 && proc.SleepTime == 0; i++)
         proc.Step();
 
-      var runTime = stopwatch.Elapsed.Milliseconds - asmTime;
+      var runTime = stopwatch.Elapsed.TotalMilliseconds - asmTime;
 
       Console.WriteLine($"asm: {asmTime:0.##}ms, run: {runTime:0.##}ms");
 
