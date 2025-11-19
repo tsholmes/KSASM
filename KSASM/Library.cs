@@ -14,7 +14,7 @@ namespace KSASM
     {
       var path = Path.Join(LibraryDir, $"{name}.ksasm");
       if (!File.Exists(path))
-        throw new InvalidOperationException($"unknown import '{name}");
+        throw new InvalidOperationException($"unknown import '{name}'");
       return new(name, File.ReadAllText(path));
     }
 

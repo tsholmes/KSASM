@@ -14,11 +14,13 @@ namespace KSASM
 
     public static int Main(string[] args)
     {
-      Assembler.Debug = false;
-      Assembler.MacroParser.DebugMacros = false;
-      MemoryAccessor.DebugRead = false;
-      MemoryAccessor.DebugWrite = false;
-      Processor.DebugOps = false;
+      var pargs = ProgramArgs.Parse(args);
+
+      Assembler.Debug = pargs.HasFlag("debug", "asm");
+      Assembler.MacroParser.DebugMacros = pargs.HasFlag("debug", "macro");
+      MemoryAccessor.DebugRead = pargs.HasFlag("debug", "read") || pargs.HasFlag("debug", "mem");
+      MemoryAccessor.DebugWrite = pargs.HasFlag("debug", "write") || pargs.HasFlag("debug", "mem");
+      Processor.DebugOps = pargs.HasFlag("debug", "ops");
 
       Library.LibraryDir = Path.Join(Directory.GetCurrentDirectory(), "Library");
       Library.RefreshIndex();
@@ -27,14 +29,17 @@ namespace KSASM
 
       AppDomain.CurrentDomain.AssemblyResolve += FindAssembly;
 
-      if (args.Any(arg => arg.ToLowerInvariant() == "--game"))
+      if (pargs.HasFlag("game"))
       {
         RunPatches();
+        if (pargs.Positional(0, out var name))
+          AsmUi.LoadLibrary(name);
         return RunGame(args);
       }
 
-      var fname = args.Length > 0 ? args[0] : "test";
-      var source = Library.LoadImport(fname);
+      var scriptName = pargs.Positional(0, out var sname) ? sname : "test";
+
+      var source = Library.LoadImport(scriptName);
 
       var proc = new Processor
       {

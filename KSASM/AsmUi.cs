@@ -51,12 +51,7 @@ namespace KSASM
           var name = Library.Index[i];
           ImGui.PushID(i);
           if (ImGui.Selectable(name))
-          {
-            var source = Library.LoadImport(name);
-            var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
-            sbytes.CopyTo(buffer);
-            buffer[sbytes.Length] = 0;
-          }
+            LoadLibrary(name);
           ImGui.PopID();
         }
         ImGui.EndCombo();
@@ -101,6 +96,14 @@ namespace KSASM
 
       ImGui.End();
       return false;
+    }
+
+    public static void LoadLibrary(string name)
+    {
+            var source = Library.LoadImport(name);
+            var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
+            sbytes.CopyTo(buffer);
+            buffer[sbytes.Length] = 0;
     }
 
     private static void Step(Vehicle vehicle)
