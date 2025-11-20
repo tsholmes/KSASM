@@ -1,0 +1,39 @@
+.ifndef libstring .macro libstring
+
+.region libstring 1024
+
+# :p24 name: addr name.len: len
+.macro str.ptr(name, addr, len) :p24 .label(name) addr .label(.concat(name .len)) len
+
+# :p24 name: addr name.len: len(val)
+# :u8 name.value: val name.end:
+.macro str(name, val) {
+  .str.ptr(name, .addns(.concat(name .value)), $(.addns(.concat(name .end)) - .addns(.concat(name .value))))
+  :u8 .label(.concat(name .value)) val .label(.concat(name .end))
+}
+
+.macro str.append(to, from)  {
+  copy*2:p24 str.append.from, from
+  copy*2:p24 str.append.to, to
+  call:p24 str.append.ret, str.append
+  copy*2:p24 to, str.append.to
+}
+:p24 str.append.ret: 0
+.str.ptr(str.append.from, 0, 0)
+.str.ptr(str.append.to, 0, 0)
+.str.ptr(str.append.temp, 0, 0)
+str.append:
+  branchifzero:p24 str.append.from.len, str.append.end # skip if from is empty
+  copy*2:p24 str.append.temp, str.append.to
+  sum*2:p24 str.append.temp, $(0) # move temp pointer to end of string
+  add:p24 str.append.to.len, str.append.from.len
+  str.append.loop:
+    copy:u8 [str.append.temp], [str.append.from]
+    add:p24 str.append.from, $(1)
+    add:p24 str.append.from.len, $(-1)
+    add:p24 str.append.temp, $(1)
+    branchifpos:p24 str.append.from.len, str.append.loop
+  str.append.end:
+    jump:p24 [str.append.ret], _
+
+.endif
