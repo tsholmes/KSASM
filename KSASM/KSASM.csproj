@@ -45,5 +45,9 @@
       <HintPath>C:\Program Files\Kitten Space Agency\Brutal.Core.Numerics.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Brutal.ImGui.Abstractions">
+      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.ImGui.Abstractions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@ using System;
 using Brutal.Numerics;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Brutal.ImGuiApi.Abstractions;
 
 namespace KSASM
 {
@@ -21,6 +22,17 @@ namespace KSASM
       __result |= DrawUi(uiContext.Astronomical as Vehicle, inViewport, uiContext);
     }
 
+    [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]
+    public static bool ConsoleWindowEx_OnKey(ref bool __result, ConsoleWindow console)
+    {
+      if (!console.IsOpen && isTyping)
+      {
+        __result = true;
+        return false;
+      }
+      return true;
+    }
+
     private const ImGuiWindowFlags WINDOW_FLAGS =
       ImGuiWindowFlags.NoResize |
       ImGuiWindowFlags.NoScrollbar |
@@ -32,6 +44,7 @@ namespace KSASM
     private static string stats = "";
     private static readonly List<string> output = [];
 
+    private static bool isTyping = false;
     private static bool doStep = false;
 
     private static ProcSystem Current;
@@ -63,6 +76,7 @@ namespace KSASM
         new float2(600, 400),
         ImGuiInputTextFlags.None
       );
+      isTyping = ImGui.IsItemActive();
 
       Step(vehicle);
 
