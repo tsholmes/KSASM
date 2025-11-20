@@ -1,5 +1,7 @@
 
 using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace KSASM
 {
@@ -48,145 +50,47 @@ namespace KSASM
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),
     };
 
-    public static class U8
+    [StructLayout(LayoutKind.Explicit)]
+    private ref struct EVal
     {
-      public static ulong Decode(Span<byte> data) => Read1(data);
-      public static void Encode(ulong val, Span<byte> data) => data[0] = (byte)val;
+      [FieldOffset(0)]
+      public Byte8 Bytes;
+      [FieldOffset(0)]
+      public byte U8;
+      [FieldOffset(0)]
+      public short I16;
+      [FieldOffset(0)]
+      public int I32;
+      [FieldOffset(0)]
+      public long I64;
+      [FieldOffset(0)]
+      public ulong U64;
+      [FieldOffset(0)]
+      public double F64;
+      [FieldOffset(0)]
+      public uint P24;
+      // TODO: C128
     }
+    private static Span<byte> BytesOf(this ref EVal val, DataType type) => val.Bytes[..type.SizeBytes()];
 
-    public static class I16
-    {
-      public static long Decode(Span<byte> data) => (short)Read2(data);
-
-      public static void Encode(long val, Span<byte> data)
-      {
-        data[0] = (byte)(val >> 0);
-        data[1] = (byte)(val >> 8);
-      }
-    }
-
-    public static class I32
-    {
-      public static long Decode(Span<byte> data) => (int)Read4(data);
-
-      public static void Encode(long val, Span<byte> data)
-      {
-        data[0] = (byte)(val >> 0);
-        data[1] = (byte)(val >> 8);
-        data[2] = (byte)(val >> 16);
-        data[3] = (byte)(val >> 24);
-      }
-    }
-
-    public static class I64
-    {
-      public static long Decode(Span<byte> data) => (long)Read8(data);
-
-      public static void Encode(long val, Span<byte> data)
-      {
-        data[0] = (byte)(val >> 0);
-        data[1] = (byte)(val >> 8);
-        data[2] = (byte)(val >> 16);
-        data[3] = (byte)(val >> 24);
-        data[4] = (byte)(val >> 32);
-        data[5] = (byte)(val >> 40);
-        data[6] = (byte)(val >> 48);
-        data[7] = (byte)(val >> 56);
-      }
-    }
-
-    public static class U64
-    {
-      public static ulong Decode(Span<byte> data) => Read8(data);
-
-      public static void Encode(ulong val, Span<byte> data)
-      {
-        data[0] = (byte)(val >> 0);
-        data[1] = (byte)(val >> 8);
-        data[2] = (byte)(val >> 16);
-        data[3] = (byte)(val >> 24);
-        data[4] = (byte)(val >> 32);
-        data[5] = (byte)(val >> 40);
-        data[6] = (byte)(val >> 48);
-        data[7] = (byte)(val >> 56);
-      }
-    }
-
-    public static class F64
-    {
-      public static double Decode(Span<byte> data) =>
-        BitConverter.UInt64BitsToDouble(Read8(data));
-
-      public static void Encode(double value, Span<byte> data) =>
-        U64.Encode(BitConverter.DoubleToUInt64Bits(value), data);
-    }
-
-    public static class P24
-    {
-      public static ulong Decode(Span<byte> data) => Read3(data);
-
-      public static void Encode(ulong val, Span<byte> data)
-      {
-        data[0] = (byte)(val >> 0);
-        data[1] = (byte)(val >> 8);
-        data[2] = (byte)(val >> 16);
-      }
-    }
-
-    // TODO: use complex type for this
-    public static class C128
-    {
-      public static double Decode(Span<byte> data) =>
-        throw new NotImplementedException();
-
-      public static void Encode(double value, Span<byte> data) =>
-        throw new NotImplementedException();
-    }
-
-    private static ulong Read1(Span<byte> data) => data[0];
-
-    private static ulong Read2(Span<byte> data) =>
-      ((ulong)data[0] << 0) | ((ulong)data[1] << 8);
-
-    private static ulong Read3(Span<byte> data) =>
-        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) | ((ulong)data[2] << 16);
-
-    private static ulong Read4(Span<byte> data) =>
-        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) |
-        ((ulong)data[2] << 16) | ((ulong)data[3] << 24);
-
-    private static ulong Read8(Span<byte> data) =>
-        ((ulong)data[0] << 0) | ((ulong)data[1] << 8) |
-        ((ulong)data[2] << 16) | ((ulong)data[3] << 24) |
-        ((ulong)data[4] << 32) | ((ulong)data[5] << 40) |
-        ((ulong)data[6] << 48) | ((ulong)data[7] << 56);
+    [InlineArray(8)]
+    public struct Byte8 { private byte element; }
 
     public static Value Decode(Span<byte> data, DataType type)
     {
+      var eval = default(EVal);
+      data[..type.SizeBytes()].CopyTo(eval.Bytes);
+
       var val = default(Value);
       switch (type)
       {
-        case DataType.U8:
-          val.Unsigned = U8.Decode(data);
-          break;
-        case DataType.I16:
-          val.Signed = I16.Decode(data);
-          break;
-        case DataType.I32:
-          val.Signed = I32.Decode(data);
-          break;
-        case DataType.I64:
-          val.Signed = I64.Decode(data);
-          break;
-        case DataType.U64:
-          val.Unsigned = U64.Decode(data);
-          break;
-        case DataType.F64:
-          val.Float = F64.Decode(data);
-          break;
-        case DataType.P24:
-          val.Unsigned = P24.Decode(data);
-          break;
+        case DataType.U8: val.Unsigned = eval.U8; break;
+        case DataType.I16: val.Signed = eval.I16; break;
+        case DataType.I32: val.Signed = eval.I32; break;
+        case DataType.I64: val.Signed = eval.I64; break;
+        case DataType.U64: val.Unsigned = eval.U64; break;
+        case DataType.F64: val.Float = eval.F64; break;
+        case DataType.P24: val.Unsigned = eval.P24; break;
         case DataType.C128:
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
@@ -196,33 +100,21 @@ namespace KSASM
 
     public static void Encode(Span<byte> buffer, DataType type, Value val)
     {
+      var eval = default(EVal);
       switch (type)
       {
-        case DataType.U8:
-          U8.Encode(val.Unsigned, buffer);
-          break;
-        case DataType.I16:
-          I16.Encode(val.Signed, buffer);
-          break;
-        case DataType.I32:
-          I32.Encode(val.Signed, buffer);
-          break;
-        case DataType.I64:
-          I64.Encode(val.Signed, buffer);
-          break;
-        case DataType.U64:
-          U64.Encode(val.Unsigned, buffer);
-          break;
-        case DataType.F64:
-          F64.Encode(val.Float, buffer);
-          break;
-        case DataType.P24:
-          P24.Encode(val.Unsigned, buffer);
-          break;
+        case DataType.U8: eval.U8 = (byte)val.Unsigned; break;
+        case DataType.I16: eval.I16 = (short)val.Signed; break;
+        case DataType.I32: eval.I32 = (int)val.Signed; break;
+        case DataType.I64: eval.I64 = val.Signed; break;
+        case DataType.U64: eval.U64 = val.Unsigned; break;
+        case DataType.F64: eval.F64 = val.Float; break;
+        case DataType.P24: eval.P24 = (uint)val.Unsigned; break;
         case DataType.C128:
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
       }
+      eval.BytesOf(type).CopyTo(buffer);
     }
   }
 }
