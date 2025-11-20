@@ -33,11 +33,11 @@ namespace KSASM
 
     public string TokenStr(Assembler.Token token) => Source[token.Pos..(token.Pos + token.Len)];
 
-    public string PosStr(int pos)
+    public (int line, int lpos) LinePos(int pos)
     {
       var line = lineStarts.FindIndex(start => start > pos);
       var lpos = pos - lineStarts[line - 1];
-      return $"{Name}:{line}:{lpos}";
+      return (line, lpos);
     }
   }
 }

@@ -37,10 +37,9 @@ namespace KSASM
       public int Pos;
       public int Len;
       public string OverrideStr;
+      public int ParentFrame;
 
       public string Str() => OverrideStr ?? Source?.TokenStr(this) ?? "";
-
-      public string PosStr() => Source?.PosStr(Pos) ?? $"?@{Pos}";
     }
 
     public interface ITokenStream

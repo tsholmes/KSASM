@@ -100,6 +100,7 @@ namespace KSASM
 
     public class InstructionStatement : Statement
     {
+      public Context Context;
       public Token OpToken;
       public OpCode Op;
       public int Width = 1;
@@ -122,7 +123,7 @@ namespace KSASM
       }
 
       private Exception Invalid(string message) =>
-        throw new InvalidOperationException($"{message} at {OpToken.PosStr()}");
+        throw new InvalidOperationException($"{message} at {Context.StackPos(OpToken)}");
 
       private DataType AType => OperandA.Mode != ParsedOpMode.Placeholder
         ? Type ?? OperandA.Type ?? throw Invalid($"Missing A Type")

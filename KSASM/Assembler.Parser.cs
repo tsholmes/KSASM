@@ -7,16 +7,16 @@ namespace KSASM
 {
   public partial class Assembler
   {
-    public class Parser
+    public class Parser : TokenProcessor
     {
       private readonly LexerReader lexer;
       public readonly List<Statement> Statements = [];
 
-      public Parser(SourceString source)
+      public Parser(SourceString source, Context ctx) : base(ctx)
       {
         ITokenStream stream = new Lexer(source);
-        stream = new MacroParser(stream);
-        lexer = new(stream);
+        stream = new MacroParser(stream, ctx);
+        lexer = new(stream, -2);
       }
 
       public void Parse()
@@ -159,7 +159,7 @@ namespace KSASM
 
       private void ParseInstruction()
       {
-        var inst = new InstructionStatement();
+        var inst = new InstructionStatement { Context = this.ctx };
 
         if (!TakeType(TokenType.Word, out inst.OpToken))
           Invalid();
@@ -404,14 +404,7 @@ namespace KSASM
         (str.StartsWith("0b") && double.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
         (str.StartsWith("0x") && double.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
 
-      private Exception Invalid()
-      {
-        lexer.Peek(out var token);
-        return Invalid(token);
-      }
-
-      private Exception Invalid(Token token) => throw new InvalidOperationException(
-        $"invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
+      protected override bool Peek(out Token token) => lexer.Peek(out token);
     }
 
     public enum ParsedOpMode

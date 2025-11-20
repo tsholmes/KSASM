@@ -6,14 +6,13 @@ namespace KSASM
 {
   public partial class Assembler
   {
-    public class MacroParser : ITokenStream
+    public class MacroParser : TokenProcessor, ITokenStream
     {
       public static bool DebugMacros = false;
 
       private readonly LexerReader baseLexer;
       private readonly List<LexerReader> macroStack = [];
       private readonly List<string> nsStack = [];
-
       private readonly Dictionary<string, MacroDef> macros = [];
 
       private int regionPos = 0x00100000;
@@ -22,9 +21,9 @@ namespace KSASM
 
       private int eolCount = 0;
 
-      public MacroParser(ITokenStream stream)
+      public MacroParser(ITokenStream stream, Context ctx) : base(ctx)
       {
-        this.baseLexer = new(stream);
+        this.baseLexer = new(stream, -1);
       }
 
       private LexerReader lexer
@@ -53,7 +52,7 @@ namespace KSASM
           else
             eolCount = 0;
           if (Debug)
-            Console.WriteLine($"{token.Type} '{token.Str()}' at {token.PosStr()}");
+            Console.WriteLine($"{token.Type} {ctx.StackPos(token)}");
           return true;
         }
         return false;
@@ -79,26 +78,17 @@ namespace KSASM
         }
       }
 
-      private void PushTokens(string name, params List<Token> tokens)
+      private void PushTokens(Token parent, params List<Token> tokens)
       {
-        macroStack.Add(new(new ListTokenStream(tokens)));
+        macroStack.Add(new(new ListTokenStream(tokens), ctx.AddFrame(parent)));
         if (DebugMacros)
         {
-          Console.WriteLine($">>> PUSH {name}");
+          Console.WriteLine($">>> PUSH {parent.Str()}");
           foreach (var token in tokens)
-            Console.WriteLine($"    {token.Type} '{token.Str()}' {token.PosStr()}");
+            Console.WriteLine($"    {token.Type} {ctx.StackPos(token)}");
           Console.WriteLine("<<<");
         }
       }
-
-      private Exception Invalid()
-      {
-        lexer.Peek(out var token);
-        return Invalid(token);
-      }
-
-      private Exception Invalid(Token token) => throw new InvalidOperationException(
-        $"Invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
 
       private void ParseMacro(Token token)
       {
@@ -107,18 +97,18 @@ namespace KSASM
         {
           case "macro": MacroDefine(); break;
           case "unmacro": MacroUndefine(); break;
-          case "import": MacroImport(); break;
-          case "region": MacroRegion(); break;
-          case "add": MacroAdd(); break;
+          case "import": MacroImport(token); break;
+          case "region": MacroRegion(token); break;
+          case "add": MacroAdd(token); break;
           case "ifdef": MacroIfDef(false); break;
           case "ifndef": MacroIfDef(true); break;
           case "if": MacroIfAny(); break;
           case "ns": MacroNs(); break;
           case "endns": MacroEndNs(token); break;
-          case "addns": MacroAddNs(); break;
-          case "tomacro": MacroToMacro(); break;
-          case "concat": MacroConcat(); break;
-          case "label": MacroLabel(); break;
+          case "addns": MacroAddNs(token); break;
+          case "tomacro": MacroToMacro(token); break;
+          case "concat": MacroConcat(token); break;
+          case "label": MacroLabel(token); break;
           default: MacroExpand(name, token); break;
         }
       }
@@ -145,7 +135,7 @@ namespace KSASM
         curNs = string.Join("", nsStack);
       }
 
-      private void MacroAddNs()
+      private void MacroAddNs(Token macro)
       {
         if (!lexer.TakeType(TokenType.POpen, out _))
           throw Invalid();
@@ -164,10 +154,10 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        PushTokens("ns", token);
+        PushTokens(macro, token);
       }
 
-      private void MacroToMacro()
+      private void MacroToMacro(Token macro)
       {
         if (!lexer.TakeType(TokenType.POpen, out _))
           throw Invalid();
@@ -181,10 +171,10 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        PushTokens("tomacro", token with { Type = TokenType.Macro, OverrideStr = $".{token.Str()}" });
+        PushTokens(macro, token with { Type = TokenType.Macro, OverrideStr = $".{token.Str()}" });
       }
 
-      private void MacroConcat()
+      private void MacroConcat(Token macro)
       {
         if (!lexer.TakeType(TokenType.POpen, out _))
           throw Invalid();
@@ -207,10 +197,10 @@ namespace KSASM
         if (token.Type == TokenType.Placeholder && token.Str().Length > 1)
           token.Type = TokenType.Word;
 
-        PushTokens("concat", token);
+        PushTokens(macro, token);
       }
 
-      private void MacroLabel()
+      private void MacroLabel(Token macro)
       {
         if (!lexer.TakeType(TokenType.POpen, out _))
           throw Invalid();
@@ -223,7 +213,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        PushTokens("label", token with { Type = TokenType.Label, OverrideStr = $"{token.Str()}:" });
+        PushTokens(macro, token with { Type = TokenType.Label, OverrideStr = $"{token.Str()}:" });
       }
 
       private void MacroIfDef(bool not)
@@ -276,7 +266,7 @@ namespace KSASM
         ifDepth--;
       }
 
-      private void MacroAdd()
+      private void MacroAdd(Token macro)
       {
         if (!lexer.TakeType(TokenType.POpen, out _))
           Invalid();
@@ -314,12 +304,12 @@ namespace KSASM
           Invalid();
 
         PushTokens(
-          "add",
-          first with { Len = 0, OverrideStr = first.Type == TokenType.Width ? $"*{val.Get(mode)}" : $"{val.Get(mode)}" }
+          macro,
+          first with { OverrideStr = first.Type == TokenType.Width ? $"*{val.Get(mode)}" : $"{val.Get(mode)}" }
         );
       }
 
-      private void MacroRegion()
+      private void MacroRegion(Token macro)
       {
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
@@ -340,26 +330,26 @@ namespace KSASM
 
         if (endLabel)
           PushTokens(
-            "region",
+            macro,
             ntoken with { Type = TokenType.Position, OverrideStr = $"@{endPos}" },
             ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" },
             ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" }
           );
         else
           PushTokens(
-            "region",
+            macro,
             ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" },
             ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" }
           );
       }
 
-      private void MacroImport()
+      private void MacroImport(Token macro)
       {
         if (!lexer.TakeType(TokenType.Word, out var ntoken))
           Invalid();
 
         var source = Library.LoadImport(ntoken.Str());
-        macroStack.Add(new(new Lexer(source)));
+        macroStack.Add(new(new Lexer(source), ctx.AddFrame(macro)));
       }
 
       private void MacroUndefine()
@@ -485,13 +475,13 @@ namespace KSASM
           expanded.Add(token);
         }
 
-        PushExpanded(name, expanded);
+        PushExpanded(nameToken, expanded);
       }
 
-      private void PushExpanded(string name, List<Token> tokens)
+      private void PushExpanded(Token macro, List<Token> tokens)
       {
         var prevLexer = lexer;
-        PushTokens(name, tokens);
+        PushTokens(macro, tokens);
 
         var startIfs = ifDepth;
 
@@ -518,8 +508,10 @@ namespace KSASM
           }
           expanded.Add(token);
         }
-        PushTokens(name, expanded);
+        PushTokens(macro, expanded);
       }
+
+      protected override bool Peek(out Token token) => lexer.Peek(out token);
 
       private class MacroDef
       {

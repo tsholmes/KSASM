@@ -11,10 +11,11 @@ namespace KSASM
 
     public static void Assemble(SourceString source, MemoryAccessor target)
     {
-      var parser = new Parser(source);
+      var ctx = new Context();
+      var parser = new Parser(source, ctx);
       parser.Parse();
 
-      var state = new State();
+      var state = new State(ctx);
 
       foreach (var stmt in parser.Statements)
         stmt.FirstPass(state);
@@ -44,7 +45,59 @@ namespace KSASM
       }
     }
 
-    public class State
+    public class Context
+    {
+      public List<Token> Frames = [];
+
+      public int AddFrame(Token token)
+      {
+        var idx = Frames.Count;
+        Frames.Add(token);
+        return idx;
+      }
+
+      public string StackPos(Token token)
+      {
+        var sb = new StringBuilder();
+
+        while (true)
+        {
+          if (sb.Length > 0)
+            sb.Append('@');
+          if (token.Source != null)
+          {
+            var (line, lpos) = token.Source.LinePos(token.Pos);
+            sb.AppendFormat("{0}:{1}:{2}('{3}')", token.Source.Name, line, lpos, token.Str());
+          }
+          else
+            sb.AppendFormat("?:{0}('{1}')", token.Pos, token.Str());
+
+          if (token.ParentFrame == -1)
+            break;
+          token = Frames[token.ParentFrame];
+        }
+
+        return sb.ToString();
+      }
+    }
+
+    public abstract class TokenProcessor(Context ctx)
+    {
+      protected readonly Context ctx = ctx;
+
+      protected abstract bool Peek(out Token token);
+
+      protected Exception Invalid()
+      {
+        Peek(out var token);
+        return Invalid(token);
+      }
+
+      protected Exception Invalid(Token token) => throw new InvalidOperationException(
+        $"invalid token {token.Type} {ctx.StackPos(token)}");
+    }
+
+    public class State(Context ctx)
     {
       public readonly Dictionary<string, int> Labels = [];
       public readonly List<(int, DataType, List<Value>)> Values = [];
@@ -164,7 +217,7 @@ namespace KSASM
       }
 
       private Exception Invalid(Token token) => throw new InvalidOperationException(
-        $"invalid token {token.Type} '{token.Str()}' at {token.PosStr()}");
+        $"invalid token {token.Type} '{token.Str()}' at {ctx.StackPos(token)}");
     }
   }
 }

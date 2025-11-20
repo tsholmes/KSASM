@@ -10,10 +10,12 @@ namespace KSASM
       private bool hasNext = false;
       private Token next;
       private bool eof = false;
+      private int parentFrame;
 
-      public LexerReader(ITokenStream stream)
+      public LexerReader(ITokenStream stream, int parentFrame)
       {
         this.stream = stream;
+        this.parentFrame = parentFrame;
       }
 
       public bool Peek(out Token token)
@@ -53,6 +55,8 @@ namespace KSASM
         if (!hasNext && !eof)
           hasNext = stream.Next(out next);
         eof = !hasNext;
+        if (parentFrame >= -1)
+          next.ParentFrame = parentFrame;
       }
     }
 
