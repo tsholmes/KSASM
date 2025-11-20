@@ -2,7 +2,7 @@
 .import libtypes
 
 # Data and macros for interacting with FlightComputer device
-.ifndef libfc .macro libfc
+.ifndef libfc { .macro libfc
 .ns fc.
 
 .macro id 3
@@ -44,4 +44,4 @@
     jump:p24 fc._burn_clear_loop, _
 
 .endns
-.endif
+}

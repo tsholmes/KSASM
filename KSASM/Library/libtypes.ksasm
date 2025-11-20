@@ -1,7 +1,7 @@
 .import libutils
 
 # defines layouts of common types to be embedded
-.ifndef libtypes .macro libtypes
+.ifndef libtypes { .macro libtypes
 .ns types.
 
 .type(listview, {
@@ -41,4 +41,4 @@
 })
 
 .endns
-.endif
+}

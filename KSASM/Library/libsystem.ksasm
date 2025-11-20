@@ -2,7 +2,7 @@
 .import libtypes
 
 # constants and macros for interacting with the System device
-.ifndef libsystem .macro libsystem
+.ifndef libsystem { .macro libsystem
 .ns system.
 
 .macro id 1
@@ -16,4 +16,4 @@
 })
 
 .endns
-.endif
+}

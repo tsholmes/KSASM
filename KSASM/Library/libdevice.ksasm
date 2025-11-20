@@ -1,4 +1,4 @@
-.ifndef libdevice .macro libdevice
+.ifndef libdevice { .macro libdevice
 .ns device.
 
 .macro define(id, fields) {
@@ -10,4 +10,4 @@
 }
 
 .endns
-.endif
+}

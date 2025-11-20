@@ -1,4 +1,4 @@
-.ifndef libstring .macro libstring
+.ifndef libstring { .macro libstring
 
 .region libstring 1024
 
@@ -36,4 +36,4 @@ str.append:
   str.append.end:
     jump:p24 [str.append.ret], _
 
-.endif
+}

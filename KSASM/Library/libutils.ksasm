@@ -1,24 +1,50 @@
-.ifndef libutils .macro libutils
+.ifndef libutils { .macro libutils
 
 .macro withns(ns, inner) {
-  .if(ns) .ns ns .endif
+  .if(ns) { .ns ns }
     inner
-  .if(ns) .endns .endif
+  .if(ns) { .endns }
 }
 
 .macro type(name, vals) {
   .macro name(ns) { .withns(ns, { vals }) }
 }
 
-.macro fn(name) {
-  ..macro _retname ..concat(_ name _ret)
+.macro _fn_arg_name(type, name, width, out) name
+.macro _fn_arg_lname(fname, name) .concat(fname ..tomacro(name))
+.macro _fn_arg_gname(fname, name) ..addns(._fn_arg_lname(fname, name))
+
+.macro _fn_arg_label(fname, type, name, width) type ..label(._fn_arg_lname(fname, name)) 0 width
+.macro _fn_arg_labels(fname, arg, ...args) ..if(arg) { .._fn_arg_label(fname, arg) .._fn_arg_labels(fname, args) }
+
+.macro _fn_in_arg(fname, type, name, width) {
+  copy width .._fn_arg_gname(fname, name) type, name
+}
+.macro _fn_in_args(fname, arg, ...args) ..if(arg) { .._fn_in_arg(fname, arg) .._fn_in_args(fname, args) }
+
+.macro _fn_out_arg(fname, type, name, width, out) {
+  ..if(out) { copy width name, .._fn_arg_gname(fname, name) type }
+}
+.macro _fn_out_args(fname, arg, ...args) ..if(arg) { .._fn_out_arg(fname, arg) .._fn_out_args(fname, args) }
+
+.macro _fn_macro_arg(arg, ...args) ..if(arg) { , .._fn_arg_name(arg) .._fn_macro_arg(args) }
+.macro _fn_macro_args(arg, ...args) ( ..if(arg) { .._fn_arg_name(arg) .._fn_macro_arg(args) } )
+
+# each arg is {:type, name, *width?, out?}
+.macro fn(name, ...args) {
+  ..macro _retname ..concat(name .ret)
   ..macro _retname_full ..addns(._retname)
   :p24 .label(.._retname) 0
+  .._fn_arg_labels(name, args)
   .macro fnret [.._retname_full]:p24
-  .macro name call:p24 .._retname_full, ..addns(name)
+  .macro name .._fn_macro_args(args) {
+    .._fn_in_args(name, args)
+    call:p24 .._retname_full, ..addns(name)
+    .._fn_out_args(name, args)
+  }
   ..unmacro _retname_full
   ..unmacro _retname
   .label(name)
 }
 
-.endif
+} # end if
