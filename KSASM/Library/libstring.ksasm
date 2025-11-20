@@ -29,8 +29,7 @@ str.append:
   add:p24 str.append.to.len, str.append.from.len
   str.append.loop:
     copy:u8 [str.append.temp], [str.append.from]
-    add:p24 str.append.from, $(1)
-    add:p24 str.append.from.len, $(-1)
+    add*2:p24 str.append.from, $(1, -1)
     add:p24 str.append.temp, $(1)
     branchifpos:p24 str.append.from.len, str.append.loop
   str.append.end:

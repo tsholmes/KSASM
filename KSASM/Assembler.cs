@@ -25,9 +25,10 @@ namespace KSASM
 
       var sb = new StringBuilder();
 
-      foreach (var (addr, type, val) in state.Values)
+      foreach (var (addr, type, vals) in state.Values)
       {
-        target.Write(addr, type, val);
+        for (var i = 0; i < vals.Count; i++)
+          target.Write(addr + i * type.SizeBytes(), type, vals[i]);
         if (Debug)
         {
           sb.Clear();
@@ -35,7 +36,9 @@ namespace KSASM
           foreach (var (label, laddr) in state.Labels)
             if (laddr == addr)
               sb.Append(label).Append(": ");
-          sb.Append($"{addr}: {type} {val.As(type)}");
+          sb.Append($"{addr}: {type}");
+          foreach (var val in vals)
+            sb.Append($" {val.As(type)}");
           Console.WriteLine(sb.ToString());
         }
       }
@@ -44,36 +47,50 @@ namespace KSASM
     public class State
     {
       public readonly Dictionary<string, int> Labels = [];
-      public readonly List<(int, DataType, Value)> Values = [];
+      public readonly List<(int, DataType, List<Value>)> Values = [];
 
-      public readonly List<(DataType, ConstExpr, int)> ConstExprs = [];
-      public readonly Dictionary<(DataType, ConstExpr), int> ConstExprAddrs = [];
+      public readonly List<(DataType, ConstExprList, int)> ConstExprs = [];
+      public readonly Dictionary<(DataType, ConstExprList), int> ConstExprAddrs = [];
 
       public int Addr = 0;
 
-      public void Emit(DataType type, Value value)
+      public void Emit(DataType type, params List<Value> values)
       {
-        Values.Add((Addr, type, value));
-        Addr += type.SizeBytes();
+        Values.Add((Addr, type, [.. values]));
+        Addr += type.SizeBytes() * values.Count;
       }
 
-      public void RegisterConst(DataType type, ConstExpr expr, int width)
+      public void Emit(DataType type, Span<Value> values)
+      {
+        Values.Add((Addr, type, [.. values]));
+        Addr += type.SizeBytes() * values.Length;
+      }
+
+      public void RegisterConst(DataType type, ConstExprList consts, int width)
       {
         // if (Debug)
         //   Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
-        ConstExprs.Add((type, expr, width));
+        ConstExprs.Add((type, consts, width));
       }
 
       public void EmitConstants()
       {
-        var vals = new Dictionary<(DataType, ConstExpr), Value>();
-        var maxWidths = new Dictionary<(DataType, Value), int>();
-        foreach (var (type, expr, wid) in ConstExprs)
+        var vals = new Dictionary<(DataType, ConstExprList), ValueX8>();
+        var maxWidths = new Dictionary<(DataType, ValueX8), int>();
+        foreach (var (type, consts, wid) in ConstExprs)
         {
-          var val = EvalExpr(expr, type.VMode());
-          vals[(type, expr)] = val;
+          ValueX8 vs = new();
+          for (var i = 0; i < consts.Count; i++)
+          {
+            vs[i] = EvalExpr(consts[i], type.VMode());
+          }
+          for (var i = consts.Count + 1; i < 8; i++)
+          {
+            vs[i] = vs[i % consts.Count];
+          }
+          vals[(type, consts)] = vs;
 
-          maxWidths[(type, val)] = Math.Max(maxWidths.GetValueOrDefault((type, val)), wid);
+          maxWidths[(type, vs)] = Math.Max(maxWidths.GetValueOrDefault((type, vs)), wid);
         }
 
         if (maxWidths.Count == 0)
@@ -83,12 +100,12 @@ namespace KSASM
           throw new InvalidOperationException("Cannot emit inlined constants without CONST label");
 
         Addr = caddr;
-        var constAddrs = new Dictionary<(DataType, Value), int>();
-        foreach (var ((type, val), width) in maxWidths)
+        var constAddrs = new Dictionary<(DataType, ValueX8), int>();
+        foreach (var ((type, vs), width) in maxWidths)
         {
-          constAddrs[(type, val)] = Addr;
+          constAddrs[(type, vs)] = Addr;
           for (var i = 0; i < width; i++)
-            Emit(type, val);
+            Emit(type, vs[i]);
         }
 
         foreach (var (type, expr, _) in ConstExprs)

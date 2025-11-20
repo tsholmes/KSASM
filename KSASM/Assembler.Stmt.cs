@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 
 namespace KSASM
 {
@@ -56,8 +57,10 @@ namespace KSASM
           Value.Unsigned = (ulong)addr;
           Value.Convert(ValueMode.Unsigned, Type.VMode());
         }
+        Span<Value> vals = stackalloc Value[Width];
         for (var i = 0; i < Width; i++)
-          state.Emit(Type, Value);
+          vals[i] = Value;
+        state.Emit(Type, vals);
       }
     }
 
@@ -65,17 +68,34 @@ namespace KSASM
     {
       public DataType Type;
       public int Width = 1;
-      public ConstExpr Expr;
+      public ConstExprList Exprs;
 
       public override void FirstPass(State state) =>
         state.Addr += Type.SizeBytes() * Width;
 
       public override void SecondPass(State state)
       {
-        var val = state.EvalExpr(Expr, Type.VMode());
-        for (var i = 0; i < Width; i++)
-          state.Emit(Type, val);
+        foreach (var expr in Exprs)
+        {
+          var val = state.EvalExpr(expr, Type.VMode());
+          var vals = new ValueX8();
+          for (var i = 0; i < Width; i++)
+            vals[i] = val;
+          state.Emit(Type, vals[..Width]);
+        }
       }
+    }
+
+    public class ValueListStatement: Statement
+    {
+      public DataType Type;
+      public List<Value> Values;
+
+      public override void FirstPass(State state) =>
+        state.Addr += Type.SizeBytes() * Values.Count;
+
+      public override void SecondPass(State state) =>
+        state.Emit(Type, Values);
     }
 
     public class InstructionStatement : Statement
@@ -90,15 +110,15 @@ namespace KSASM
       public override void FirstPass(State state)
       {
         if (OperandA.Mode == ParsedOpMode.Const)
-          RegisterConst(state, OperandA.Const, AType);
+          RegisterConst(state, OperandA.Consts, AType);
         if (OperandB.Mode == ParsedOpMode.Const)
-          RegisterConst(state, OperandB.Const, BType);
+          RegisterConst(state, OperandB.Consts, BType);
         state.Addr += DataType.U64.SizeBytes();
       }
 
-      private void RegisterConst(State state, ConstExpr cval, DataType type)
+      private void RegisterConst(State state, ConstExprList consts, DataType type)
       {
-        state.RegisterConst(type, cval, Width);
+        state.RegisterConst(type, consts, Width);
       }
 
       private Exception Invalid(string message) =>
@@ -170,7 +190,7 @@ namespace KSASM
             throw Invalid($"Invalid operand modes ({OperandA.Mode},{OperandB.Mode})");
         }
 
-        state.Emit(DataType.U64, new() { Unsigned = inst.Encode() });
+        state.Emit(DataType.U64, new Value { Unsigned = inst.Encode() });
       }
 
       private int LookupAddr(State state, AddrRef addr)
@@ -236,17 +256,17 @@ namespace KSASM
 
       private void ParseAConst(State state, ref Instruction inst)
       {
-        inst.AddrBase = LookupConst(state, OperandA.Const, inst.AType);
+        inst.AddrBase = LookupConst(state, OperandA.Consts, inst.AType);
       }
 
       private void ParseBConst(State state, ref Instruction inst)
       {
-        inst.OffsetB = LookupConst(state, OperandB.Const, inst.BType);
+        inst.OffsetB = LookupConst(state, OperandB.Consts, inst.BType);
       }
 
-      private int LookupConst(State state, ConstExpr cval, DataType type)
+      private int LookupConst(State state, ConstExprList consts, DataType type)
       {
-        return state.ConstExprAddrs[(type, cval)];
+        return state.ConstExprAddrs[(type, consts)];
       }
     }
   }

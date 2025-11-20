@@ -114,6 +114,7 @@ namespace KSASM
             if (curType != DataType.U8)
               Invalid(token);
 
+            var stmt = new ValueListStatement { Values = [] };
             var str = token.Str()[1..^1];
             for (var i = 0; i < str.Length; i++)
             {
@@ -133,15 +134,16 @@ namespace KSASM
                 };
                 i++;
               }
-              Statements.Add(new ValueStatement() { Type = DataType.U8, Value = new() { Unsigned = c } });
+              stmt.Values.Add(new() { Unsigned = c });
             }
+            Statements.Add(stmt);
           }
           else if (PeekType(TokenType.COpen, out _))
           {
             var stmt = new ExprValueStatement
             {
               Type = curType,
-              Expr = ParseConst(),
+              Exprs = ParseConsts(),
             };
             if (TakeType(TokenType.Width, out token))
             {
@@ -194,7 +196,7 @@ namespace KSASM
         }
         else if (PeekType(TokenType.COpen, out _))
         {
-          op.Const = ParseConst();
+          op.Consts = ParseConsts();
           op.Mode = ParsedOpMode.Const;
         }
         else
@@ -254,17 +256,22 @@ namespace KSASM
         return addr;
       }
 
-      private ConstExpr ParseConst()
+      private ConstExprList ParseConsts()
       {
+        var consts = new ConstExprList();
+
         if (!TakeType(TokenType.COpen, out _))
           throw Invalid();
 
-        var cexpr = ParseConstInner();
+        consts.Add(ParseConstInner());
+
+        while (TakeType(TokenType.Comma, out _))
+          consts.Add(ParseConstInner());
 
         if (!TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        return cexpr;
+        return consts;
       }
 
       private ConstExpr ParseConstInner()
@@ -413,7 +420,7 @@ namespace KSASM
       public ParsedOpMode Mode;
       public AddrRef Base;
       public AddrRef Addr;
-      public ConstExpr Const;
+      public ConstExprList Consts;
       public DataType? Type;
     }
 
@@ -433,6 +440,8 @@ namespace KSASM
       public ValueMode Mode;
       public Value Value;
     }
+
+    public class ConstExprList : List<ConstExpr> { }
 
     public class ConstExpr
     {

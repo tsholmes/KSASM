@@ -1,5 +1,7 @@
 
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -72,6 +74,33 @@ namespace KSASM
       ValueMode.Float => Float,
       _ => "Invalid",
     };
+  }
+
+  // length 8 value type for use as map key
+  [InlineArray(8)]
+  public struct ValueX8
+  {
+    private Value element;
+
+    public override bool Equals([NotNullWhen(true)] object obj)
+    {
+      if (obj is not ValueX8 other)
+        return false;
+      for (var i = 0; i < 8; i++)
+        if (this[i].Unsigned != other[i].Unsigned)
+          return false;
+      return true;
+    }
+    public static bool operator ==(ValueX8 left, ValueX8 right) => left.Equals(right);
+    public static bool operator !=(ValueX8 left, ValueX8 right) => !(left == right);
+
+    public override int GetHashCode()
+    {
+      return HashCode.Combine(
+        this[0].Unsigned, this[1].Unsigned, this[2].Unsigned, this[3].Unsigned,
+        this[4].Unsigned, this[5].Unsigned, this[6].Unsigned, this[7].Unsigned
+      );
+    }
   }
 
   public partial class ValArray
