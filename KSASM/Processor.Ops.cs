@@ -159,7 +159,17 @@ namespace KSASM
         PC = opB.Address;
     }
 
-    private void OpSwitch(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpSwitch(ValuePointer opA, ValuePointer opB)
+    {
+      opA.Width = 1;
+      Memory.Read(opA, A);
+      Memory.Read(opB, B);
+      A.Convert(ValueMode.Unsigned);
+      B.Convert(ValueMode.Unsigned);
+      var idx = A.Values[0].Unsigned;
+      if (idx < (ulong)B.Width)
+        PC = (int)B.Values[(int)idx].Unsigned;
+    }
 
     private void OpSleep(ValuePointer opA, ValuePointer opB)
     {

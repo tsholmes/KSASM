@@ -193,20 +193,28 @@ namespace KSASM
         if (TakeType(TokenType.Placeholder, out _))
         {
           op.Mode = ParsedOpMode.Placeholder;
+          return op;
         }
-        else if (PeekType(TokenType.COpen, out _))
+
+        var indirect = TakeType(TokenType.IOpen, out _);
+
+        if (PeekType(TokenType.COpen, out _))
         {
           op.Consts = ParseConsts();
+          op.Consts.Indirect = indirect;
           op.Mode = ParsedOpMode.Const;
+
+          if (indirect && !TakeType(TokenType.IClose, out _))
+            throw Invalid();
         }
         else
         {
-          var first = ParseAddr(false);
+          var first = ParseAddr(indirect, false);
           if (lexer.Peek(out var token) &&
               (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
           {
             op.Base = first;
-            op.Addr = ParseAddr(true);
+            op.Addr = ParseAddr(indirect, true);
             op.Mode = ParsedOpMode.BaseOffset;
           }
           else
@@ -216,7 +224,7 @@ namespace KSASM
           }
         }
 
-        if (op.Mode != ParsedOpMode.Placeholder && TakeType(TokenType.Type, out var ttoken))
+        if (TakeType(TokenType.Type, out var ttoken))
         {
           if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType type))
             Invalid(ttoken);
@@ -226,11 +234,11 @@ namespace KSASM
         return op;
       }
 
-      private AddrRef ParseAddr(bool requireOffset)
+      private AddrRef ParseAddr(bool indirect, bool requireOffset)
       {
         var addr = new AddrRef();
 
-        addr.Indirect = TakeType(TokenType.IOpen, out _);
+        addr.Indirect = indirect || TakeType(TokenType.IOpen, out _);
 
         if (TakeType(TokenType.Offset, out var otoken))
           addr.Offset = otoken.Str();
@@ -441,7 +449,10 @@ namespace KSASM
       public Value Value;
     }
 
-    public class ConstExprList : List<ConstExpr> { }
+    public class ConstExprList : List<ConstExpr>
+    {
+      public bool Indirect;
+    }
 
     public class ConstExpr
     {

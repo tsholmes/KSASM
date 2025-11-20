@@ -257,14 +257,18 @@ namespace KSASM
       private void ParseAConst(State state, ref Instruction inst)
       {
         inst.AddrBase = LookupConst(state, OperandA.Consts, inst.AType);
+        if (OperandA.Consts.Indirect)
+          inst.OperandMode |= OperandMode.IndirectA;
       }
 
       private void ParseBConst(State state, ref Instruction inst)
       {
         inst.OffsetB = LookupConst(state, OperandB.Consts, inst.BType);
+        if (OperandB.Consts.Indirect)
+          inst.OperandMode |= OperandMode.IndirectB;
       }
 
-      private int LookupConst(State state, ConstExprList consts, DataType type)
+      private static int LookupConst(State state, ConstExprList consts, DataType type)
       {
         return state.ConstExprAddrs[(type, consts)];
       }

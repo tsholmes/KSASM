@@ -1,5 +1,6 @@
-.ifndef libstring { .macro libstring
+.import libutils
 
+.ifndef libstring { .macro libstring
 .region libstring 1024
 
 # :p24 name: addr name.len: len
@@ -12,27 +13,71 @@
   :u8 .label(.concat(name .value)) val .label(.concat(name .end))
 }
 
-.macro str.append(to, from)  {
-  copy*2:p24 str.append.from, from
-  copy*2:p24 str.append.to, to
-  call:p24 str.append.ret, str.append
-  copy*2:p24 to, str.append.to
+.macro _str.copy.bigcopy(n) {
+  .label(.concat(str.copy.big n))
+  copy .add(*0, n) :u64 [str.copy.to], [str.copy.from]
+  add*4:p24 str.copy.to, $(8*n, -n, 8*n, -8*n)
 }
-:p24 str.append.ret: 0
-.str.ptr(str.append.from, 0, 0)
-.str.ptr(str.append.to, 0, 0)
-.str.ptr(str.append.temp, 0, 0)
-str.append:
-  branchifzero:p24 str.append.from.len, str.append.end # skip if from is empty
-  copy*2:p24 str.append.temp, str.append.to
-  sum*2:p24 str.append.temp, $(0) # move temp pointer to end of string
-  add:p24 str.append.to.len, str.append.from.len
-  str.append.loop:
-    copy:u8 [str.append.temp], [str.append.from]
-    add*2:p24 str.append.from, $(1, -1)
-    add:p24 str.append.temp, $(1)
-    branchifpos:p24 str.append.from.len, str.append.loop
-  str.append.end:
-    jump:p24 [str.append.ret], _
+
+# copy bytes from(addr, len) into to(addr, _)
+.fn(str.copy, {:p24, to, *2}, {:p24, from, *2})
+  # copy from.len into to.len and divide by 8 to get bigcopy size
+  copy:p24 [$(str.copy.to+3)], [$(str.copy.from+3)]
+  divide:p24 [$(str.copy.to+3)], $(8)
+  str.copy.bigloop:
+    switch*8:p24 [$(str.copy.to+3)], \
+      $(str.copy.small, str.copy.big1, str.copy.big2, str.copy.big3, \
+        str.copy.big4, str.copy.big5, str.copy.big6, str.copy.big7)
+    # on fallthrough do big copy and jump back to loop
+    ._str.copy.bigcopy(8)
+    jump:p24 _, str.copy.bigloop
+    # otherwise do partial bigcopy and jump to next section
+    ._str.copy.bigcopy(7)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(6)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(5)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(4)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(3)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(2)
+    jump:p24 _, str.copy.small
+    ._str.copy.bigcopy(1)
+  str.copy.small:
+    # at this point we have 7 or less. copy in one step and jump to end
+    switch*7:p24 [$(str.copy.from+3)], \
+      $(str.copy.small6, str.copy.small5, str.copy.small4, str.copy.small3, \
+        str.copy.small2, str.copy.small1, str.copy.end)
+    copy*7:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small6:
+    copy*6:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small5:
+    copy*5:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small4:
+    copy*4:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small3:
+    copy*3:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small2:
+    copy*2:u8 [str.copy.to], [str.copy.from]
+    jump _, .fnret
+  str.copy.small1:
+    copy*1:u8 [str.copy.to], [str.copy.from]
+  str.copy.end:
+    jump _, .fnret
+
+:p24 str.append.local: 0*8
+.fn(str.append, {:p24, to, *2, out}, {:p24, from, *2})
+  copy*2:p24 str.append.local, str.append.to # copy to into local
+  sum*2:p24 str.append.local, $(0) # move local ptr to end
+  .str.copy(str.append.local:p24, str.append.from:p24)
+  add:p24 [$(str.append.to+3)], [$(str.append.from+3)] # add from length
+  jump _, .fnret
 
 }

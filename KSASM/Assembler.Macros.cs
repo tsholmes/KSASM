@@ -86,7 +86,7 @@ namespace KSASM
         {
           Console.WriteLine($">>> PUSH {name}");
           foreach (var token in tokens)
-            Console.WriteLine($"    {token.Type} '{token.Str()}'");
+            Console.WriteLine($"    {token.Type} '{token.Str()}' {token.PosStr()}");
           Console.WriteLine("<<<");
         }
       }
@@ -493,6 +493,8 @@ namespace KSASM
         var prevLexer = lexer;
         PushTokens(name, tokens);
 
+        var startIfs = ifDepth;
+
         var expanded = new List<Token>();
         while (lexer != prevLexer)
         {
@@ -507,6 +509,12 @@ namespace KSASM
               ParseMacro(token with { OverrideStr = tstr[1..] });
               continue;
             }
+          }
+          else if (token.Type is TokenType.BClose && ifDepth > startIfs)
+          {
+            // if we have active inner ifs, close them now instead of passing the tokens on
+            ifDepth--;
+            continue;
           }
           expanded.Add(token);
         }

@@ -136,7 +136,7 @@ TODO
 * devid: An = devices[Bn].id
 * devtype: An = devices[Bn].type
 * devmap: mem[A0..A0+A1] => devices[B0].mem[B1..]
-  * set B0 to unmap range (B1 ignored)
+  * set B0=0 to unmap range (B1 ignored)
 
 ### Interrupt Operations
 * TODO: figure out what this should actually look like
