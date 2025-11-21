@@ -22,10 +22,10 @@
 # copy bytes from(addr, len) into to(addr, _)
 .fn(str.copy, {:p24, to, *2}, {:p24, from, *2})
   # copy from.len into to.len and divide by 8 to get bigcopy size
-  copy:p24 [$(str.copy.to+3)], [$(str.copy.from+3)]
-  divide:p24 [$(str.copy.to+3)], $(8)
+  copy:p24 $[str.copy.to+3], $[str.copy.from+3]
+  divide:p24 $[str.copy.to+3], $(8)
   str.copy.bigloop:
-    switch:p24*8 [$(str.copy.to+3)], \
+    switch:p24*8 $[str.copy.to+3], \
       $(str.copy.small, str.copy.big1, str.copy.big2, str.copy.big3, \
         str.copy.big4, str.copy.big5, str.copy.big6, str.copy.big7)
     # on fallthrough do big copy and jump back to loop
@@ -47,7 +47,7 @@
     ._str.copy.bigcopy(1)
   str.copy.small:
     # at this point we have 7 or less. copy in one step and jump to end
-    switch:p24*7 [$(str.copy.from+3)], \
+    switch:p24*7 $[str.copy.from+3], \
       $(str.copy.end, str.copy.small1, str.copy.small2, str.copy.small3, \
         str.copy.small4, str.copy.small5, str.copy.small6)
     copy:u8*7 [str.copy.to], [str.copy.from]
@@ -77,7 +77,7 @@
   copy:p24*2 str.append.local, str.append.to # copy to into local
   sum:p24*2 str.append.local, $(0) # move local ptr to end
   .str.copy(str.append.local:p24, str.append.from:p24)
-  add:p24 [$(str.append.to+3)], [$(str.append.from+3)] # add from length
+  add:p24 $[str.append.to+3], $[str.append.from+3] # add from length
   jump _, .fnret
 
 :u8 char.zero: "0" char.neg: "-"
@@ -85,32 +85,32 @@
 
 :u64 str.itoa.local: 0*8
 .fn(str.itoa, {:p24, to, *2, out}, {:i64, val})
-  sign [$(str.itoa.local + 8)]:i16, str.itoa.val:i64 # save the sign for later
+  sign $[str.itoa.local + 8]:i16, str.itoa.val:i64 # save the sign for later
   abs:i64 str.itoa.val, str.itoa.val                 # abs input
   bzero:i64 str.itoa.val, str.itoa.zero              # special case zero
   copy:p24*2 str.itoa.local, $(str.fmt.buf.end, 0)   # start at end of buffer
   str.itoa.loop:
-    copy:i64 [$(str.itoa.local + 16)], str.itoa.val
+    copy:i64 $[str.itoa.local + 16], str.itoa.val
     div:i64 str.itoa.val, $(10)
     # TODO: replace this with mod
       mul:i64 str.itoa.val, $(10)
-      sub:i64 [$(str.itoa.local + 16)], str.itoa.val
+      sub:i64 $[str.itoa.local + 16], str.itoa.val
       div:i64 str.itoa.val, $(10)
     add:p24*2 str.itoa.local, $(-1, 1)
     copy:u8 [str.itoa.local], char.zero
-    add:u8 [str.itoa.local], [$(str.itoa.local + 16)]
+    add:u8 [str.itoa.local], $[str.itoa.local + 16]
     bpos str.itoa.val:i64, str.itoa.loop
-  add:i16 [$(str.itoa.local + 8)], $(1)              # offset sign by 1
-  bpos [$(str.itoa.local + 8)]:i16, str.itoa.end:p24 # skip adding - if (sign+1) > 0
+  add:i16 $[str.itoa.local + 8], $(1)              # offset sign by 1
+  bpos $[str.itoa.local + 8]:i16, str.itoa.end:p24 # skip adding - if (sign+1) > 0
   add:p24*2 str.itoa.local, $(-1, 1)
   copy:u8 [str.itoa.local], char.neg
   str.itoa.end:
     .str.copy(str.itoa.to:p24, str.itoa.local:p24)
-    copy:p24 [$(str.itoa.to + 3)], [$(str.itoa.local + 3)]
+    copy:p24 $[str.itoa.to + 3], $[str.itoa.local + 3]
     jump _, .fnret
   str.itoa.zero:
     copy:u8 [str.itoa.to], char.zero
-    copy:p24 [$(str.itoa.to+3)], $(1)
+    copy:p24 $[str.itoa.to+3], $(1)
     jump _, .fnret
 
 }

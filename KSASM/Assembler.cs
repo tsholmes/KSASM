@@ -133,6 +133,15 @@ namespace KSASM
         var sb = new StringBuilder();
         foreach (var (type, consts, wid) in ConstExprs)
         {
+          if (consts.Addr)
+          {
+            var addr = EvalExpr(consts[0], type.VMode());
+            addr.Convert(type.VMode(), ValueMode.Unsigned);
+            if (Debug)
+              Console.WriteLine($"CONST ADDR {addr}");
+            ConstExprAddrs[(type, consts)] = (int)addr.Unsigned;
+            continue;
+          }
           ValueX8 vs = new();
           for (var i = 0; i < consts.Count; i++)
           {
@@ -173,6 +182,7 @@ namespace KSASM
 
         foreach (var (type, expr, _) in ConstExprs)
         {
+          if (expr.Addr) continue;
           var val = vals[(type, expr)];
           ConstExprAddrs[(type, expr)] = constAddrs[(type, val)];
         }

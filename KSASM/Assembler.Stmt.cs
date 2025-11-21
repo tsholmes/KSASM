@@ -119,7 +119,7 @@ namespace KSASM
 
       private void RegisterConst(State state, ConstExprList consts, DataType type)
       {
-        if (consts.Indirect) type = DataType.P24;
+        if (consts.Indirect || consts.Addr) type = DataType.P24;
         state.RegisterConst(type, consts, Width);
       }
 
@@ -272,7 +272,7 @@ namespace KSASM
 
       private static int LookupConst(State state, ConstExprList consts, DataType type)
       {
-        if (consts.Indirect) type = DataType.P24;
+        if (consts.Indirect || consts.Addr) type = DataType.P24;
         return state.ConstExprAddrs[(type, consts)];
       }
     }

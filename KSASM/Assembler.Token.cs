@@ -20,6 +20,7 @@ namespace KSASM
       Offset, // + or -
       Number, // decimal, hex with 0x prefix, binary with 0b prefix
       COpen, // $(
+      CIOpen, // $[
       POpen, // (
       PClose, // )
       Macro, // .macroname

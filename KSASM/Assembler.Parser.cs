@@ -198,7 +198,7 @@ namespace KSASM
 
         var indirect = TakeType(TokenType.IOpen, out _);
 
-        if (PeekType(TokenType.COpen, out _))
+        if (PeekType(TokenType.COpen, out _) || PeekType(TokenType.CIOpen, out _))
         {
           op.Consts = ParseConsts();
           op.Consts.Indirect = indirect;
@@ -268,7 +268,9 @@ namespace KSASM
       {
         var consts = new ConstExprList();
 
-        if (!TakeType(TokenType.COpen, out _))
+        if (TakeType(TokenType.CIOpen, out _))
+          consts.Addr = true;
+        else if (!TakeType(TokenType.COpen, out _))
           throw Invalid();
 
         consts.Add(ParseConstInner());
@@ -276,7 +278,9 @@ namespace KSASM
         while (TakeType(TokenType.Comma, out _))
           consts.Add(ParseConstInner());
 
-        if (!TakeType(TokenType.PClose, out _))
+        if (consts.Addr && !TakeType(TokenType.IClose, out _))
+          throw Invalid();
+        else if (!consts.Addr && !TakeType(TokenType.PClose, out _))
           throw Invalid();
 
         return consts;
@@ -444,6 +448,7 @@ namespace KSASM
 
     public class ConstExprList : List<ConstExpr>
     {
+      public bool Addr;
       public bool Indirect;
     }
 
