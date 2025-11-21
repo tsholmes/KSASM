@@ -33,79 +33,36 @@ namespace KSASM
   {
     // Move operations
     Copy,
-    Reorder,
+    Reorder, Swz = Reorder,
 
     // Unary operations
-    BitNot,
-    Negate,
-    Conjugate,
+    BitNot, Not = BitNot,
+    Negate, Neg = Negate,
+    Conjugate, Conj = Conjugate,
     Sign,
     Abs,
 
     // Binary operations
-    BitAnd,
-    BitOr,
-    BitXor,
-    ShiftLeft,
-    ShiftRight,
+    BitAnd, And = BitAnd,
+    BitOr, Or = BitOr,
+    BitXor, Xor = BitXor,
+    ShiftLeft, Shl = ShiftLeft,
+    ShiftRight, Shr = ShiftRight,
     Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Remainder,
-    Modulus,
-    Power,
+    Subtract, Sub = Subtract,
+    Multiply, Mul = Multiply,
+    Divide, Div = Divide,
+    Remainder, Rem = Remainder,
+    Modulus, Mod = Modulus,
+    Power, Pow = Power,
     Max,
     Min,
-    UFpu,
 
-    // Reduce operations
-    All,
-    Any,
-    Parity,
-    Sum,
-    Product,
-    MinAll,
-    MaxAll,
-
-    // Branch operations
-    Jump,
-    Call,
-    BranchIfZero,
-    BranchIfPos,
-    BranchIfNeg,
-    Switch,
-
-    // Wait operations
-    Sleep,
-
-    // Device Operations
-    // TODO: redesign after some use
-    DevID,
-    DevType,
-    DevMap,
-
-    // Interrupt Operations
-    // TODO: redesign after some use
-    IHandler,
-    IData,
-    IReturn,
-
-    // debug instructions
-    Debug = 126,
-    DebugStr = 127,
-  }
-
-  // TODO: assign static values once more finalized
-  public enum UFpuCode
-  {
-    // Rounding
+    // Unary Float operations
     Floor,
     Ceil,
     Round,
     Trunc,
-
-    // Exponential
     Sqrt,
     Exp,
     Pow2,
@@ -113,16 +70,12 @@ namespace KSASM
     Log,
     Log2,
     Log10,
-
-    // Trig
     Sin,
     Cos,
     Tan,
     Sinh,
     Cosh,
     Tanh,
-
-    // Inverse Trig
     Asin,
     Acos,
     Atan,
@@ -130,7 +83,37 @@ namespace KSASM
     Acosh,
     Atanh,
 
-    // Random
+    // Random operations
     Rand,
+
+    // Reduce operations
+    All, AndR = All,
+    Any, OrR = Any,
+    Parity, XorR = Parity,
+    Sum, AddR = Sum,
+    Product, MulR = Product,
+    MinAll, MinR = MinAll,
+    MaxAll, MaxR = MaxAll,
+
+    // Branch operations
+    Jump,
+    Call,
+    BranchIfZero, BZero = BranchIfZero,
+    BranchIfPos, BPos = BranchIfPos,
+    BranchIfNeg, BNeg = BranchIfNeg,
+    Switch,
+
+    // Wait operations
+    Sleep,
+
+    // Device Operations
+    DevMap,
+    // TODO: device enumeration and info once dynamic devices for parts are added
+
+    // TODO: Interrupt Operations if needed
+
+    // debug instructions
+    Debug = 126,
+    DebugStr = 127,
   }
 }

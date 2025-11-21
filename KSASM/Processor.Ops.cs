@@ -118,7 +118,31 @@ namespace KSASM
     private void OpMin(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.Min(ref A, B));
 
-    private void OpUFpu(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpFloor(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpCeil(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpRound(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpTrunc(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpSqrt(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpExp(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpPow2(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpPow10(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpLog(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpLog2(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpLog10(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpSin(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpCos(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpTan(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpSinh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpCosh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpTanh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAsin(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAcos(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAtan(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAsinh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAcosh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpAtanh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+
+    private void OpRand(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
 
     private void OpAll(ValuePointer opA, ValuePointer opB) =>
       ReduceAAtB(opA, opB, (ops, ref A, B) => ops.BitAnd(ref A, B));
@@ -180,9 +204,6 @@ namespace KSASM
         SleepTime = 1;
     }
 
-    private void OpDevID(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpDevType(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-
     private void OpDevMap(ValuePointer opA, ValuePointer opB)
     {
       Memory.Read(opA, A);
@@ -204,10 +225,6 @@ namespace KSASM
         MappedMemory.MapRange(memAddr, device, devAddr, memLen);
       }
     }
-
-    private void OpIHandler(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpIData(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpIReturn(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
 
     private void OpDebug(ValuePointer opA, ValuePointer opB)
     {
