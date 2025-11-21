@@ -7,6 +7,7 @@ using Brutal.Numerics;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Brutal.ImGuiApi.Abstractions;
+using System.Linq;
 
 namespace KSASM
 {
@@ -23,7 +24,7 @@ namespace KSASM
     }
 
     [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]
-    public static bool ConsoleWindowEx_OnKey(ref bool __result, ConsoleWindow console)
+    public static bool ConsoleWindowEx_OnKey_Prefix(ref bool __result, ConsoleWindow console)
     {
       if (!console.IsOpen && isTyping)
       {
@@ -31,6 +32,73 @@ namespace KSASM
         return false;
       }
       return true;
+    }
+
+    [HarmonyPatch(typeof(Mod), nameof(Mod.LoadAssetBundles)), HarmonyTranspiler]
+    public static IEnumerable<CodeInstruction> Mod_LoadAssetBundles_Transpile(IEnumerable<CodeInstruction> instructions)
+    {
+      var matcher = new CodeMatcher(instructions);
+      matcher.MatchStartForward(CodeMatch.Calls(() => XmlLoader.Load<AssetBundle>("", null)));
+      matcher.ThrowIfInvalid("Could not find LoadAssetBundles transpile point");
+
+      matcher.RemoveInstruction();
+      matcher.Insert(CodeInstruction.Call(() => XmlMergeLoader.Load("", null)));
+
+      return matcher.Instructions();
+    }
+
+    [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
+    public static void ModLibrary_LoadAll_Suffix()
+    {
+      terminalCanvas = ModLibrary.Get<GaugeCanvas>("KSASMTerminal");
+      var labelsComp = terminalCanvas.Components.First(c => c.Name == "Labels");
+
+      const float EDGE_PAD = 0.025f;
+      const float SCALE = 0.9f;
+
+      static float pos(int i, int len) => EDGE_PAD + (1 - 2 * EDGE_PAD) * ((float)i / (float)len);
+
+      for (var cy = 0; cy < Terminal.Y_CHARS; cy++)
+      {
+        var y0 = pos(cy, Terminal.Y_CHARS);
+        var y1 = pos(cy + 1, Terminal.Y_CHARS);
+        for (var cx = 0; cx < Terminal.X_CHARS; cx++)
+        {
+          var x0 = pos(cx, Terminal.X_CHARS);
+          var x1 = pos(cx + 1, Terminal.X_CHARS);
+
+          var label = new TerminalLabel
+          {
+            X = x0,
+            Y = y0,
+            Width = x1 - x0,
+            Height = y1 - y0,
+            TextColor = IndexedColor.White,
+            BackgroundColor = IndexedColor.DarkGrey,
+            TextScale = SCALE,
+            Label = " "
+          };
+          labelsComp.Rects.Add(label);
+          terminalLabels.Add(label);
+        }
+      }
+
+      labelsComp.OnDataLoad(labelsComp.Mod);
+      for (var i = 0; i < 256; i++)
+      {
+        var c = (char)i;
+        if (c >= 'a' && c <= 'z')
+          c -= (char)('a' - 'A');
+        if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '/' || c == '_' || c == ' ')
+        {
+          // valid
+        }
+        else
+          c = ' ';
+        charStrings[i] = ((char)i).ToString();
+      }
+
+      new Terminal(terminalLabels, charStrings).Update();
     }
 
     private const ImGuiWindowFlags WINDOW_FLAGS =
@@ -47,7 +115,11 @@ namespace KSASM
     private static bool isTyping = false;
     private static bool doStep = false;
 
-    private static ProcSystem Current;
+    public static ProcSystem Current { get; private set; }
+
+    private static GaugeCanvas terminalCanvas;
+    private static readonly List<TerminalLabel> terminalLabels = [];
+    private static readonly string[] charStrings = new string[256];
 
     public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
     {
@@ -55,7 +127,10 @@ namespace KSASM
         return false;
 
       if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
+      {
+        ImGui.End();
         return false;
+      }
 
       if (ImGui.BeginCombo("##Library", "Load Library Script"))
       {
@@ -123,7 +198,7 @@ namespace KSASM
     private static void Step(Vehicle vehicle)
     {
       if (vehicle != Current?.Vehicle)
-        Current = new(vehicle, AddOutput);
+        Current = new(vehicle, AddOutput, new(terminalLabels, charStrings));
 
       var maxSteps = ProcSystem.STEPS_PER_FRAME;
       if (doStep)
@@ -186,5 +261,11 @@ namespace KSASM
       while (output.Count > 20)
         output.RemoveAt(0);
     }
+  }
+
+  public class TerminalLabel : GaugeLabelReference
+  {
+    public uint4 PackedText = default;
+    public override uint4 PackData0() => PackedText;
   }
 }

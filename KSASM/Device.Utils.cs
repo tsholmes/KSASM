@@ -60,6 +60,9 @@ namespace KSASM
 
     public B Hash(DeviceFieldGetter<V, IKeyed> getter) => Uint((ref v) => getter(ref v)?.Hash ?? 0);
     public B ChildHash(DeviceFieldBufGetter<V, IKeyed> getter) => NonNull(getter, b => b.Uint((ref v) => v.Hash));
+
+    public B Raw(int length, DeviceFieldGetter<V, Span<byte>> getter, DeviceFieldSetter<V, Span<byte>> setter) =>
+      Field(new RawDeviceField<V>(length, getter, setter));
   }
 
   public class NullDeviceField<T>(int length) : IDeviceField<T>
@@ -140,6 +143,24 @@ namespace KSASM
       Pick(parent).Read(ref parent, deviceBuf, readBuf, offset);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) =>
       Pick(parent).Write(ref parent, deviceBuf, writeBuf, offset);
+  }
+
+  public class RawDeviceField<T>(int length, DeviceFieldGetter<T, Span<byte>> getter, DeviceFieldSetter<T, Span<byte>> setter) : IDeviceField<T>
+  {
+    public int Length => length;
+
+    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    {
+      var data = getter(ref parent);
+      data.Slice(offset, readBuf.Length).CopyTo(readBuf);
+    }
+
+    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    {
+      var data = getter(ref parent);
+      writeBuf.CopyTo(data[offset..]);
+      setter(ref parent, data);
+    }
   }
 
   public struct SearchView<T>

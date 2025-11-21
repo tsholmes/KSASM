@@ -13,6 +13,7 @@
   :f64 time: 0
   :u64 hash_param: 0
   .types.astronomical
+  :u64 terminal_data: 0*64 # 8*64 = 512 = 32*16 chars
 })
 
 .endns

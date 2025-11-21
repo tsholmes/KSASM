@@ -89,9 +89,9 @@ namespace KSASM
     public override IDeviceField<T> Build() => new RootDeviceField<T>(fields);
   }
 
-  public delegate V DeviceFieldGetter<T, V>(ref T parent);
-  public delegate V DeviceFieldBufGetter<T, V>(ref T parent, Span<byte> deviceBuffer);
-  public delegate void DeviceFieldSetter<T, V>(ref T parent, V value);
+  public delegate V DeviceFieldGetter<T, V>(ref T parent) where V : allows ref struct;
+  public delegate V DeviceFieldBufGetter<T, V>(ref T parent, Span<byte> deviceBuffer) where V : allows ref struct;
+  public delegate void DeviceFieldSetter<T, V>(ref T parent, V value) where V : allows ref struct;
 
   public class LeafDeviceField<T, V>(
     DataType type,

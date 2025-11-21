@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using KSA;
 
@@ -11,6 +12,7 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
+    public readonly Terminal Terminal;
     private readonly Action<string> log;
 
     public int LastSteps { get; private set; } = 0;
@@ -18,10 +20,11 @@ namespace KSASM
 
     private readonly Stopwatch stopwatch;
 
-    public ProcSystem(Vehicle vehicle, Action<string> log)
+    public ProcSystem(Vehicle vehicle, Action<string> log, Terminal terminal)
     {
       this.Vehicle = vehicle;
       this.log = log;
+      this.Terminal = terminal;
       stopwatch = new();
 
       Reset();
@@ -68,5 +71,20 @@ namespace KSASM
 
     private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");
     private void OnDebugStr(string str) => log?.Invoke($"> {str}");
+  }
+
+  public class Terminal(List<TerminalLabel> labels, string[] charStrings)
+  {
+    public const int X_CHARS = 32;
+    public const int Y_CHARS = 16;
+    public const int TOTAL_SIZE = X_CHARS * Y_CHARS;
+
+    public readonly byte[] Data = new byte[TOTAL_SIZE];
+
+    public void Update()
+    {
+      for (var i = 0; i < TOTAL_SIZE; i++)
+        labels[i].PackedText = GaugeLabel.Pack4(charStrings[Data[i]]);
+    }
   }
 }
