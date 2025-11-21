@@ -15,8 +15,8 @@
 
 .macro _str.copy.bigcopy(n) {
   .label(.concat(str.copy.big n))
-  copy .add(*0, n) :u64 [str.copy.to], [str.copy.from]
-  add*4:p24 str.copy.to, $(8*n, -n, 8*n, -8*n)
+  copy:u64 .add(*0, n) [str.copy.to], [str.copy.from]
+  add:p24*4 str.copy.to, $(8*n, -n, 8*n, -8*n)
 }
 
 # copy bytes from(addr, len) into to(addr, _)
@@ -25,7 +25,7 @@
   copy:p24 [$(str.copy.to+3)], [$(str.copy.from+3)]
   divide:p24 [$(str.copy.to+3)], $(8)
   str.copy.bigloop:
-    switch*8:p24 [$(str.copy.to+3)], \
+    switch:p24*8 [$(str.copy.to+3)], \
       $(str.copy.small, str.copy.big1, str.copy.big2, str.copy.big3, \
         str.copy.big4, str.copy.big5, str.copy.big6, str.copy.big7)
     # on fallthrough do big copy and jump back to loop
@@ -47,35 +47,35 @@
     ._str.copy.bigcopy(1)
   str.copy.small:
     # at this point we have 7 or less. copy in one step and jump to end
-    switch*7:p24 [$(str.copy.from+3)], \
+    switch:p24*7 [$(str.copy.from+3)], \
       $(str.copy.small6, str.copy.small5, str.copy.small4, str.copy.small3, \
         str.copy.small2, str.copy.small1, str.copy.end)
-    copy*7:u8 [str.copy.to], [str.copy.from]
+    copy:u8*7 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small6:
-    copy*6:u8 [str.copy.to], [str.copy.from]
+    copy:u8*6 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small5:
-    copy*5:u8 [str.copy.to], [str.copy.from]
+    copy:u8*5 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small4:
-    copy*4:u8 [str.copy.to], [str.copy.from]
+    copy:u8*4 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small3:
-    copy*3:u8 [str.copy.to], [str.copy.from]
+    copy:u8*3 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small2:
-    copy*2:u8 [str.copy.to], [str.copy.from]
+    copy:u8*2 [str.copy.to], [str.copy.from]
     jump _, .fnret
   str.copy.small1:
-    copy*1:u8 [str.copy.to], [str.copy.from]
+    copy:u8*1 [str.copy.to], [str.copy.from]
   str.copy.end:
     jump _, .fnret
 
 :p24 str.append.local: 0*8
 .fn(str.append, {:p24, to, *2, out}, {:p24, from, *2})
-  copy*2:p24 str.append.local, str.append.to # copy to into local
-  sum*2:p24 str.append.local, $(0) # move local ptr to end
+  copy:p24*2 str.append.local, str.append.to # copy to into local
+  sum:p24*2 str.append.local, $(0) # move local ptr to end
   .str.copy(str.append.local:p24, str.append.from:p24)
   add:p24 [$(str.append.to+3)], [$(str.append.from+3)] # add from length
   jump _, .fnret

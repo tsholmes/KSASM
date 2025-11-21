@@ -6,7 +6,7 @@
     fields
   data.end:
   :p24 _setup_data: .addns(data) $(.addns(data.end) - .addns(data)) id 0
-  .macro init devmap*2:p24 ..addns(_setup_data)+0, +6
+  .macro init devmap:p24*2 ..addns(_setup_data)+0, +6
 }
 
 .endns

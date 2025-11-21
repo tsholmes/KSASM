@@ -130,6 +130,7 @@ namespace KSASM
       {
         var vals = new Dictionary<(DataType, ConstExprList), ValueX8>();
         var maxWidths = new Dictionary<(DataType, ValueX8), int>();
+        var sb = new StringBuilder();
         foreach (var (type, consts, wid) in ConstExprs)
         {
           ValueX8 vs = new();
@@ -137,11 +138,20 @@ namespace KSASM
           {
             vs[i] = EvalExpr(consts[i], type.VMode());
           }
-          for (var i = consts.Count + 1; i < 8; i++)
+          for (var i = consts.Count; i < 8; i++)
           {
             vs[i] = vs[i % consts.Count];
           }
           vals[(type, consts)] = vs;
+
+          if (Debug)
+          {
+            sb.Clear();
+            sb.Append($"CONST {type}*{wid}");
+            for (var i = 0; i < 8; i++)
+              sb.Append($" {vs[i].As(type)}");
+            Console.WriteLine(sb.ToString());
+          }
 
           maxWidths[(type, vs)] = Math.Max(maxWidths.GetValueOrDefault((type, vs)), wid);
         }

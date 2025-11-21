@@ -23,7 +23,7 @@
 .macro _fn_in_args(fname, arg, ...args) ..if(arg) { .._fn_in_arg(fname, arg) .._fn_in_args(fname, args) }
 
 .macro _fn_out_arg(fname, type, name, width, out) {
-  ..if(out) { copy width name type, .._fn_arg_gname(fname, name) type }
+  ..if(out) { copy width name, .._fn_arg_gname(fname, name) type }
 }
 .macro _fn_out_args(fname, arg, ...args) ..if(arg) { .._fn_out_arg(fname, arg) .._fn_out_args(fname, args) }
 

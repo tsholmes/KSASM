@@ -166,15 +166,15 @@ namespace KSASM
         if (!Enum.TryParse(inst.OpToken.Str(), true, out inst.Op))
           Invalid(inst.OpToken);
 
-        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken.Str()[1..], out inst.Width))
-          Invalid(wtoken);
-
         if (TakeType(TokenType.Type, out var ttoken))
         {
           if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType parsedType))
             Invalid(ttoken);
           inst.Type = parsedType;
         }
+
+        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken.Str()[1..], out inst.Width))
+          Invalid(wtoken);
 
         inst.OperandA = ParseOperand();
 
