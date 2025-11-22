@@ -92,8 +92,6 @@ namespace KSASM
         return c switch
         {
           '\n' => TakeNext(TokenType.EOL, 1, out token),
-          '\\' when At(index + 1) == '\n' => TakeNext(TokenType.EscapedEOL, 2, out token),
-          '\\' when At(index + 1) == '\r' && At(index + 2) == '\n' => TakeNext(TokenType.EscapedEOL, 3, out token),
           '[' => TakeNext(TokenType.IOpen, 1, out token),
           ']' => TakeNext(TokenType.IClose, 1, out token),
           '+' or '-' => TakeNext(TokenType.Offset, 1, out token),
@@ -121,6 +119,16 @@ namespace KSASM
         while (index < source.Length)
         {
           var c = At(index);
+          if (c == '\\' && At(index + 1) == '\n')
+          {
+            index += 2;
+            continue;
+          }
+          else if (c == '\\' && At(index + 1) == '\r' && At(index + 2) == '\n')
+          {
+            index += 3;
+            continue;
+          }
           if (c == '\n' || !char.IsWhiteSpace(c))
             break;
           index++;

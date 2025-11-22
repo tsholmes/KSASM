@@ -42,8 +42,6 @@ namespace KSASM
       {
         while (NextInner(out token))
         {
-          if (token.Type == TokenType.EscapedEOL)
-            continue;
           if (token.Type == TokenType.EOL)
           {
             if (++eolCount > 2)

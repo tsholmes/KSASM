@@ -7,7 +7,6 @@ namespace KSASM
     {
       Invalid,
       EOL, // non-escaped newline, or end of file
-      EscapedEOL, // \ newline
       Placeholder, // _
       Word, // [\w][\w\d]*
       Label, // word:\b
