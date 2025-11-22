@@ -84,21 +84,6 @@ namespace KSASM
       }
 
       labelsComp.OnDataLoad(labelsComp.Mod);
-      for (var i = 0; i < 256; i++)
-      {
-        var c = (char)i;
-        if (c >= 'a' && c <= 'z')
-          c -= (char)('a' - 'A');
-        if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '/' || c == '_' || c == ' ')
-        {
-          // valid
-        }
-        else
-          c = ' ';
-        charStrings[i] = ((char)i).ToString();
-      }
-
-      new Terminal(terminalLabels, charStrings).Update();
     }
 
     private const ImGuiWindowFlags WINDOW_FLAGS =
@@ -119,7 +104,6 @@ namespace KSASM
 
     private static GaugeCanvas terminalCanvas;
     private static readonly List<TerminalLabel> terminalLabels = [];
-    private static readonly string[] charStrings = new string[256];
 
     public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
     {
@@ -198,7 +182,10 @@ namespace KSASM
     private static void Step(Vehicle vehicle)
     {
       if (vehicle != Current?.Vehicle)
-        Current = new(vehicle, AddOutput, new(terminalLabels, charStrings));
+      {
+        Current = new(vehicle, AddOutput, new(terminalLabels));
+        Current.Terminal.Update();
+      }
 
       var maxSteps = ProcSystem.STEPS_PER_FRAME;
       if (doStep)
@@ -265,7 +252,7 @@ namespace KSASM
 
   public class TerminalLabel : GaugeLabelReference
   {
-    public uint4 PackedText = default;
+    public uint4 PackedText = Terminal.CharCodes[0];
     public override uint4 PackData0() => PackedText;
   }
 }

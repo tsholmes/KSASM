@@ -33,6 +33,7 @@ namespace KSASM
       .Uint((ref a) => a.Hash)
       .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
       .List((ref a) => a.Children, (b, get) => b.ChildHash(new(get)))
+      .String(32, (ref a, _) => a.Id)
     );
 
     public B Burn(

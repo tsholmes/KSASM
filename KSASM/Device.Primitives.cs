@@ -1,4 +1,5 @@
 
+using System;
 using Brutal.Numerics;
 
 namespace KSASM
@@ -7,6 +8,9 @@ namespace KSASM
   {
     public B Bool(DeviceFieldGetter<V, bool> getter, DeviceFieldSetter<V, bool> setter = null) =>
       Leaf(DataType.U8, BoolValueConverter.Instance, getter, setter);
+
+    public B Byte(DeviceFieldGetter<V, byte> getter, DeviceFieldSetter<V, byte> setter = null) =>
+      Leaf(DataType.U8, ByteValueConverter.Instance, getter, setter);
 
     public B Uint(DeviceFieldGetter<V, uint> getter, DeviceFieldSetter<V, uint> setter = null) =>
       Leaf(DataType.U64, UintValueConverter.Instance, getter, setter);
@@ -23,12 +27,42 @@ namespace KSASM
         .Double((ref d3) => d3[1], (ref d3, v) => d3[1] = v)
         .Double((ref d3) => d3[2], (ref d3, v) => d3[2] = v)
       );
+
+    public B String(int maxLen, DeviceFieldBufGetter<V, string> getter) => Composite<string>(getter, b => b
+      .Byte((ref s) => (byte)s.Length)
+      .Field(new StringDeviceField<string>(maxLen, (ref s) => s))
+    );
+  }
+
+  public class StringDeviceField<T>(int maxLen, DeviceFieldGetter<T, string> getter) : IDeviceField<T>
+  {
+    public int Length => maxLen;
+
+    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    {
+      var str = getter(ref parent);
+      var bytes = System.Text.Encoding.ASCII.GetBytes(str, deviceBuf);
+      if (bytes < maxLen)
+        deviceBuf[bytes..].Clear();
+      deviceBuf.Slice(offset, readBuf.Length).CopyTo(readBuf);
+    }
+
+    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    {
+      // read only
+    }
   }
 
   public class BoolValueConverter : UnsignedValueConverter<BoolValueConverter, bool>
   {
     public override bool FromUnsigned(ulong val) => val != 0;
     public override ulong ToUnsigned(bool val) => val ? 1u : 0u;
+  }
+
+  public class ByteValueConverter : UnsignedValueConverter<ByteValueConverter, byte>
+  {
+    public override byte FromUnsigned(ulong val) => (byte)val;
+    public override ulong ToUnsigned(byte val) => val;
   }
 
   public class UintValueConverter : UnsignedValueConverter<UintValueConverter, uint>

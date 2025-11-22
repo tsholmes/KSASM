@@ -75,14 +75,14 @@ namespace KSASM
 
       public override void SecondPass(State state)
       {
-        foreach (var expr in Exprs)
-        {
-          var val = state.EvalExpr(expr, Type.VMode());
-          var vals = new ValueX8();
-          for (var i = 0; i < Width; i++)
-            vals[i] = val;
-          state.Emit(Type, vals[..Width]);
-        }
+        var totalCount = Exprs.Count * Width;
+        Span<Value> evals = stackalloc Value[totalCount];
+        for (var i = 0; i < Exprs.Count; i++)
+          evals[i] = state.EvalExpr(Exprs[i], Type.VMode());
+        for (var i = Exprs.Count; i < totalCount; i++)
+          evals[i] = evals[i % Exprs.Count];
+
+        state.Emit(Type, evals);
       }
     }
 

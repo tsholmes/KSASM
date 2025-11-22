@@ -38,6 +38,8 @@
   .types.orbit(orbit.)
   .types.listview(children.)
   :u64 child.hash: 0
+  :u8 id.len: 0
+  :u64 id: 0*4 # 32 chars max
 })
 
 .endns
