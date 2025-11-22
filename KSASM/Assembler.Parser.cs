@@ -349,7 +349,7 @@ namespace KSASM
             return new() { Op = ConstOp.Leaf, Val = new() { StringVal = wtoken.Str() }, Token = wtoken };
           else if (TakeType(TokenType.Offset, out var otoken))
           {
-            var inner = parseAddSub();
+            var inner = parseGroup();
             if (otoken.Str() == "-")
               return new() { Op = ConstOp.Neg, Right = inner, Token = otoken };
             else

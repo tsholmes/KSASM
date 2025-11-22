@@ -78,6 +78,16 @@ namespace KSASM
         }
       }
 
+      // fetches the next expanded token, throwing an error if it is not the expected type
+      private Token NextInnerTyped(TokenType type)
+      {
+        if (!NextInner(out var token))
+          throw Invalid();
+        else if (token.Type != type)
+          throw Invalid(token);
+        return token;
+      }
+
       private void PushTokens(Token parent, params List<Token> tokens)
       {
         macroStack.Add(new(new ListTokenStream(tokens), ctx.AddFrame(parent)));
@@ -116,10 +126,7 @@ namespace KSASM
       private void MacroNs()
       {
         // expand arg
-        if (!NextInner(out var wtoken))
-          throw Invalid();
-        else if (wtoken.Type != TokenType.Word)
-          throw Invalid(wtoken);
+        var wtoken = NextInnerTyped(TokenType.Word);
 
         nsStack.Add(wtoken.Str());
 
@@ -163,10 +170,7 @@ namespace KSASM
           throw Invalid();
 
         // expand arg
-        if (!NextInner(out var token))
-          throw Invalid();
-        else if (token.Type != TokenType.Word)
-          throw Invalid(token);
+        var token = NextInnerTyped(TokenType.Word);
 
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
@@ -205,10 +209,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.POpen, out _))
           throw Invalid();
 
-        if (!NextInner(out var token))
-          throw Invalid();
-        else if (token.Type != TokenType.Word)
-          throw Invalid(token);
+        var token = NextInnerTyped(TokenType.Word);
 
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
@@ -311,8 +312,7 @@ namespace KSASM
 
       private void MacroRegion(Token macro)
       {
-        if (!lexer.TakeType(TokenType.Word, out var ntoken))
-          Invalid();
+        var ntoken = NextInnerTyped(TokenType.Word);
 
         var name = ntoken.Str();
 
@@ -355,10 +355,7 @@ namespace KSASM
       private void MacroUndefine()
       {
         // expand macros for name
-        if (!NextInner(out var ntoken))
-          throw Invalid();
-        else if (ntoken.Type != TokenType.Word)
-          throw Invalid(ntoken);
+        var ntoken = NextInnerTyped(TokenType.Word);
 
         var name = curNs + ntoken.Str();
         if (!macros.Remove(name))
@@ -368,10 +365,7 @@ namespace KSASM
       private void MacroDefine()
       {
         // expand macros for name
-        if (!NextInner(out var ntoken))
-          throw Invalid();
-        else if (ntoken.Type != TokenType.Word)
-          throw Invalid(ntoken);
+        var ntoken = NextInnerTyped(TokenType.Word);
 
         var macro = new MacroDef { Name = curNs + ntoken.Str() };
 
