@@ -69,6 +69,22 @@ Operands are resolved to full addresses prior to instruction execution.
 | addrBaseOffAB | directBase   | `addrBase+offA`   | `[addrBase+offA]`   | `addrBase+offB`   | `[addrBase+offB]`   |
 |               | indirectBase | `[addrBase]+offA` | `[[addrBase]+offA]` | `[addrBase]+offB` | `[[addrBase]+offB]` |
 
+### Value Modes
+When executing, operand values are read as the data type specified in the instruction and expanded into the largest similar type:
+- u8, u64, p24: Unsigned (64-bit unsigned integer)
+- i16, i32, i64: Signed (64-bit signed integer)
+- f64: Float (64-bit double precision floating point)
+- c128: Complex (128-bit pair of double precision floating points)
+
+The operands are then converted between value modes depending on the form of instruction
+- `A = op(B)` convert B to A's value mode prior to execution
+- `A = op(A, B)` convert B to A's value mode prior to execution
+- `An = op(A_Bn)` convert B to Unsigned prior to execution
+- `An = reduce(Ai where Bi=n)` convert B to Unsigned prior to execution
+- `if (condition(A)) PC = B` convert B to Unsigned prior to execution
+
+Some operations noted below always convert to `Float` before execution, converting back to A's value mode before storing the result.
+
 ## Opcodes
 
 * TODO: arithmetic vs logical shift
