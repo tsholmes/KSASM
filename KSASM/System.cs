@@ -13,7 +13,7 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
-    public Assembler.DebugSymbols Symbols;
+    public Assembly.DebugSymbols Symbols;
     public readonly Terminal Terminal;
     private readonly Action<string> log;
 

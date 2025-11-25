@@ -2,67 +2,67 @@
 using System;
 using System.Globalization;
 
-namespace KSASM
+namespace KSASM.Assembly
 {
-  public partial class Assembler
+  public enum TokenType
   {
-    public enum TokenType
+    Invalid,
+    EOL, // non-escaped newline, or end of file
+    Placeholder, // _
+    Word, // [\w][\w\d]*
+    Label, // word:\b
+    Position, // @integer
+    Width, // *integer
+    IOpen, // [
+    IClose, // ]
+    Comma, // ,
+    Type, // :typename
+    Offset, // + or -
+    Number, // decimal, hex with 0x prefix, binary with 0b prefix
+    COpen, // $(
+    CIOpen, // $[
+    POpen, // (
+    PClose, // )
+    Macro, // .macroname
+    String, // "string"
+    BOpen, // {
+    BClose, // }
+    Mult, // * when not part of width
+    Div, // /
+  }
+
+  public struct Token
+  {
+    public SourceString Source;
+    public TokenType Type;
+    public int Pos;
+    public int Len;
+    public string OverrideStr;
+    public int ParentFrame;
+
+    public string Str() => OverrideStr ?? Source?.TokenStr(this) ?? "";
+    public ReadOnlySpan<char> Span()
     {
-      Invalid,
-      EOL, // non-escaped newline, or end of file
-      Placeholder, // _
-      Word, // [\w][\w\d]*
-      Label, // word:\b
-      Position, // @integer
-      Width, // *integer
-      IOpen, // [
-      IClose, // ]
-      Comma, // ,
-      Type, // :typename
-      Offset, // + or -
-      Number, // decimal, hex with 0x prefix, binary with 0b prefix
-      COpen, // $(
-      CIOpen, // $[
-      POpen, // (
-      PClose, // )
-      Macro, // .macroname
-      String, // "string"
-      BOpen, // {
-      BClose, // }
-      Mult, // * when not part of width
-      Div, // /
+      if (OverrideStr != null)
+        return OverrideStr;
+      if (Source != null)
+        return Source.TokenSpan(this);
+      return [];
     }
 
-    public struct Token
-    {
-      public SourceString Source;
-      public TokenType Type;
-      public int Pos;
-      public int Len;
-      public string OverrideStr;
-      public int ParentFrame;
+    public ReadOnlySpan<char> this[Range range] => Span()[range];
+    public char this[int index] => Span()[index];
 
-      public string Str() => OverrideStr ?? Source?.TokenStr(this) ?? "";
-      public ReadOnlySpan<char> Span()
-      {
-        if (OverrideStr != null)
-          return OverrideStr;
-        if (Source != null)
-          return Source.TokenSpan(this);
-        return [];
-      }
+    public static implicit operator ReadOnlySpan<char>(Token token) => token.Span();
+  }
 
-      public ReadOnlySpan<char> this[Range range] => Span()[range];
-      public char this[int index] => Span()[index];
+  public interface ITokenStream
+  {
+    public bool Next(out Token token);
+  }
 
-      public static implicit operator ReadOnlySpan<char>(Token token) => token.Span();
-    }
-
-    public interface ITokenStream
-    {
-      public bool Next(out Token token);
-    }
-
+  public static class Values
+  {
     public static bool TryParseUnsigned(ReadOnlySpan<char> str, out ulong val) =>
       ulong.TryParse(str, NumberStyles.Integer, null, out val) ||
       TryParseHex(str, out val) ||

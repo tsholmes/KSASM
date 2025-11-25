@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Brutal.ImGuiApi.Abstractions;
 using System.Linq;
+using KSASM.Assembly;
 
 namespace KSASM
 {

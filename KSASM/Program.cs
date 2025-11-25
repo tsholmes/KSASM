@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using HarmonyLib;
+using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -16,7 +17,7 @@ namespace KSASM
       var pargs = ProgramArgs.Parse(args);
 
       Assembler.Debug = pargs.HasFlag("debug", "asm");
-      Assembler.MacroParser.DebugMacros = pargs.HasFlag("debug", "macro");
+      MacroParser.DebugMacros = pargs.HasFlag("debug", "macro");
       MemoryAccessor.DebugRead = pargs.HasFlag("debug", "read") || pargs.HasFlag("debug", "mem");
       MemoryAccessor.DebugWrite = pargs.HasFlag("debug", "write") || pargs.HasFlag("debug", "mem");
       Processor.DebugOps = pargs.HasFlag("debug", "ops");
@@ -64,12 +65,12 @@ namespace KSASM
       return 0;
     }
 
-    private static Assembly FindAssembly(object sender, ResolveEventArgs args)
+    private static System.Reflection.Assembly FindAssembly(object sender, ResolveEventArgs args)
     {
       var name = new AssemblyName(args.Name).Name + ".dll";
       var path = Path.Join(KSADir, name);
       if (File.Exists(path))
-        return Assembly.LoadFrom(path);
+        return System.Reflection.Assembly.LoadFrom(path);
       return null;
     }
 

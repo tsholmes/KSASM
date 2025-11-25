@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace KSASM
+namespace KSASM.Assembly
 {
   public class SourceString
   {
@@ -24,7 +24,7 @@ namespace KSASM
 
     public char this[int idx] => Source[idx];
 
-    public Assembler.Token Token(Assembler.TokenType type, int pos, int len) => new()
+    public Token Token(TokenType type, int pos, int len) => new()
     {
       Source = this,
       Type = type,
@@ -32,14 +32,16 @@ namespace KSASM
       Len = len,
     };
 
-    public string TokenStr(Assembler.Token token) => Source[token.Pos..(token.Pos + token.Len)];
+    public string TokenStr(Token token) => Source[token.Pos..(token.Pos + token.Len)];
 
-    public ReadOnlySpan<char> TokenSpan(Assembler.Token token) =>
+    public ReadOnlySpan<char> TokenSpan(Token token) =>
       Source.AsSpan()[token.Pos..(token.Pos + token.Len)];
 
     public (int line, int lpos) LinePos(int pos)
     {
-      var line = lineStarts.FindIndex(start => start > pos);
+      var line = lineStarts.BinarySearch(pos + 1);
+      if (line < 0)
+        line = ~line;
       var lpos = pos - lineStarts[line - 1];
       return (line, lpos);
     }
