@@ -46,4 +46,39 @@ namespace KSASM.Assembly
       return (line, lpos);
     }
   }
+
+  public record struct SToken(TokenType Type, Range Range);
+
+  public record class TokenSource(SourceString Source, List<SToken> Tokens)
+  {
+    public int Count => Tokens.Count;
+
+    public Token this[int index]
+    {
+      get
+      {
+        var tok = Tokens[index];
+        var (off, len) = tok.Range.GetOffsetAndLength(Source.Length);
+        return new() { Source = Source, Type = tok.Type, Pos = off, Len = len, ParentFrame = -1 };
+      }
+    }
+
+    public ITokenStream AsStream() => new Stream(this);
+
+    private record class Stream(TokenSource Source) : ITokenStream
+    {
+      private int index = 0;
+
+      public bool Next(out Token token)
+      {
+        if (index >= Source.Count)
+        {
+          token = default;
+          return false;
+        }
+        token = Source[index++];
+        return true;
+      }
+    }
+  }
 }

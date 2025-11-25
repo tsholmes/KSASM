@@ -11,9 +11,8 @@ namespace KSASM.Assembly
 
     public Parser(SourceString source, Context ctx) : base(ctx)
     {
-      ITokenStream stream = new Lexer(source);
-      stream = new MacroParser(stream, ctx);
-      lexer = new(stream, -2);
+      var tsource = Lexer.LexTokens(source);
+      lexer = new(new MacroParser(tsource.AsStream(), ctx), -1);
     }
 
     public void Parse()

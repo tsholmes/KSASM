@@ -61,6 +61,64 @@ namespace KSASM.Assembly
     public bool Next(out Token token);
   }
 
+  // TODO: rename to TokenReader. read from TokenSource
+  public class LexerReader
+  {
+    private readonly ITokenStream stream;
+
+    private bool hasNext = false;
+    private Token next;
+    private bool eof = false;
+    private readonly int parentFrame;
+
+    public LexerReader(ITokenStream stream, int parentFrame)
+    {
+      this.stream = stream;
+      this.parentFrame = parentFrame;
+    }
+
+    public bool Peek(out Token token)
+    {
+      FillNext();
+      token = next;
+      return hasNext;
+    }
+
+    public bool PeekType(TokenType type, out Token token)
+    {
+      if (!Peek(out token))
+        return false;
+      return type == token.Type;
+    }
+
+    public bool Take(out Token token)
+    {
+      FillNext();
+      token = next;
+      var has = hasNext;
+      hasNext = false;
+      return has;
+    }
+
+    public bool TakeType(TokenType type, out Token token) =>
+      PeekType(type, out token) && Take(out token);
+
+    public bool EOF()
+    {
+      FillNext();
+      return eof;
+    }
+
+    private void FillNext()
+    {
+      if (!hasNext && !eof)
+        hasNext = stream.Next(out next);
+      eof = !hasNext;
+      if (parentFrame >= -1)
+        next.ParentFrame = parentFrame;
+    }
+  }
+
   public static class Values
   {
     public static bool TryParseUnsigned(ReadOnlySpan<char> str, out ulong val) =>

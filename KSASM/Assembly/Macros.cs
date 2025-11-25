@@ -374,7 +374,7 @@ namespace KSASM.Assembly
         Invalid();
 
       var source = Library.LoadImport(ntoken.Str());
-      PushLexer(new(new Lexer(source), ctx.AddFrame(macro)), null);
+      PushLexer(new(Lexer.LexTokens(source).AsStream(), ctx.AddFrame(macro)), null);
     }
 
     private void MacroUndefine()

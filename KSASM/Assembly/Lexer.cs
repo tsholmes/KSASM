@@ -1,88 +1,40 @@
 
+using System.Collections.Generic;
+
 namespace KSASM.Assembly
 {
-  public class LexerReader
+  public class Lexer
   {
-    private readonly ITokenStream stream;
-
-    private bool hasNext = false;
-    private Token next;
-    private bool eof = false;
-    private readonly int parentFrame;
-
-    public LexerReader(ITokenStream stream, int parentFrame)
+    public static TokenSource LexTokens(SourceString source)
     {
-      this.stream = stream;
-      this.parentFrame = parentFrame;
+      var tokens = new List<SToken>();
+
+      var lexer = new Lexer(source);
+      while (lexer.Next(out var token))
+        tokens.Add(token);
+
+      if (tokens.Count == 0 || tokens[^1].Type != TokenType.EOL)
+        tokens.Add(new(TokenType.EOL, ^0..^0));
+
+      return new(source, tokens);
     }
 
-    public bool Peek(out Token token)
-    {
-      FillNext();
-      token = next;
-      return hasNext;
-    }
-
-    public bool PeekType(TokenType type, out Token token)
-    {
-      if (!Peek(out token))
-        return false;
-      return type == token.Type;
-    }
-
-    public bool Take(out Token token)
-    {
-      FillNext();
-      token = next;
-      var has = hasNext;
-      hasNext = false;
-      return has;
-    }
-
-    public bool TakeType(TokenType type, out Token token) =>
-      PeekType(type, out token) && Take(out token);
-
-    public bool EOF()
-    {
-      FillNext();
-      return eof;
-    }
-
-    private void FillNext()
-    {
-      if (!hasNext && !eof)
-        hasNext = stream.Next(out next);
-      eof = !hasNext;
-      if (parentFrame >= -1)
-        next.ParentFrame = parentFrame;
-    }
-  }
-
-  public class Lexer : ITokenStream
-  {
     private readonly SourceString source;
     private int index = 0;
 
-    private bool takenEOF = false;
-
-    public Lexer(SourceString source)
+    private Lexer(SourceString source)
     {
       this.source = source;
     }
 
-    public bool Next(out Token token)
+    private bool Next(out SToken token)
     {
       SkipWS();
 
       if (index == source.Length)
       {
-        if (takenEOF)
-        {
-          token = default;
-          return false;
-        }
-        takenEOF = true;
-        return TakeNext(TokenType.EOL, 0, out token);
+        token = default;
+        return false;
       }
 
       var c = At(index);
@@ -137,14 +89,14 @@ namespace KSASM.Assembly
         index++;
     }
 
-    private bool TakeNext(TokenType type, int len, out Token token)
+    private bool TakeNext(TokenType type, int len, out SToken token)
     {
-      token = source.Token(type, index, len);
+      token = new() { Type = type, Range = index..(index + len) };
       index += len;
       return true;
     }
 
-    private bool TakeWordLike(out Token token)
+    private bool TakeWordLike(out SToken token)
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
@@ -158,7 +110,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.Word, len, out token);
     }
 
-    private bool TakeMacro(out Token token)
+    private bool TakeMacro(out SToken token)
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
@@ -170,7 +122,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.Macro, len, out token);
     }
 
-    private bool TakeString(out Token token)
+    private bool TakeString(out SToken token)
     {
       var len = 1;
       while (index + len < source.Length && At(index + len) is not '"' and not '\n')
@@ -184,7 +136,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.String, len, out token);
     }
 
-    private bool TakePosition(out Token token)
+    private bool TakePosition(out SToken token)
     {
       var len = 1;
       // TODO: support hex positions?
@@ -197,7 +149,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.Position, len, out token);
     }
 
-    private bool TakeWidth(out Token token)
+    private bool TakeWidth(out SToken token)
     {
       var len = 1;
       while (IsDigit(At(index + len)))
@@ -209,7 +161,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.Width, len, out token);
     }
 
-    private bool TakeType(out Token token)
+    private bool TakeType(out SToken token)
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
@@ -221,7 +173,7 @@ namespace KSASM.Assembly
         return TakeNext(TokenType.Type, len, out token);
     }
 
-    private bool TakeNumber(out Token token)
+    private bool TakeNumber(out SToken token)
     {
       var len = 1;
       var minLen = 1;
