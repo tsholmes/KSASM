@@ -36,6 +36,8 @@ namespace KSASM
         return RunGame(args);
       }
 
+      // Library.CacheAll();
+
       var scriptName = pargs.Positional(0, out var sname) ? sname : "test";
 
       var source = Library.LoadImport(scriptName);

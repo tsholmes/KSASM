@@ -1,4 +1,5 @@
 
+using System;
 using System.Collections.Generic;
 
 namespace KSASM
@@ -32,6 +33,9 @@ namespace KSASM
     };
 
     public string TokenStr(Assembler.Token token) => Source[token.Pos..(token.Pos + token.Len)];
+
+    public ReadOnlySpan<char> TokenSpan(Assembler.Token token) =>
+      Source.AsSpan()[token.Pos..(token.Pos + token.Len)];
 
     public (int line, int lpos) LinePos(int pos)
     {

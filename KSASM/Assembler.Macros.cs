@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace KSASM
 {
@@ -11,7 +12,9 @@ namespace KSASM
       public static bool DebugMacros = false;
 
       private readonly LexerReader baseLexer;
-      private readonly List<LexerReader> macroStack = [];
+      private readonly Stack<(LexerReader, List<Token>)> macroStack = [];
+      private readonly ListPool<Token> tokenListPool = new();
+      private readonly ListPool<Range> rangeListPool = new();
       private readonly List<string> nsStack = [];
       private readonly Dictionary<string, MacroDef> macros = [];
 
@@ -30,10 +33,14 @@ namespace KSASM
       {
         get
         {
-          while (macroStack.Count > 0 && macroStack[^1].EOF())
-            macroStack.RemoveAt(macroStack.Count - 1);
-          if (macroStack.Count > 0)
-            return macroStack[^1];
+          (LexerReader lexer, List<Token> tokens) macro;
+          while (macroStack.TryPeek(out macro) && macro.lexer.EOF())
+          {
+            macro = macroStack.Pop();
+            tokenListPool.Return(macro.tokens);
+          }
+          if (macroStack.TryPeek(out macro))
+            return macro.lexer;
           return baseLexer;
         }
       }
@@ -70,7 +77,7 @@ namespace KSASM
           else
           {
             if (token.Type == TokenType.Label && curNs.Length > 0)
-              token.OverrideStr = curNs + token.Str();
+              AddNs(ref token);
             return true;
           }
         }
@@ -86,10 +93,13 @@ namespace KSASM
         return token;
       }
 
-      private void PushTokens(Token parent, params List<Token> tokens)
+      private void PushLexer(LexerReader lexer, List<Token> tokens) =>
+        macroStack.Push((lexer, tokens));
+
+      private void PushTokens(Token parent, List<Token> tokens)
       {
-        macroStack.Add(new(new ListTokenStream(tokens), ctx.AddFrame(parent)));
-        if (DebugMacros)
+        PushLexer(new(new ListTokenStream(tokens), ctx.AddFrame(parent)), tokens);
+        if (DebugMacros && parent.Span() != ".import")
         {
           Console.WriteLine($">>> PUSH {parent.Str()}");
           foreach (var token in tokens)
@@ -98,9 +108,30 @@ namespace KSASM
         }
       }
 
+      private void PushTokens(Token parent, params Span<Token> tokens) =>
+        PushTokens(parent, tokenListPool.Take(tokens));
+
+      private readonly StringBuilder nsb = new();
+      private void AddNs(ref Token token)
+      {
+        nsb.Clear();
+        if (token.Type == TokenType.Macro)
+        {
+          nsb.Append('.');
+          nsb.Append(curNs);
+          nsb.Append(token[1..]);
+        }
+        else
+        {
+          nsb.Append(curNs);
+          nsb.Append(token.Span());
+        }
+        token.OverrideStr = nsb.ToString();
+      }
+
       private void ParseMacro(Token token)
       {
-        var name = token.Str()[1..];
+        var name = token[1..].ToString();
         switch (name.ToLowerInvariant())
         {
           case "macro": MacroDefine(); break;
@@ -149,10 +180,8 @@ namespace KSASM
         if (!NextInner(out var token))
           throw Invalid();
 
-        if (token.Type == TokenType.Word)
-          token = token with { OverrideStr = curNs + token.Str() };
-        else if (token.Type == TokenType.Macro)
-          token = token with { OverrideStr = $".{curNs}{token.Str()[1..]}" };
+        if (token.Type == TokenType.Word || token.Type == TokenType.Macro)
+          AddNs(ref token);
         else
           throw Invalid(token);
 
@@ -173,7 +202,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        PushTokens(macro, token with { Type = TokenType.Macro, OverrideStr = $".{token.Str()}" });
+        PushTokens(macro, token with { Type = TokenType.Macro, OverrideStr = $".{token.Span()}" });
       }
 
       private void MacroConcat(Token macro)
@@ -190,13 +219,13 @@ namespace KSASM
         while (lexer.TakeType(TokenType.Word, out var itoken)
             || lexer.TakeType(TokenType.Macro, out itoken)
             || lexer.TakeType(TokenType.Placeholder, out itoken)
-            || (lexer.TakeType(TokenType.Number, out itoken) && int.TryParse(itoken.Str(), out _)))
-          token = token with { OverrideStr = $"{token.Str()}{itoken.Str()}" };
+            || (lexer.TakeType(TokenType.Number, out itoken) && int.TryParse(itoken.Span(), out _)))
+          token = token with { OverrideStr = $"{token.Span()}{itoken.Span()}" };
 
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        if (token.Type == TokenType.Placeholder && token.Str().Length > 1)
+        if (token.Type == TokenType.Placeholder && token.Span().Length > 1)
           token.Type = TokenType.Word;
 
         PushTokens(macro, token);
@@ -212,7 +241,7 @@ namespace KSASM
         if (!lexer.TakeType(TokenType.PClose, out _))
           throw Invalid();
 
-        PushTokens(macro, token with { Type = TokenType.Label, OverrideStr = $"{token.Str()}:" });
+        PushTokens(macro, token with { Type = TokenType.Label, OverrideStr = $"{token.Span()}:" });
       }
 
       private void MacroIfDef(bool not)
@@ -278,12 +307,12 @@ namespace KSASM
 
         if (first.Type == TokenType.Width)
         {
-          if (!Parser.TryParseValue(first.Str()[1..], out val, out mode))
+          if (!TryParseValue(first[1..], out val, out mode))
             Invalid(first);
         }
         else if (first.Type == TokenType.Number)
         {
-          if (!Parser.TryParseValue(first.Str(), out val, out mode))
+          if (!TryParseValue(first, out val, out mode))
             Invalid(first);
         }
         else
@@ -293,7 +322,7 @@ namespace KSASM
         {
           if (!lexer.TakeType(TokenType.Number, out var ntoken))
             Invalid();
-          if (!Parser.TryParseValue(ntoken.Str(), out var nval, out var nmode))
+          if (!TryParseValue(ntoken, out var nval, out var nmode))
             Invalid(ntoken);
           nval.Convert(nmode, mode);
           mode.Ops().Add(ref val, nval);
@@ -312,14 +341,14 @@ namespace KSASM
       {
         var ntoken = NextInnerTyped(TokenType.Word);
 
-        var name = ntoken.Str();
+        var name = ntoken.Span();
 
         var endLabel = lexer.TakeType(TokenType.Offset, out var otoken) && otoken.Str() == "-";
 
         if (!lexer.TakeType(TokenType.Number, out var sztoken))
           Invalid();
 
-        if (!int.TryParse(sztoken.Str(), out var size))
+        if (!int.TryParse(sztoken, out var size))
           Invalid(sztoken);
 
         var startPos = regionPos - size;
@@ -347,7 +376,7 @@ namespace KSASM
           Invalid();
 
         var source = Library.LoadImport(ntoken.Str());
-        macroStack.Add(new(new Lexer(source), ctx.AddFrame(macro)));
+        PushLexer(new(new Lexer(source), ctx.AddFrame(macro)), null);
       }
 
       private void MacroUndefine()
@@ -373,10 +402,10 @@ namespace KSASM
           {
             if (lexer.TakeType(TokenType.Macro, out var mtoken))
             {
-              var mstr = mtoken.Str();
+              var mstr = mtoken.Span();
               if (!mstr.StartsWith("..."))
                 throw Invalid(mtoken);
-              macro.Args[mstr[3..]] = macro.Args.Count;
+              macro.Args[mstr[3..].ToString()] = macro.Args.Count;
               macro.HasRest = true;
               if (!lexer.TakeType(TokenType.PClose, out _))
                 throw Invalid();
@@ -416,15 +445,19 @@ namespace KSASM
         if (!macros.TryGetValue(name, out var macro) && !macros.TryGetValue(curNs + name, out macro))
           Invalid(nameToken);
 
-        var args = new List<List<Token>>();
+        using var tokenLease = tokenListPool.Lease();
+        using var rangeLease = rangeListPool.Lease();
+
+        var argTokens = tokenLease.List;
+        var argRanges = rangeLease.List;
+        var argStart = 0;
 
         if (lexer.TakeType(TokenType.POpen, out _))
         {
           var done = false;
           while (!done)
           {
-            var isRest = macro.HasRest && args.Count == macro.Args.Count - 1;
-            var arg = new List<Token>();
+            var isRest = macro.HasRest && argRanges.Count == macro.Args.Count - 1;
             var chunk = new ChunkReader { P = this, TrackP = true, TrackB = true };
             // don't consume brackets for rest
             if (!isRest && lexer.TakeType(TokenType.BOpen, out _))
@@ -432,14 +465,15 @@ namespace KSASM
             else
             {
               chunk.EndPClose = chunk.EndLine = true;
-              if (!macro.HasRest || args.Count < macro.Args.Count - 1)
+              if (!macro.HasRest || argRanges.Count < macro.Args.Count - 1)
                 chunk.EndComma = true; // only end on comma if we aren't in the ...rest arg
             }
 
             while (chunk.Take(out var token))
-              arg.Add(token);
+              argTokens.Add(token);
 
-            args.Add(arg);
+            argRanges.Add(argStart..argTokens.Count);
+            argStart = argTokens.Count;
 
             if (chunk.EndBClose && !lexer.TakeType(TokenType.BClose, out _))
               throw Invalid();
@@ -453,15 +487,18 @@ namespace KSASM
           }
         }
 
-        var expanded = new List<Token>();
+        var expanded = tokenListPool.Take();
         foreach (var tk in macro.Tokens)
         {
           var token = tk;
           if (token.Type == TokenType.Word && macro.Args.TryGetValue(token.Str(), out var argIdx))
           {
-            if (argIdx >= args.Count)
+            if (argIdx >= argRanges.Count)
               continue;
-            expanded.AddRange(args[argIdx]);
+
+            var range = argRanges[argIdx];
+            for (var i = range.Start.Value; i < range.End.Value; i++)
+              expanded.AddRange(argTokens[i]);
             continue;
           }
           expanded.Add(token);
@@ -475,9 +512,24 @@ namespace KSASM
         var prevLexer = lexer;
         PushTokens(macro, tokens);
 
+        var any = false;
+        foreach (var tok in tokens)
+        {
+          if (tok.Type != TokenType.Macro)
+            continue;
+          var str = tok.Span();
+          if (str.Length > 2 && str[1] == '.')
+          {
+            any = true;
+            break;
+          }
+        }
+        if (!any)
+          return;
+
         var startIfs = ifDepth;
 
-        var expanded = new List<Token>();
+        var expanded = tokenListPool.Take();
         while (lexer != prevLexer)
         {
           if (!lexer.Take(out var token))
@@ -485,10 +537,10 @@ namespace KSASM
 
           if (token.Type == TokenType.Macro)
           {
-            var tstr = token.Str();
+            var tstr = token.Span();
             if (tstr.Length > 2 && tstr[1] == '.')
             {
-              ParseMacro(token with { OverrideStr = tstr[1..] });
+              ParseMacro(token with { OverrideStr = tstr[1..].ToString() });
               continue;
             }
           }

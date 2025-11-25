@@ -168,4 +168,32 @@ namespace KSASM
       }
     }
   }
+
+  public class ListPool<T>
+  {
+    private readonly Stack<List<T>> lists = [];
+
+    public List<T> Take(params Span<T> values)
+    {
+      if (!lists.TryPop(out var list))
+        list = new();
+      list.AddRange(values);
+      return list;
+    }
+
+    public void Return(List<T> list)
+    {
+      if (list == null)
+        return;
+      list.Clear();
+      lists.Push(list);
+    }
+
+    public BufferLease Lease() => new(this, Take());
+
+    public record struct BufferLease(ListPool<T> Pool, List<T> List) : IDisposable
+    {
+      public void Dispose() => Pool.Return(List);
+    }
+  }
 }

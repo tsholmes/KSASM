@@ -10,7 +10,7 @@ namespace KSASM
       private bool hasNext = false;
       private Token next;
       private bool eof = false;
-      private int parentFrame;
+      private readonly int parentFrame;
 
       public LexerReader(ITokenStream stream, int parentFrame)
       {

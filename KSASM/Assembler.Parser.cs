@@ -1,7 +1,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 
 namespace KSASM
 {
@@ -54,11 +53,11 @@ namespace KSASM
         PeekType(type, out token) && lexer.Take(out token);
 
       private void AddLabel(Token token) =>
-        Statements.Add(new LabelStatement { Label = token.Str()[..^1] });
+        Statements.Add(new LabelStatement { Label = new(token[..^1]) });
 
       private void AddPosition(Token token)
       {
-        if (!int.TryParse(token.Str()[1..], out var addr))
+        if (!int.TryParse(token[1..], out var addr))
           Invalid(token);
         Statements.Add(new PositionStatement { Addr = addr });
       }
@@ -68,14 +67,14 @@ namespace KSASM
         if (!TakeType(TokenType.Type, out var token))
           Invalid();
 
-        if (!Enum.TryParse(token.Str()[1..], true, out DataType curType))
+        if (!Enum.TryParse(token[1..], true, out DataType curType))
           Invalid(token);
 
         while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
         {
           if (TakeType(TokenType.Type, out token))
           {
-            if (!Enum.TryParse(token.Str()[1..], true, out curType))
+            if (!Enum.TryParse(token[1..], true, out curType))
               Invalid(token);
           }
           else if (TakeType(TokenType.Label, out token))
@@ -91,20 +90,20 @@ namespace KSASM
             switch (curType.VMode())
             {
               case ValueMode.Unsigned:
-                valid = TryParseUnsigned(token.Str(), out stmt.Value.Unsigned);
+                valid = TryParseUnsigned(token, out stmt.Value.Unsigned);
                 break;
               case ValueMode.Signed:
-                valid = TryParseSigned(token.Str(), out stmt.Value.Signed);
+                valid = TryParseSigned(token, out stmt.Value.Signed);
                 break;
               case ValueMode.Float:
-                valid = TryParseFloat(token.Str(), out stmt.Value.Float);
+                valid = TryParseFloat(token, out stmt.Value.Float);
                 break;
             }
             if (!valid)
               Invalid(token);
             if (TakeType(TokenType.Width, out token))
             {
-              if (!int.TryParse(token.Str()[1..], out stmt.Width))
+              if (!int.TryParse(token[1..], out stmt.Width))
                 Invalid(token);
             }
             Statements.Add(stmt);
@@ -115,7 +114,7 @@ namespace KSASM
               Invalid(token);
 
             var stmt = new ValueListStatement { Values = [] };
-            var str = token.Str()[1..^1];
+            var str = token[1..^1];
             for (var i = 0; i < str.Length; i++)
             {
               var c = str[i];
@@ -147,7 +146,7 @@ namespace KSASM
             };
             if (TakeType(TokenType.Width, out token))
             {
-              if (!int.TryParse(token.Str()[1..], out stmt.Width))
+              if (!int.TryParse(token[1..], out stmt.Width))
                 throw Invalid(token);
             }
             Statements.Add(stmt);
@@ -163,17 +162,17 @@ namespace KSASM
 
         if (!TakeType(TokenType.Word, out inst.OpToken))
           Invalid();
-        if (!Enum.TryParse(inst.OpToken.Str(), true, out inst.Op))
+        if (!Enum.TryParse(inst.OpToken, true, out inst.Op))
           Invalid(inst.OpToken);
 
         if (TakeType(TokenType.Type, out var ttoken))
         {
-          if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType parsedType))
+          if (!Enum.TryParse(ttoken[1..], true, out DataType parsedType))
             Invalid(ttoken);
           inst.Type = parsedType;
         }
 
-        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken.Str()[1..], out inst.Width))
+        if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken[1..], out inst.Width))
           Invalid(wtoken);
 
         inst.OperandA = ParseOperand();
@@ -226,7 +225,7 @@ namespace KSASM
 
         if (TakeType(TokenType.Type, out var ttoken))
         {
-          if (!Enum.TryParse(ttoken.Str()[1..], true, out DataType type))
+          if (!Enum.TryParse(ttoken[1..], true, out DataType type))
             Invalid(ttoken);
           op.Type = type;
         }
@@ -249,7 +248,7 @@ namespace KSASM
           addr.StrAddr = wtoken.Str();
         else if (TakeType(TokenType.Number, out var ntoken))
         {
-          if (!TryParseValue(ntoken.Str(), out var val, out var mode))
+          if (!TryParseValue(ntoken, out var val, out var mode))
             Invalid(ntoken);
           if (mode != ValueMode.Unsigned)
             Invalid(ntoken);
@@ -288,125 +287,76 @@ namespace KSASM
 
       private ConstExpr ParseConstInner()
       {
-        ConstExpr parseAddSub()
+        var expr = new ConstExpr();
+
+        void parseAddSub()
         {
-          var left = parseMulDiv();
+          parseMulDiv();
           while (true)
           {
             if (TakeType(TokenType.Offset, out var otoken))
             {
-              var right = parseMulDiv();
-              left = new()
-              {
-                Op = otoken.Str() == "-" ? ConstOp.Sub : ConstOp.Add,
-                Left = left,
-                Right = right,
-                Token = otoken
-              };
+              parseMulDiv();
+              expr.PushOp(otoken, otoken[0] == '-' ? ConstOp.Sub : ConstOp.Add);
             }
             else
               break;
           }
-          return left;
         }
-        ConstExpr parseMulDiv()
+        void parseMulDiv()
         {
-          var left = parseGroup();
+          parseGroup();
           while (true)
           {
             if (TakeType(TokenType.Mult, out var mtoken))
             {
-              var right = parseGroup();
-              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = mtoken };
+              parseGroup();
+              expr.PushOp(mtoken, ConstOp.Mul);
             }
             else if (TakeType(TokenType.Div, out var dtoken))
             {
-              var right = parseGroup();
-              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = mtoken };
+              parseGroup();
+              expr.PushOp(dtoken, ConstOp.Div);
             }
             else if (TakeType(TokenType.Width, out var wtoken))
             {
-              if (!TryParseValue(wtoken.Str()[1..], out var val, out var mode))
+              if (!TryParseValue(wtoken[1..], out var val, out var mode))
                 throw Invalid(wtoken);
-              var right = new ConstExpr() { Op = ConstOp.Leaf, Val = new() { Value = val, Mode = mode } };
-              left = new() { Op = ConstOp.Mul, Left = left, Right = right, Token = wtoken };
+              expr.PushVal(wtoken, new(Value: val, Mode: mode));
+              expr.PushOp(wtoken, ConstOp.Mul);
             }
             else
               break;
           }
-          return left;
         }
-        ConstExpr parseGroup()
+        void parseGroup()
         {
           if (TakeType(TokenType.POpen, out _))
           {
-            var res = parseAddSub();
+            parseAddSub();
             if (!TakeType(TokenType.PClose, out _))
               throw Invalid();
-            return res;
           }
           else if (TakeType(TokenType.Word, out var wtoken))
-            return new() { Op = ConstOp.Leaf, Val = new() { StringVal = wtoken.Str() }, Token = wtoken };
+            expr.PushVal(wtoken, new(StringVal: wtoken.Str()));
           else if (TakeType(TokenType.Offset, out var otoken))
           {
-            var inner = parseGroup();
-            if (otoken.Str() == "-")
-              return new() { Op = ConstOp.Neg, Right = inner, Token = otoken };
-            else
-              return inner;
+            parseGroup();
+            if (otoken[0] == '-')
+              expr.PushOp(otoken, ConstOp.Neg);
           }
           else if (TakeType(TokenType.Number, out var ntoken))
           {
-            if (!TryParseValue(ntoken.Str(), out var val, out var mode))
+            if (!TryParseValue(ntoken, out var val, out var mode))
               throw Invalid(ntoken);
-            return new() { Op = ConstOp.Leaf, Val = new() { Value = val, Mode = mode } };
+            expr.PushVal(ntoken, new(Value: val, Mode: mode));
           }
           else
             throw Invalid();
         }
-        return parseAddSub();
+        parseAddSub();
+        return expr;
       }
-
-      public static bool TryParseValue(string str, out Value value, out ValueMode mode)
-      {
-        str = str.ToLowerInvariant();
-        if (TryParseUnsigned(str, out var uval))
-        {
-          value = new() { Unsigned = uval };
-          mode = ValueMode.Unsigned;
-          return true;
-        }
-        else if (TryParseSigned(str, out var sval))
-        {
-          value = new() { Signed = sval };
-          mode = ValueMode.Signed;
-          return true;
-        }
-        else if (TryParseFloat(str, out var fval))
-        {
-          value = new() { Float = fval };
-          mode = ValueMode.Float;
-          return true;
-        }
-        value = default;
-        mode = default;
-        return false;
-      }
-
-      private static bool TryParseUnsigned(string str, out ulong val) =>
-        ulong.TryParse(str, NumberStyles.Integer, null, out val) ||
-        (str.StartsWith("0b") && ulong.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
-        (str.StartsWith("0x") && ulong.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
-
-      private static bool TryParseSigned(string str, out long val) =>
-        long.TryParse(str, NumberStyles.Integer, null, out val) ||
-        (str.StartsWith("0b") && long.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
-        (str.StartsWith("0x") && long.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
-
-      private static bool TryParseFloat(string str, out double val) =>
-        double.TryParse(str, NumberStyles.Float, null, out val) ||
-        (str.StartsWith("0b") && double.TryParse(str[2..], NumberStyles.BinaryNumber, null, out val)) ||
-        (str.StartsWith("0x") && double.TryParse(str[2..], NumberStyles.HexNumber, null, out val));
 
       protected override bool Peek(out Token token) => lexer.Peek(out token);
     }
@@ -439,12 +389,7 @@ namespace KSASM
       public bool Indirect;
     }
 
-    public class ConstVal
-    {
-      public string StringVal;
-      public ValueMode Mode;
-      public Value Value;
-    }
+    public record struct ConstVal(string StringVal = null, ValueMode Mode = default, Value Value = default);
 
     public class ConstExprList : List<ConstExpr>
     {
@@ -452,15 +397,19 @@ namespace KSASM
       public bool Indirect;
     }
 
-    public class ConstExpr
-    {
-      public ConstOp Op;
-      public ConstExpr Left;
-      public ConstExpr Right;
-      public ConstVal Val;
-      public Token Token;
-    }
-
     public enum ConstOp { Leaf, Neg, Add, Sub, Mul, Div }
+
+    public record struct ExprNode(ConstOp Op, Token Token, ConstVal Val = default);
+
+    public class ConstExpr : List<ExprNode>
+    {
+      public void PushVal(Token token, ConstVal val) => DoAdd(new(ConstOp.Leaf, token, val));
+      public void PushOp(Token token, ConstOp op) => DoAdd(new(op, token));
+
+      private void DoAdd(ExprNode node)
+      {
+        Add(node);
+      }
+    }
   }
 }

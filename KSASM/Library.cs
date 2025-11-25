@@ -10,8 +10,12 @@ namespace KSASM
     public static string LibraryDir;
     public static readonly List<string> Index = [];
 
+    private static Dictionary<string, SourceString> cache = [];
+
     public static SourceString LoadImport(string name)
     {
+      if (cache.TryGetValue(name, out var cached))
+        return cached;
       var path = Path.Join(LibraryDir, $"{name}.ksasm");
       if (!File.Exists(path))
         throw new InvalidOperationException($"unknown import '{name}'");
@@ -27,6 +31,13 @@ namespace KSASM
           continue;
         Index.Add(Path.GetFileNameWithoutExtension(file));
       }
+    }
+
+    public static void CacheAll()
+    {
+      RefreshIndex();
+      foreach (var name in Index)
+        cache[name] = LoadImport(name);
     }
   }
 }

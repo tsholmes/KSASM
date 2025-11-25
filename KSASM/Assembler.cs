@@ -190,50 +190,62 @@ namespace KSASM
 
       public Value EvalExpr(ConstExpr expr, ValueMode mode)
       {
+        var vals = new Stack<Value>();
         Value left = default, right = default;
-        switch (expr.Op)
+        var ops = mode.Ops();
+        foreach (var node in expr)
         {
-          case ConstOp.Leaf:
-            if (expr.Val.StringVal != null)
-            {
-              if (!Labels.TryGetValue(expr.Val.StringVal, out var lpos))
-                throw Invalid(expr.Token);
-              left.Unsigned = (ulong)lpos;
-              left.Convert(ValueMode.Unsigned, mode);
-            }
-            else
-            {
-              left = expr.Val.Value;
-              left.Convert(expr.Val.Mode, mode);
-            }
-            return left;
-          case ConstOp.Neg:
-            right = EvalExpr(expr.Right, mode);
-            mode.Ops().Negate(ref right);
-            return right;
-          case ConstOp.Add:
-            left = EvalExpr(expr.Left, mode);
-            right = EvalExpr(expr.Right, mode);
-            mode.Ops().Add(ref left, right);
-            return left;
-          case ConstOp.Sub:
-            left = EvalExpr(expr.Left, mode);
-            right = EvalExpr(expr.Right, mode);
-            mode.Ops().Sub(ref left, right);
-            return left;
-          case ConstOp.Mul:
-            left = EvalExpr(expr.Left, mode);
-            right = EvalExpr(expr.Right, mode);
-            mode.Ops().Mul(ref left, right);
-            return left;
-          case ConstOp.Div:
-            left = EvalExpr(expr.Left, mode);
-            right = EvalExpr(expr.Right, mode);
-            mode.Ops().Div(ref left, right);
-            return left;
-          default:
-            throw new InvalidOperationException($"{expr.Op}");
+          switch (node.Op)
+          {
+            case ConstOp.Leaf:
+              if (node.Val.StringVal != null)
+              {
+                if (!Labels.TryGetValue(node.Val.StringVal, out var lpos))
+                  throw Invalid(node.Token);
+                left.Unsigned = (ulong)lpos;
+                left.Convert(ValueMode.Unsigned, mode);
+              }
+              else
+              {
+                left = node.Val.Value;
+                left.Convert(node.Val.Mode, mode);
+              }
+              vals.Push(left);
+              break;
+            case ConstOp.Neg:
+              right = vals.Pop();
+              ops.Negate(ref right);
+              vals.Push(right);
+              break;
+            case ConstOp.Add:
+              right = vals.Pop();
+              left = vals.Pop();
+              ops.Add(ref left, right);
+              vals.Push(left);
+              break;
+            case ConstOp.Sub:
+              right = vals.Pop();
+              left = vals.Pop();
+              ops.Sub(ref left, right);
+              vals.Push(left);
+              break;
+            case ConstOp.Mul:
+              right = vals.Pop();
+              left = vals.Pop();
+              ops.Mul(ref left, right);
+              vals.Push(left);
+              break;
+            case ConstOp.Div:
+              right = vals.Pop();
+              left = vals.Pop();
+              ops.Div(ref left, right);
+              vals.Push(left);
+              break;
+            default:
+              throw new InvalidOperationException($"Unknown const op {node.Op}");
+          }
         }
+        return vals.Pop();
       }
 
       private Exception Invalid(Token token) => throw new InvalidOperationException(
