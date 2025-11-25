@@ -129,8 +129,8 @@ namespace KSASM.Assembly
 
     private void ParseMacro(Token token)
     {
-      var name = token[1..].ToString();
-      switch (name.ToLowerInvariant())
+      var name = token[1..];
+      switch (name)
       {
         case "macro": MacroDefine(); break;
         case "unmacro": MacroUndefine(); break;
@@ -146,7 +146,7 @@ namespace KSASM.Assembly
         case "tomacro": MacroToMacro(token); break;
         case "concat": MacroConcat(token); break;
         case "label": MacroLabel(token); break;
-        default: MacroExpand(name, token); break;
+        default: MacroExpand(name.ToString(), token); break;
       }
     }
 

@@ -106,21 +106,30 @@ namespace KSASM.Assembly
       return sb.ToString();
     }
 
+    public void EmitLabel(string label)
+    {
+      Symbols.AddLabel(label, Addr);
+      Labels[label] = Addr;
+    }
+
     public void EmitInst(Token token, ulong encoded)
     {
-      Symbols.AddInst(Addr, StackPos(token, 1));
-      Emit(DataType.U64, new Value() { Unsigned = encoded });
+      Symbols.AddInst(Addr, token);
+      Values.Add((Addr, DataType.U64, [new Value() { Unsigned = encoded }]));
+      Addr += DataType.U64.SizeBytes();
     }
 
     public void Emit(DataType type, List<Value> values)
     {
-      Values.Add((Addr, type, [.. values]));
+      Values.Add((Addr, type, values));
+      Symbols.AddData(Addr, type, values.Count);
       Addr += type.SizeBytes() * values.Count;
     }
 
     public void Emit(DataType type, params ReadOnlySpan<Value> values)
     {
       Values.Add((Addr, type, [.. values]));
+      Symbols.AddData(Addr, type, values.Length);
       Addr += type.SizeBytes() * values.Length;
     }
 

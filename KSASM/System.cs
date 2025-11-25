@@ -65,12 +65,17 @@ namespace KSASM
       var step = 0;
       stopwatch.Restart();
 
-      for (; step < maxSteps && Processor.SleepTime == 0; step++)
-        Processor.Step();
-
-      stopwatch.Stop();
-      LastSteps = step;
-      LastMs = stopwatch.Elapsed.TotalMilliseconds;
+      try
+      {
+        for (; step < maxSteps && Processor.SleepTime == 0; step++)
+          Processor.Step();
+      }
+      finally
+      {
+        stopwatch.Stop();
+        LastSteps = step;
+        LastMs = stopwatch.Elapsed.TotalMilliseconds;
+      }
     }
 
     private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");

@@ -53,6 +53,12 @@ namespace KSASM.Assembly
     public ReadOnlySpan<char> this[Range range] => Span()[range];
     public char this[int index] => Span()[index];
 
+    public ReadOnlySpan<char> SourceLine()
+    {
+      var (line, _) = Source.LinePos(Pos);
+      return Source.Line(line - 1);
+    }
+
     public static implicit operator ReadOnlySpan<char>(Token token) => token.Span();
   }
 

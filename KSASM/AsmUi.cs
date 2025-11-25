@@ -9,6 +9,7 @@ using System.Diagnostics;
 using Brutal.ImGuiApi.Abstractions;
 using System.Linq;
 using KSASM.Assembly;
+using System.Text;
 
 namespace KSASM
 {
@@ -198,12 +199,25 @@ namespace KSASM
       try
       {
         Current.OnFrame(maxSteps);
-        stats = $"@{Current.Processor.PC}({Current.Symbols?.InstLocation(Current.Processor.PC)}) {Current.LastSteps} steps in {Current.LastMs:0.##}ms";
       }
       catch (Exception ex)
       {
         AddOutput(ex.ToString());
       }
+
+      var sb = new StringBuilder();
+      var pc = Current.Processor.PC;
+      sb.Append('@').Append(pc).AppendLine();
+      if (Current.Symbols != null)
+      {
+        var loc = Current.Symbols.SourceLine(pc);
+        sb.Append(loc).AppendLine();
+        var id = Current.Symbols.ID(pc);
+        sb.Append(id.Label).Append('+').Append(id.Offset).AppendLine();
+      }
+      sb.Append(Current.LastSteps).Append(" steps in ");
+      sb.AppendFormat("{0:0.##}", Current.LastMs).Append("ms");
+      stats = sb.ToString();
 
       if (doStep)
         Stop();

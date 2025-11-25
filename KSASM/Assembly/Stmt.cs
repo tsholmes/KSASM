@@ -15,8 +15,7 @@ namespace KSASM.Assembly
     public Token Token;
     public string Label;
 
-    public override void FirstPass(Context ctx) =>
-      ctx.Labels[Label] = ctx.Addr;
+    public override void FirstPass(Context ctx) => ctx.EmitLabel(Label);
 
     public override void SecondPass(Context ctx)
     {

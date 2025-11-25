@@ -23,19 +23,21 @@ namespace KSASM.Assembly
     public int Length => Source.Length;
 
     public char this[int idx] => Source[idx];
-
-    public Token Token(TokenType type, int pos, int len) => new()
-    {
-      Source = this,
-      Type = type,
-      Pos = pos,
-      Len = len,
-    };
+    public ReadOnlySpan<char> this[Range range] => Source.AsSpan()[range];
 
     public string TokenStr(Token token) => Source[token.Pos..(token.Pos + token.Len)];
 
     public ReadOnlySpan<char> TokenSpan(Token token) =>
       Source.AsSpan()[token.Pos..(token.Pos + token.Len)];
+
+    public ReadOnlySpan<char> Line(int line)
+    {
+      var start = lineStarts[line];
+      var end = line < lineStarts.Count - 1 ? lineStarts[line + 1] : Source.Length;
+      if (end > start)
+        end--; // cut off NL
+      return this[start..end];
+    }
 
     public (int line, int lpos) LinePos(int pos)
     {
