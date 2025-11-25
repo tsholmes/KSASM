@@ -53,13 +53,13 @@ namespace KSASM
         PeekType(type, out token) && lexer.Take(out token);
 
       private void AddLabel(Token token) =>
-        Statements.Add(new LabelStatement { Label = new(token[..^1]) });
+        Statements.Add(new LabelStatement { Token = token, Label = new(token[..^1]) });
 
       private void AddPosition(Token token)
       {
         if (!int.TryParse(token[1..], out var addr))
           Invalid(token);
-        Statements.Add(new PositionStatement { Addr = addr });
+        Statements.Add(new PositionStatement { Token = token, Addr = addr });
       }
 
       private void ParseDataLine()
@@ -82,10 +82,10 @@ namespace KSASM
           else if (TakeType(TokenType.Position, out token))
             AddPosition(token);
           else if (TakeType(TokenType.Word, out token))
-            Statements.Add(new ValueStatement() { Type = curType, StrValue = token.Str() });
+            Statements.Add(new ValueStatement { Token = token, Type = curType, StrValue = token.Str() });
           else if (TakeType(TokenType.Number, out token))
           {
-            var stmt = new ValueStatement() { Type = curType };
+            var stmt = new ValueStatement { Token = token, Type = curType };
             var valid = false;
             switch (curType.VMode())
             {
@@ -113,7 +113,7 @@ namespace KSASM
             if (curType != DataType.U8)
               Invalid(token);
 
-            var stmt = new ValueListStatement { Values = [] };
+            var stmt = new ValueListStatement { Token = token, Values = [] };
             var str = token[1..^1];
             for (var i = 0; i < str.Length; i++)
             {
@@ -405,6 +405,8 @@ namespace KSASM
     {
       public void PushVal(Token token, ConstVal val) => DoAdd(new(ConstOp.Leaf, token, val));
       public void PushOp(Token token, ConstOp op) => DoAdd(new(op, token));
+
+      public ExprNode Root => Count > 0 ? this[^1] : default;
 
       private void DoAdd(ExprNode node)
       {

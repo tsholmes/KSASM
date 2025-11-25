@@ -9,24 +9,22 @@ namespace KSASM
   {
     public static bool Debug = false;
 
-    public static void Assemble(SourceString source, MemoryAccessor target)
+    public static DebugSymbols Assemble(SourceString source, MemoryAccessor target)
     {
       var ctx = new Context();
       var parser = new Parser(source, ctx);
       parser.Parse();
 
-      var state = new State(ctx);
-
       foreach (var stmt in parser.Statements)
-        stmt.FirstPass(state);
-      state.EmitConstants();
-      state.Addr = 0;
+        stmt.FirstPass(ctx);
+      ctx.EmitConstants();
+      ctx.Addr = 0;
       foreach (var stmt in parser.Statements)
-        stmt.SecondPass(state);
+        stmt.SecondPass(ctx);
 
       var sb = new StringBuilder();
 
-      foreach (var (addr, type, vals) in state.Values)
+      foreach (var (addr, type, vals) in ctx.Values)
       {
         for (var i = 0; i < vals.Count; i++)
           target.Write(addr + i * type.SizeBytes(), type, vals[i]);
@@ -34,7 +32,7 @@ namespace KSASM
         {
           sb.Clear();
           sb.Append("ASM ");
-          foreach (var (label, laddr) in state.Labels)
+          foreach (var (label, laddr) in ctx.Labels)
             if (laddr == addr)
               sb.Append(label).Append(": ");
           sb.Append($"{addr}: {type}");
@@ -43,42 +41,8 @@ namespace KSASM
           Console.WriteLine(sb.ToString());
         }
       }
-    }
 
-    public class Context
-    {
-      public List<Token> Frames = [];
-
-      public int AddFrame(Token token)
-      {
-        var idx = Frames.Count;
-        Frames.Add(token);
-        return idx;
-      }
-
-      public string StackPos(Token token)
-      {
-        var sb = new StringBuilder();
-
-        while (true)
-        {
-          if (sb.Length > 0)
-            sb.Append('@');
-          if (token.Source != null)
-          {
-            var (line, lpos) = token.Source.LinePos(token.Pos);
-            sb.AppendFormat("{0}:{1}:{2}('{3}')", token.Source.Name, line, lpos, token.Str());
-          }
-          else
-            sb.AppendFormat("?:{0}('{1}')", token.Pos, token.Str());
-
-          if (token.ParentFrame == -1)
-            break;
-          token = Frames[token.ParentFrame];
-        }
-
-        return sb.ToString();
-      }
+      return ctx.Symbols;
     }
 
     public abstract class TokenProcessor(Context ctx)
@@ -97,8 +61,11 @@ namespace KSASM
         $"invalid token {token.Type} {ctx.StackPos(token)}");
     }
 
-    public class State(Context ctx)
+    public class Context
     {
+      public readonly List<Token> Frames = [];
+      public readonly DebugSymbols Symbols = new();
+
       public readonly Dictionary<string, int> Labels = [];
       public readonly List<(int, DataType, List<Value>)> Values = [];
 
@@ -107,13 +74,50 @@ namespace KSASM
 
       public int Addr = 0;
 
-      public void Emit(DataType type, params List<Value> values)
+      public int AddFrame(Token token)
+      {
+        var idx = Frames.Count;
+        Frames.Add(token);
+        return idx;
+      }
+
+      public string StackPos(Token token, int frameLimit = 20)
+      {
+        var sb = new StringBuilder();
+
+        for (var i = 0; i < frameLimit; i++)
+        {
+          if (sb.Length > 0)
+            sb.Append('@');
+          if (token.Source != null)
+          {
+            var (line, lpos) = token.Source.LinePos(token.Pos);
+            sb.AppendFormat("{0}:{1}:{2}('{3}')", token.Source.Name, line, lpos, token.Str());
+          }
+          else
+            sb.AppendFormat("?:{0}('{1}')", token.Pos, token.Str());
+
+          if (token.ParentFrame == -1)
+            break;
+          token = Frames[token.ParentFrame];
+        }
+
+        return sb.ToString();
+      }
+
+      public void EmitInst(Token token, ulong encoded)
+      {
+        Symbols.AddInst(Addr, StackPos(token, 1));
+        Emit(DataType.U64, new Value() { Unsigned = encoded });
+      }
+
+      public void Emit(DataType type, List<Value> values)
       {
         Values.Add((Addr, type, [.. values]));
         Addr += type.SizeBytes() * values.Count;
       }
 
-      public void Emit(DataType type, Span<Value> values)
+      public void Emit(DataType type, params ReadOnlySpan<Value> values)
       {
         Values.Add((Addr, type, [.. values]));
         Addr += type.SizeBytes() * values.Length;
@@ -176,8 +180,7 @@ namespace KSASM
         foreach (var ((type, vs), width) in maxWidths)
         {
           constAddrs[(type, vs)] = Addr;
-          for (var i = 0; i < width; i++)
-            Emit(type, vs[i]);
+          Emit(type, vs[..width]);
         }
 
         foreach (var (type, expr, _) in ConstExprs)
@@ -249,7 +252,7 @@ namespace KSASM
       }
 
       private Exception Invalid(Token token) => throw new InvalidOperationException(
-        $"invalid token {token.Type} '{token.Str()}' at {ctx.StackPos(token)}");
+        $"invalid token {token.Type} '{token.Str()}' at {StackPos(token)}");
     }
   }
 }

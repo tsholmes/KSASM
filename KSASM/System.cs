@@ -13,6 +13,7 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
+    public Assembler.DebugSymbols Symbols;
     public readonly Terminal Terminal;
     private readonly Action<string> log;
 
@@ -45,6 +46,8 @@ namespace KSASM
 
       LastSteps = 0;
       LastMs = 0;
+
+      Symbols = null;
     }
 
     public void OnFrame(int maxSteps = STEPS_PER_FRAME)

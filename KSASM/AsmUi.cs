@@ -156,7 +156,7 @@ namespace KSASM
       if (ImGui.Button("Stop##stop"))
         Stop();
 
-      ImGui.SameLine(); ImGui.Text(stats);
+      ImGui.Text(stats);
 
       foreach (var line in output)
         ImGui.Text(line);
@@ -197,7 +197,7 @@ namespace KSASM
       try
       {
         Current.OnFrame(maxSteps);
-        stats = $"@{Current.Processor.PC} {Current.LastSteps} steps in {Current.LastMs:0.##}ms";
+        stats = $"@{Current.Processor.PC}({Current.Symbols?.InstLocation(Current.Processor.PC)}) {Current.LastSteps} steps in {Current.LastMs:0.##}ms";
       }
       catch (Exception ex)
       {
@@ -219,7 +219,7 @@ namespace KSASM
         var len = buffer.IndexOf((byte)0);
         var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
 
-        Assembler.Assemble(new("script", source), Current.Processor.Memory);
+        Current.Symbols = Assembler.Assemble(new("script", source), Current.Processor.Memory);
 
         stopwatch.Stop();
         AddOutput($"Assembled in {stopwatch.Elapsed.Milliseconds:0.##}ms");
