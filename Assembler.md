@@ -40,10 +40,10 @@ line-prefix = Label | Position
 
 statement = data-line | instruction
 
-data-line = Type (Label | Position | Type | String | data-number | data-const)*
+data-line = (Type (Label | Position | String | data-number | data-const)+)+
   :u8 0*10 label: "string" @300 :u64 $(const * val + 3)
 
-data-number = Number Width?
+data-number = (Number | Word) Width?
 
 data-const = COpen const-expr PClose Width?
   $(a*(b+123))
