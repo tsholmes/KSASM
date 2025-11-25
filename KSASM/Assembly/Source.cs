@@ -4,7 +4,18 @@ using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
-  public class SourceString
+  public interface ISource
+  {
+    public int Length { get; }
+    public char this[int idx] { get; }
+    public ReadOnlySpan<char> this[Range range] { get; }
+    public string TokenStr(Token token);
+    public ReadOnlySpan<char> TokenSpan(Token token);
+    public ReadOnlySpan<char> Line(int line);
+    public (int line, int lpos) LinePos(int pos);
+  }
+
+  public class SourceString : ISource
   {
     public readonly string Name;
     public readonly string Source;
@@ -61,7 +72,15 @@ namespace KSASM.Assembly
       {
         var tok = Tokens[index];
         var (off, len) = tok.Range.GetOffsetAndLength(Source.Length);
-        return new() { Source = Source, Type = tok.Type, Pos = off, Len = len, ParentFrame = -1 };
+        return new()
+        {
+          Source = Source,
+          Type = tok.Type,
+          Pos = off,
+          Len = len,
+          ParentFrame = -1,
+          PreviousFrame = -1
+        };
       }
     }
 

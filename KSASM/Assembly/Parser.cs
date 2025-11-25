@@ -12,7 +12,7 @@ namespace KSASM.Assembly
     public Parser(SourceString source, Context ctx) : base(ctx)
     {
       var tsource = Lexer.LexTokens(source);
-      lexer = new(new MacroParser(tsource.AsStream(), ctx), -1);
+      lexer = new(new MacroParser(tsource.AsStream(), ctx), -2);
     }
 
     public void Parse()

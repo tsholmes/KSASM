@@ -6,6 +6,7 @@ namespace KSASM.Assembly
 {
   public class DebugSymbols
   {
+    private readonly List<Token> frames = [];
     private readonly Dictionary<int, Token> instTokens = [];
     private readonly Dictionary<string, int> labelToAddr = [];
     private readonly Dictionary<int, string> addrToLabel = [];
@@ -14,6 +15,12 @@ namespace KSASM.Assembly
 
     private readonly Dictionary<int, AddrId> addrToId = [];
     private readonly List<AddrId> allIds = [];
+
+    public int AddFrame(Token token)
+    {
+      frames.Add(token);
+      return frames.Count - 1;
+    }
 
     public void AddInst(int address, Token token) => instTokens[address] = token;
     public ReadOnlySpan<char> SourceLine(int address)
@@ -111,5 +118,50 @@ namespace KSASM.Assembly
       public int CompareTo(object obj) => obj switch { AddrId other => CompareTo(other), _ => 0 };
     }
     public record struct DataRecord(int Address, DataType Type, int Width);
+
+    public record struct FrameIter
+    {
+      private readonly DebugSymbols symbols;
+      private Token root;
+      private Token current;
+      private bool done;
+      private bool nextNew;
+
+      public FrameIter(DebugSymbols symbols, Token root)
+      {
+        this.symbols = symbols;
+        this.root = root;
+        current = root;
+        done = false;
+      }
+
+      public bool Next(out Token token, out bool newRoot)
+      {
+        if (done)
+        {
+          token = default;
+          newRoot = default;
+          return false;
+        }
+
+        token = current;
+        newRoot = nextNew;
+
+        nextNew = false;
+
+        if (current.ParentFrame != -1)
+          current = symbols.frames[current.ParentFrame];
+        else if (root.PreviousFrame != -1)
+        {
+          root = symbols.frames[root.PreviousFrame];
+          current = root;
+          nextNew = true;
+        }
+        else
+          done = true;
+
+        return true;
+      }
+    }
   }
 }

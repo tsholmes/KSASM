@@ -64,7 +64,6 @@ namespace KSASM.Assembly
 
   public class Context
   {
-    public readonly List<Token> Frames = [];
     public readonly DebugSymbols Symbols = new();
 
     public readonly Dictionary<string, int> Labels = [];
@@ -75,32 +74,31 @@ namespace KSASM.Assembly
 
     public int Addr = 0;
 
-    public int AddFrame(Token token)
-    {
-      var idx = Frames.Count;
-      Frames.Add(token);
-      return idx;
-    }
+    public int AddFrame(Token token) => Symbols.AddFrame(token);
 
     public string StackPos(Token token, int frameLimit = 20)
     {
       var sb = new StringBuilder();
 
+      var iter = new DebugSymbols.FrameIter(Symbols, token);
+
       for (var i = 0; i < frameLimit; i++)
       {
-        if (sb.Length > 0)
-          sb.Append('@');
-        if (token.Source != null)
-        {
-          var (line, lpos) = token.Source.LinePos(token.Pos);
-          sb.AppendFormat("{0}:{1}:{2}('{3}')", token.Source.Name, line, lpos, token.Str());
-        }
-        else
-          sb.AppendFormat("?:{0}('{1}')", token.Pos, token.Str());
-
-        if (token.ParentFrame == -1)
+        if (!iter.Next(out var frame, out var newRoot))
           break;
-        token = Frames[token.ParentFrame];
+
+        if (i > 0)
+          sb.AppendLine();
+
+        if (newRoot)
+          sb.AppendLine("== expanded from ==");
+
+        if (frame.Source != null)
+        {
+          var (line, lpos) = frame.Source.LinePos(frame.Pos);
+          sb.Append('\'').Append(frame.Span()).Append("'@");
+          sb.Append(frame.Source.Name).Append(':').Append(line).Append(':').Append(lpos);
+        }
       }
 
       return sb.ToString();

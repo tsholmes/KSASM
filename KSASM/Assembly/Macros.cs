@@ -421,6 +421,8 @@ namespace KSASM.Assembly
         }
       }
 
+      var frame = ctx.AddFrame(ntoken with { OverrideStr = macro.Name });
+
       var chunk = new ChunkReader { P = this };
       if (lexer.TakeType(TokenType.BOpen, out _))
         chunk.TrackB = chunk.EndBClose = true;
@@ -428,7 +430,7 @@ namespace KSASM.Assembly
         chunk.EndLine = true;
 
       while (chunk.Take(out var token))
-        macro.Tokens.Add(token);
+        macro.Tokens.Add(token with { PreviousFrame = token.ParentFrame, ParentFrame = frame });
 
       if (chunk.TrackB && !lexer.TakeType(TokenType.BClose, out _))
         throw Invalid();

@@ -39,6 +39,7 @@ namespace KSASM.Assembly
     public int Len;
     public string OverrideStr;
     public int ParentFrame;
+    public int PreviousFrame;
 
     public string Str() => OverrideStr ?? Source?.TokenStr(this) ?? "";
     public ReadOnlySpan<char> Span()
@@ -118,10 +119,15 @@ namespace KSASM.Assembly
     private void FillNext()
     {
       if (!hasNext && !eof)
+      {
         hasNext = stream.Next(out next);
+        if (hasNext && parentFrame >= -1 && next.ParentFrame != parentFrame)
+        {
+          next.PreviousFrame = next.ParentFrame;
+          next.ParentFrame = parentFrame;
+        }
+      }
       eof = !hasNext;
-      if (parentFrame >= -1)
-        next.ParentFrame = parentFrame;
     }
   }
 
