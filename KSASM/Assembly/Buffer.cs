@@ -7,8 +7,7 @@ namespace KSASM.Assembly
   {
     private readonly AppendBuffer<char> sourceData = new();
     private readonly AppendBuffer<SourceRecord> sources = new();
-    private readonly AppendBuffer<SourceToken> sourceTokens = new();
-    private readonly AppendBuffer<SynthToken> synthTokens = new();
+    private readonly AppendBuffer<Token> tokens = new();
 
     public RawSourceBuilder NewRawSource(string name, ReadOnlySpan<char> data, TokenIndex producer)
     {
@@ -18,104 +17,46 @@ namespace KSASM.Assembly
 
     public SyntheticSourceBuilder NewSynthSource(string name, TokenIndex producer) => new(this, name, producer);
 
-    private void AddSource(SourceIndex source, string name, FixedRange data, FixedRange tokens, bool synthetic)
+    private void FinishSource(SourceIndex index, FixedRange data, FixedRange tokens)
     {
-      if (sources[source.Index].Name != name)
+      var source = sources[index.Index];
+      if (source.Tokens.Length != -1)
         throw new InvalidOperationException();
-      sources[source.Index] = new(name, data, tokens, synthetic);
+      sources[index.Index] = new(source.Name, data, tokens, source.Synthetic, source.Producer);
     }
 
-    private SourceIndex ReserveSource(string name, bool synthetic, FixedRange dataRange)
-    {
-      sources.Add(new SourceRecord(
-        name,
-        dataRange,
-        new(synthetic ? synthTokens.Length : sourceTokens.Length, -1),
-        synthetic));
-      return new(sources.Length - 1);
-    }
+    private SourceIndex ReserveSource(string name, bool synthetic, FixedRange dataRange, TokenIndex producer) =>
+      new(sources.Add(new SourceRecord(name, dataRange, new(tokens.Length, -1), synthetic, producer)));
 
-    private int AddSourceToken(SourceIndex source, TokenType type, FixedRange range, TokenIndex producer) =>
-      sourceTokens.Add(new SourceToken(source, type, range, producer));
+    private TokenIndex AddToken(SourceIndex source, TokenType type, FixedRange data, TokenIndex previous) =>
+      new(tokens.Add(new(source, new(tokens.Length), type, data, previous)));
 
-    private int AddSynthToken(
-      SourceIndex source, TokenType type, FixedRange data, TokenIndex previous, TokenIndex producer
-    ) => synthTokens.Add(new SynthToken(source, type, data, previous, producer));
-
-    public Token this[TokenIndex idx]
-    {
-      get
-      {
-        if (idx.Synthetic)
-        {
-          ref var tok = ref synthTokens[idx.Index];
-          return new(tok.Type, tok.Data, idx, tok.Source, tok.Previous, tok.Producer);
-        }
-        else
-        {
-          ref var tok = ref sourceTokens[idx.Index];
-          return new(tok.Type, tok.Data, idx, tok.Source, TokenIndex.Invalid, tok.Producer);
-        }
-      }
-    }
-
+    public int TokenCount => tokens.Length;
+    public Token this[TokenIndex idx] => tokens[idx.Index];
     public ReadOnlySpan<char> this[Token token] => Data(token.Data);
-
-    public int SynthTokenCount => synthTokens.Length;
-
-    public ReadOnlySpan<char> SourceName(SourceIndex source) => sources[source.Index].Name;
-
-    public TokenEnumerable SourceTokens(SourceIndex src)
-    {
-      var source = sources[src.Index];
-      return TokenRange(source.Tokens, source.Synthetic);
-    }
-
-    public TokenEnumerable TokenRange(FixedRange range, bool synthetic) => new(this, range, synthetic);
-
-    public ReadOnlySpan<SynthToken> SynthTokens(FixedRange range) => synthTokens[range];
-
-    public TokenReader SourceReader(SourceIndex source) => new(this, source);
-
     public ReadOnlySpan<char> Data(FixedRange range) => sourceData[range];
 
+    public ReadOnlySpan<char> SourceName(SourceIndex source) => sources[source.Index].Name;
     public SourceRecord Source(SourceIndex source) => sources[source.Index];
+    public TokenReader SourceReader(SourceIndex source) => new(this, source);
+    public TokenEnumerable SourceTokens(SourceIndex src) => TokenRange(sources[src.Index].Tokens);
+    public TokenEnumerable TokenRange(FixedRange range) => new(this, range);
+    public ReadOnlySpan<Token> TokenSpan(FixedRange range) => tokens[range];
 
-    // TODO: maybe merge SourceToken/SynthToken and get rid of synthetic flags
-    private readonly struct SourceToken(SourceIndex source, TokenType type, FixedRange data, TokenIndex producer)
+    public struct TokenEnumerable(ParseBuffer buf, FixedRange range)
     {
-      public readonly SourceIndex Source = source;
-      public readonly TokenType Type = type;
-      public readonly FixedRange Data = data;
-      public readonly TokenIndex Producer = producer;
-    }
-    public readonly struct SynthToken(
-      SourceIndex source, TokenType type, FixedRange data, TokenIndex previous, TokenIndex producer)
-    {
-      public readonly SourceIndex Source = source;
-      public readonly TokenType Type = type;
-      public readonly FixedRange Data = data;
-      public readonly TokenIndex Previous = previous;
-      public readonly TokenIndex Producer = producer;
+      public TokenEnumerator GetEnumerator() => new(buf, range);
     }
 
-    public struct TokenEnumerable(ParseBuffer buf, FixedRange range, bool synthetic)
-    {
-      public TokenEnumerator GetEnumerator() => new(buf, range, synthetic);
-    }
-
-    public ref struct TokenEnumerator(ParseBuffer buf, FixedRange range, bool synthetic)
+    public struct TokenEnumerator(ParseBuffer buf, FixedRange range)
     {
       private int index = -1;
-
-      public Token Current => buf[new TokenIndex(range.Start + index, synthetic)];
-
+      public Token Current => buf[new TokenIndex(range.Start + index)];
       public bool MoveNext() => ++index < range.Length;
     }
 
     public struct TokenReader(ParseBuffer buf, SourceIndex source)
     {
-      private readonly bool synthetic = buf.sources[source.Index].Synthetic;
       private readonly FixedRange tokens = buf.sources[source.Index].Tokens;
       private int index = 0;
 
@@ -128,7 +69,7 @@ namespace KSASM.Assembly
           token = default;
           return false;
         }
-        token = buf[new TokenIndex(tokens.Start + index, synthetic)];
+        token = buf[new TokenIndex(tokens.Start + index)];
         return true;
       }
 
@@ -154,52 +95,50 @@ namespace KSASM.Assembly
     public readonly struct RawSourceBuilder(
       ParseBuffer buf, string name, FixedRange dataRange, TokenIndex producer) : IDisposable
     {
-      public readonly SourceIndex Source = buf.ReserveSource(name, false, dataRange);
-      private readonly int tokenStart = buf.sourceTokens.Length;
+      public readonly SourceIndex Source = buf.ReserveSource(name, false, dataRange, producer);
+      private readonly int tokenStart = buf.tokens.Length;
 
       public TokenIndex AddToken(TokenType type, FixedRange range)
       {
         range += dataRange.Start;
         if (range.End > dataRange.End)
           throw new IndexOutOfRangeException();
-        var idx = buf.AddSourceToken(Source, type, range, producer);
-        return new(idx, false);
+        return buf.AddToken(Source, type, range, producer);
       }
 
       public void Dispose() =>
-        buf.AddSource(Source, name, dataRange, new(tokenStart, buf.sourceTokens.Length - tokenStart), false);
+        buf.FinishSource(Source, dataRange, new(tokenStart, buf.tokens.Length - tokenStart));
     }
 
     public readonly struct SyntheticSourceBuilder(ParseBuffer buf, string name, TokenIndex producer) : IDisposable
     {
-      public readonly SourceIndex Source = buf.ReserveSource(name, true, new(buf.sourceData.Length, -1));
+      public readonly SourceIndex Source = buf.ReserveSource(name, true, new(buf.sourceData.Length, -1), producer);
       private readonly int dataStart = buf.sourceData.Length;
-      private readonly int tokenStart = buf.synthTokens.Length;
+      private readonly int tokenStart = buf.tokens.Length;
 
-      public TokenIndex FirstToken => new(tokenStart, true);
-      public TokenIndex NextToken => new(buf.synthTokens.Length, true);
-      public TokenIndex LastToken => new(buf.synthTokens.Length - 1, true);
+      public TokenIndex FirstToken => new(tokenStart);
+      public TokenIndex NextToken => new(buf.tokens.Length);
+      public TokenIndex LastToken => new(buf.tokens.Length - 1);
 
       public TokenIndex CopyToken(TokenIndex from)
       {
         var tok = buf[from];
-        var idx = buf.AddSynthToken(Source, tok.Type, tok.Data, from, producer);
-        return new(idx, true);
+        return buf.AddToken(Source, tok.Type, tok.Data, from);
       }
 
       public SyntheticTokenBuilder MakeToken(TokenType type, TokenIndex from) =>
-        new(buf, Source, type, from, producer);
+        new(buf, Source, type, from);
 
       public void Dispose()
       {
         var data = new FixedRange(dataStart, buf.sourceData.Length - dataStart);
-        var tokens = new FixedRange(tokenStart, buf.synthTokens.Length - tokenStart);
-        buf.AddSource(Source, name, data, tokens, true);
+        var tokens = new FixedRange(tokenStart, buf.tokens.Length - tokenStart);
+        buf.FinishSource(Source, data, tokens);
       }
     }
 
     public readonly struct SyntheticTokenBuilder(
-      ParseBuffer buf, SourceIndex source, TokenType type, TokenIndex from, TokenIndex producer) : IDisposable
+      ParseBuffer buf, SourceIndex source, TokenType type, TokenIndex from) : IDisposable
     {
       private readonly int dataStart = buf.sourceData.Length;
 
@@ -222,46 +161,40 @@ namespace KSASM.Assembly
         AddData(data[..length]);
       }
 
-      public void Dispose() =>
-        buf.AddSynthToken(source, type, new(dataStart, buf.sourceData.Length - dataStart), from, producer);
+      public void Dispose() => buf.AddToken(source, type, new(dataStart, buf.sourceData.Length - dataStart), from);
     }
   }
 
   public readonly struct Token(
-    TokenType type, FixedRange data, TokenIndex index,
-    SourceIndex source, TokenIndex previous, TokenIndex producer)
+    SourceIndex source, TokenIndex index, TokenType type, FixedRange data, TokenIndex previous)
   {
+    public readonly SourceIndex Source = source;
+    public readonly TokenIndex Index = index;
     public readonly TokenType Type = type;
     public readonly FixedRange Data = data;
-    public readonly TokenIndex Index = index;
-    public readonly SourceIndex Source = source;
     public readonly TokenIndex Previous = previous;
-    public readonly TokenIndex Producer = producer;
   }
 
-  public readonly struct TokenIndex(int index, bool synthetic)
+  public readonly struct TokenIndex(int index)
   {
-    public static readonly TokenIndex Invalid = new(-1, false);
-
+    public static readonly TokenIndex Invalid = new(-1);
     public readonly int Index = index;
-    public readonly bool Synthetic = synthetic;
 
-    public static bool operator ==(TokenIndex left, TokenIndex right) =>
-      left.Index == right.Index && left.Synthetic == right.Synthetic;
-    public static bool operator !=(TokenIndex left, TokenIndex right) =>
-      left.Index != right.Index || left.Synthetic != right.Synthetic;
+    public static bool operator ==(TokenIndex left, TokenIndex right) => left.Index == right.Index;
+    public static bool operator !=(TokenIndex left, TokenIndex right) => left.Index != right.Index;
 
-    public override bool Equals(object obj) => obj is TokenIndex right && (this == right);
-    public override int GetHashCode() => HashCode.Combine(Index, Synthetic);
+    public override bool Equals(object obj) => obj is TokenIndex other && Index == other.Index;
+    public override int GetHashCode() => Index;
   }
 
   public readonly struct SourceIndex(int index) { public readonly int Index = index; }
 
-  public readonly struct SourceRecord(string name, FixedRange data, FixedRange tokens, bool synthetic)
+  public readonly struct SourceRecord(string name, FixedRange data, FixedRange tokens, bool synthetic, TokenIndex producer)
   {
     public readonly string Name = name;
     public readonly FixedRange Data = data;
     public readonly FixedRange Tokens = tokens;
     public readonly bool Synthetic = synthetic;
+    public readonly TokenIndex Producer = producer;
   }
 }

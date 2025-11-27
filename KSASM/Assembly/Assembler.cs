@@ -81,7 +81,7 @@ namespace KSASM.Assembly
       {
         bool newRoot;
         if (newRoot = current == TokenIndex.Invalid)
-          lastRoot = current = buffer[lastRoot].Producer;
+          lastRoot = current = buffer.Source(buffer[lastRoot].Source).Producer;
         if (current == TokenIndex.Invalid)
         {
           more = false;

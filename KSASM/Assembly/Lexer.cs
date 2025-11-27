@@ -231,24 +231,30 @@ namespace KSASM.Assembly
       return source[index];
     }
 
-    private static bool IsWordStart(char c) => c switch
+    public void Dispose()
+    {
+      s.AddToken(TokenType.EOL, new(source.Length, 0));
+      s.Dispose();
+    }
+
+    public static bool IsWordStart(char c) => c switch
     {
       '_' => true,
       >= 'A' and <= 'Z' => true,
       >= 'a' and <= 'z' => true,
       _ => false,
     };
+    public static bool IsDigit(char c) => char.IsAsciiDigit(c);
+    public static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
+    public static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
 
-    private static bool IsDigit(char c) => char.IsAsciiDigit(c);
-
-    private static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
-
-    private static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
-
-    public void Dispose()
-    {
-      s.AddToken(TokenType.EOL, new(source.Length, 0));
-      s.Dispose();
-    }
+    public static bool NeedsSpace(TokenType firstType, char firstEnd, TokenType secondType, char secondStart) =>
+      (firstType, firstEnd, secondType, secondStart) switch
+      {
+        (TokenType.Label or TokenType.Comma, _, _, _) => true,
+        (_, _, TokenType.Mult, _) => true,
+        _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
+        _ => false,
+      };
   }
 }

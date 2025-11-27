@@ -30,8 +30,9 @@ namespace KSASM.Assembly
       var root = token;
       while (true)
       {
-        if (token.Producer != TokenIndex.Invalid)
-          token = buffer[token.Producer];
+        var source = buffer.Source(token.Source);
+        if (source.Producer != TokenIndex.Invalid)
+          token = buffer[source.Producer];
         else if (token.Previous != TokenIndex.Invalid)
           token = buffer[token.Previous];
         else
@@ -42,7 +43,7 @@ namespace KSASM.Assembly
       return root.Index;
     }
 
-    public string SourceName(TokenIndex tokeni) => buffer.Source(buffer[tokeni].Source).Name;
+    public ReadOnlySpan<char> SourceName(TokenIndex tokeni) => buffer.SourceName(buffer[tokeni].Source);
 
     public ReadOnlySpan<char> SourceLine(TokenIndex tok, out int lnum, out int loff)
     {
@@ -61,14 +62,18 @@ namespace KSASM.Assembly
         loff = 0;
 
         var len = 0;
+        var prevType = TokenType.Invalid;
+        var prevEnd = (char)0;
         for (var i = lrange.Start; i < lrange.End && len < lineBuffer.Length; i++)
         {
-          var token = buffer[new TokenIndex(i, true)];
+          var token = buffer[new TokenIndex(i)];
           if (token.Type == TokenType.EOL)
             break;
-          if (len > 0)
-            lineBuffer[len++] = ' ';
           var tdata = buffer[token];
+          if (len > 0 && tdata.Length > 0 && Lexer.NeedsSpace(prevType, prevEnd, token.Type, tdata[0]))
+            lineBuffer[len++] = ' ';
+          prevType = token.Type;
+          prevEnd = tdata.Length > 0 ? tdata[^1] : default;
           if (len + tdata.Length > lineBuffer.Length)
             tdata = tdata[..(lineBuffer.Length - len)];
           tdata.CopyTo(lineBuffer.AsSpan(len));
@@ -120,7 +125,7 @@ namespace KSASM.Assembly
         var range = srecord.Tokens;
         // if range unfinished, take all tokens to end
         if (range.End == -1)
-          range = new(range.Start, buffer.SynthTokenCount);
+          range = new(range.Start, buffer.TokenCount);
 
         var start = range.Start;
         var current = start;
@@ -129,7 +134,7 @@ namespace KSASM.Assembly
           var cend = (start + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
           if (cend > range.End)
             cend = range.End;
-          var tokens = buffer.SynthTokens(new(current, cend - current));
+          var tokens = buffer.TokenSpan(new(current, cend - current));
           for (var i = 0; i < tokens.Length; i++)
           {
             var lend = i + 1 + current;

@@ -9,17 +9,13 @@ namespace KSASM.Assembly
     public static bool DebugMacros = false;
 
     private readonly RefStack<ParseBuffer.TokenReader> readerStack = new();
-
     private readonly Stack<AppendBuffer<TokenIndex>> tempStack = new();
-
     private readonly Dictionary<string, MacroDef> macros = [];
-
     private readonly AppendBuffer<char> nsbuf = new();
     private readonly Stack<int> nslens = new();
 
     private int regionPos = 0x00100000;
     private int ifDepth = 0;
-
     private int eolCount = 0;
 
     private ref ParseBuffer.TokenReader Reader
@@ -517,7 +513,7 @@ namespace KSASM.Assembly
               continue;
 
             var range = argRanges[argIdx];
-            foreach (var atoken in buffer.TokenRange(range, true))
+            foreach (var atoken in buffer.TokenRange(range))
               s.S.CopyToken(atoken.Index);
             continue;
           }
