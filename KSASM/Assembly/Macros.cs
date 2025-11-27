@@ -1,46 +1,44 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace KSASM.Assembly
 {
-  public class MacroParser : TokenProcessor, ITokenStream
+  public class MacroParser : TokenProcessor
   {
     public static bool DebugMacros = false;
 
-    private readonly LexerReader baseLexer;
-    private readonly Stack<(LexerReader, List<Token>)> macroStack = [];
-    private readonly ListPool<Token> tokenListPool = new();
-    private readonly ListPool<Range> rangeListPool = new();
-    private readonly List<string> nsStack = [];
+    private readonly RefStack<ParseBuffer.TokenReader> readerStack = new();
+
+    private readonly Stack<AppendBuffer<TokenIndex>> tempStack = new();
+
     private readonly Dictionary<string, MacroDef> macros = [];
+
+    private readonly AppendBuffer<char> nsbuf = new();
+    private readonly Stack<int> nslens = new();
 
     private int regionPos = 0x00100000;
     private int ifDepth = 0;
-    private string curNs = "";
 
     private int eolCount = 0;
 
-    public MacroParser(ITokenStream stream, Context ctx) : base(ctx)
-    {
-      this.baseLexer = new(stream, -1);
-    }
-
-    private LexerReader lexer
+    private ref ParseBuffer.TokenReader Reader
     {
       get
       {
-        (LexerReader lexer, List<Token> tokens) macro;
-        while (macroStack.TryPeek(out macro) && macro.lexer.EOF())
+        while (true)
         {
-          macro = macroStack.Pop();
-          tokenListPool.Return(macro.tokens);
+          ref var top = ref readerStack.Top;
+          if (readerStack.Length == 1 || !top.EOF)
+            return ref top;
+          readerStack.Pop();
         }
-        if (macroStack.TryPeek(out macro))
-          return macro.lexer;
-        return baseLexer;
       }
+    }
+
+    public MacroParser(ParseBuffer buffer, SourceIndex source) : base(buffer)
+    {
+      readerStack.Push(buffer.SourceReader(source));
     }
 
     public bool Next(out Token token)
@@ -54,8 +52,8 @@ namespace KSASM.Assembly
         }
         else
           eolCount = 0;
-        if (Assembler.Debug)
-          Console.WriteLine($"{token.Type} {ctx.StackPos(token)}");
+        // if (Assembler.Debug)
+        //   Console.WriteLine($"{token.Type} {ctx.StackPos(token)}");
         return true;
       }
       return false;
@@ -65,21 +63,23 @@ namespace KSASM.Assembly
     {
       while (true)
       {
-        if (!lexer.Take(out token))
+        if (!Reader.Take(out token))
           return false;
 
         if (token.Type == TokenType.Macro)
-          ParseMacro(token);
+          ParseMacro(token, buffer[token][1..]);
         else if (token.Type == TokenType.BClose)
           EndIf(token);
         else
         {
-          if (token.Type == TokenType.Label && curNs.Length > 0)
-            AddNs(ref token);
+          if (token.Type == TokenType.Label)
+            token = AddNs(token, TokenIndex.Invalid, out _);
           return true;
         }
       }
     }
+
+    protected override bool Peek(out Token token) => Reader.Peek(out token);
 
     // fetches the next expanded token, throwing an error if it is not the expected type
     private Token NextInnerTyped(TokenType type)
@@ -91,45 +91,12 @@ namespace KSASM.Assembly
       return token;
     }
 
-    private void PushLexer(LexerReader lexer, List<Token> tokens) =>
-      macroStack.Push((lexer, tokens));
+    private void PushSource(SourceIndex source) => readerStack.Push(buffer.SourceReader(source));
 
-    private void PushTokens(Token parent, List<Token> tokens)
+    private SynthSourcePush PushSynthSource(string name, TokenIndex producer) => new(this, name, producer);
+
+    private void ParseMacro(Token token, ReadOnlySpan<char> name)
     {
-      PushLexer(new(new ListTokenStream(tokens), ctx.AddFrame(parent)), tokens);
-      if (DebugMacros && parent.Span() != ".import")
-      {
-        Console.WriteLine($">>> PUSH {parent.Str()}");
-        foreach (var token in tokens)
-          Console.WriteLine($"    {token.Type} {ctx.StackPos(token)}");
-        Console.WriteLine("<<<");
-      }
-    }
-
-    private void PushTokens(Token parent, params Span<Token> tokens) =>
-      PushTokens(parent, tokenListPool.Take(tokens));
-
-    private readonly StringBuilder nsb = new();
-    private void AddNs(ref Token token)
-    {
-      nsb.Clear();
-      if (token.Type == TokenType.Macro)
-      {
-        nsb.Append('.');
-        nsb.Append(curNs);
-        nsb.Append(token[1..]);
-      }
-      else
-      {
-        nsb.Append(curNs);
-        nsb.Append(token.Span());
-      }
-      token.OverrideStr = nsb.ToString();
-    }
-
-    private void ParseMacro(Token token)
-    {
-      var name = token[1..];
       switch (name)
       {
         case "macro": MacroDefine(); break;
@@ -150,117 +117,149 @@ namespace KSASM.Assembly
       }
     }
 
+    private Token AddNs(Token token, TokenIndex producer, out SourceIndex source, bool force = false)
+    {
+      if (nsbuf.Length == 0 && !force)
+      {
+        source = new(-1);
+        return token;
+      }
+      using var s = buffer.NewSynthSource(".addns", producer);
+      source = s.Source;
+      var tdata = buffer[token];
+      using (var t = s.MakeToken(token.Type, token.Index))
+      {
+        if (token.Type == TokenType.Macro)
+        {
+          t.AddData('.');
+          tdata = tdata[1..];
+        }
+        t.AddData(nsbuf[..]);
+        t.AddData(tdata);
+      }
+      return buffer[s.LastToken];
+    }
+
     private void MacroNs()
     {
       // expand arg
       var wtoken = NextInnerTyped(TokenType.Word);
 
-      nsStack.Add(wtoken.Str());
-
-      curNs = string.Join("", nsStack);
+      var ns = buffer[wtoken];
+      nsbuf.AddRange(ns);
+      nslens.Push(ns.Length);
     }
 
     private void MacroEndNs(Token token)
     {
-      if (nsStack.Count == 0)
+      if (nslens.Count == 0)
         throw Invalid(token);
-      nsStack.RemoveAt(nsStack.Count - 1);
-
-      curNs = string.Join("", nsStack);
+      var len = nslens.Pop();
+      nsbuf.Length -= len;
     }
 
     private void MacroAddNs(Token macro)
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
       // expand arg
       if (!NextInner(out var token))
         throw Invalid();
 
-      if (token.Type == TokenType.Word || token.Type == TokenType.Macro)
-        AddNs(ref token);
-      else
+      if (token.Type is not TokenType.Word and not TokenType.Macro)
         throw Invalid(token);
 
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
 
-      PushTokens(macro, token);
+      AddNs(token, macro.Index, out var sourceIndex, force: true);
+
+      PushSource(sourceIndex);
     }
 
     private void MacroToMacro(Token macro)
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
       // expand arg
       var token = NextInnerTyped(TokenType.Word);
 
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
 
-      PushTokens(macro, token with { Type = TokenType.Macro, OverrideStr = $".{token.Span()}" });
+      using var s = PushSynthSource(".tomacro", macro.Index);
+      using var t = s.S.MakeToken(TokenType.Macro, token.Index);
+      t.AddData('.');
+      t.AddData(buffer[token]);
     }
 
     private void MacroConcat(Token macro)
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
-      if (!lexer.Take(out var token))
+      if (!Reader.Take(out var token))
         throw Invalid();
 
       if (token.Type is not TokenType.Word and not TokenType.Macro and not TokenType.Placeholder)
         throw Invalid(token);
 
-      while (lexer.TakeType(TokenType.Word, out var itoken)
-          || lexer.TakeType(TokenType.Macro, out itoken)
-          || lexer.TakeType(TokenType.Placeholder, out itoken)
-          || (lexer.TakeType(TokenType.Number, out itoken) && int.TryParse(itoken.Span(), out _)))
-        token = token with { OverrideStr = $"{token.Span()}{itoken.Span()}" };
+      var type = token.Type == TokenType.Placeholder ? TokenType.Word : token.Type;
 
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      using var s = PushSynthSource(".concat", macro.Index);
+      using var t = s.S.MakeToken(type, token.Index);
+      t.AddData(buffer[token]);
+
+      while (Reader.TakeType(TokenType.Word, out var itoken)
+          || Reader.TakeType(TokenType.Macro, out itoken)
+          || Reader.TakeType(TokenType.Placeholder, out itoken)
+          || Reader.TakeType(TokenType.Number, out itoken))
+      {
+        if (itoken.Type == TokenType.Number && !int.TryParse(buffer[itoken], out _))
+          throw Invalid(itoken);
+
+        t.AddData(buffer[itoken]);
+      }
+
+      if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
-
-      if (token.Type == TokenType.Placeholder && token.Span().Length > 1)
-        token.Type = TokenType.Word;
-
-      PushTokens(macro, token);
     }
 
     private void MacroLabel(Token macro)
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
       var token = NextInnerTyped(TokenType.Word);
 
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
 
-      PushTokens(macro, token with { Type = TokenType.Label, OverrideStr = $"{token.Span()}:" });
+      using var s = PushSynthSource(".label", macro.Index);
+      s.MakeLabel(buffer[token], token.Index);
     }
 
     private void MacroIfDef(bool not)
     {
-      if (!lexer.TakeType(TokenType.Word, out var wtoken))
+      if (!Reader.TakeType(TokenType.Word, out var wtoken))
         throw Invalid();
 
-      var name = wtoken.Str();
+      var name = buffer[wtoken].ToString();
       MacroDoIf(macros.ContainsKey(name) == not);
     }
 
     private void MacroIfAny()
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
       var any = false;
       var chunk = new ChunkReader { P = this, EndPClose = true, TrackP = true };
       while (chunk.Take(out _))
         any = true;
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
 
       MacroDoIf(!any);
@@ -268,7 +267,7 @@ namespace KSASM.Assembly
 
     private void MacroDoIf(bool skip)
     {
-      if (!lexer.TakeType(TokenType.BOpen, out _))
+      if (!Reader.TakeType(TokenType.BOpen, out _))
         throw Invalid();
 
       if (!skip)
@@ -281,7 +280,7 @@ namespace KSASM.Assembly
 
       while (chunk.Take(out _)) ;
 
-      if (!lexer.TakeType(TokenType.BClose, out _))
+      if (!Reader.TakeType(TokenType.BClose, out _))
         throw Invalid();
     }
 
@@ -294,10 +293,10 @@ namespace KSASM.Assembly
 
     private void MacroAdd(Token macro)
     {
-      if (!lexer.TakeType(TokenType.POpen, out _))
+      if (!Reader.TakeType(TokenType.POpen, out _))
         Invalid();
 
-      if (!lexer.Take(out var first))
+      if (!Reader.Take(out var first))
         Invalid();
 
       Value val;
@@ -305,76 +304,75 @@ namespace KSASM.Assembly
 
       if (first.Type == TokenType.Width)
       {
-        if (!Values.TryParseValue(first[1..], out val, out mode))
+        if (!Values.TryParseValue(buffer[first][1..], out val, out mode))
           Invalid(first);
       }
       else if (first.Type == TokenType.Number)
       {
-        if (!Values.TryParseValue(first, out val, out mode))
+        if (!Values.TryParseValue(buffer[first], out val, out mode))
           Invalid(first);
       }
       else
         throw Invalid(first);
 
-      while (lexer.TakeType(TokenType.Comma, out _))
+      while (Reader.TakeType(TokenType.Comma, out _))
       {
-        if (!lexer.TakeType(TokenType.Number, out var ntoken))
+        if (!Reader.TakeType(TokenType.Number, out var ntoken))
           Invalid();
-        if (!Values.TryParseValue(ntoken, out var nval, out var nmode))
+        if (!Values.TryParseValue(buffer[ntoken], out var nval, out var nmode))
           Invalid(ntoken);
         nval.Convert(nmode, mode);
         mode.Ops().Add(ref val, nval);
       }
 
-      if (!lexer.TakeType(TokenType.PClose, out _))
+      if (!Reader.TakeType(TokenType.PClose, out _))
         Invalid();
 
-      PushTokens(
-        macro,
-        first with { OverrideStr = first.Type == TokenType.Width ? $"*{val.Get(mode)}" : $"{val.Get(mode)}" }
-      );
+      using var s = PushSynthSource(".add", macro.Index);
+      if (first.Type == TokenType.Width)
+        s.MakeWidth(val, mode, first.Index);
+      else
+        s.MakeNumber(val, mode, first.Index);
     }
 
     private void MacroRegion(Token macro)
     {
       var ntoken = NextInnerTyped(TokenType.Word);
 
-      var name = ntoken.Span();
+      var endLabel = Reader.TakeType(TokenType.Offset, out var otoken) && buffer[otoken][0] == '-';
 
-      var endLabel = lexer.TakeType(TokenType.Offset, out var otoken) && otoken.Str() == "-";
-
-      if (!lexer.TakeType(TokenType.Number, out var sztoken))
+      if (!Reader.TakeType(TokenType.Number, out var sztoken))
         Invalid();
 
-      if (!int.TryParse(sztoken, out var size))
+      if (!int.TryParse(buffer[sztoken], out var size))
         Invalid(sztoken);
 
       var startPos = regionPos - size;
       var endPos = regionPos;
       regionPos = startPos;
 
+      using var s = PushSynthSource(".region", macro.Index);
       if (endLabel)
-        PushTokens(
-          macro,
-          ntoken with { Type = TokenType.Position, OverrideStr = $"@{endPos}" },
-          ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" },
-          ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" }
-        );
+      {
+        s.MakePosition(endPos, TokenIndex.Invalid);
+        s.MakeLabel(buffer[ntoken], ntoken.Index);
+        s.MakePosition(startPos, TokenIndex.Invalid);
+      }
       else
-        PushTokens(
-          macro,
-          ntoken with { Type = TokenType.Position, OverrideStr = $"@{startPos}" },
-          ntoken with { Type = TokenType.Label, OverrideStr = $"{name}:" }
-        );
+      {
+        s.MakePosition(startPos, TokenIndex.Invalid);
+        s.MakeLabel(buffer[ntoken], ntoken.Index);
+      }
     }
 
     private void MacroImport(Token macro)
     {
-      if (!lexer.TakeType(TokenType.Word, out var ntoken))
+      if (!Reader.TakeType(TokenType.Word, out var ntoken))
         Invalid();
 
-      var source = Library.LoadImport(ntoken.Str());
-      PushLexer(new(Lexer.LexTokens(source).AsStream(), ctx.AddFrame(macro)), null);
+      var source = Library.LoadImport(buffer[ntoken].ToString());
+      var sourceIndex = Lexer.LexSource(buffer, source, macro.Index);
+      PushSource(sourceIndex);
     }
 
     private void MacroUndefine()
@@ -382,8 +380,12 @@ namespace KSASM.Assembly
       // expand macros for name
       var ntoken = NextInnerTyped(TokenType.Word);
 
-      var name = curNs + ntoken.Str();
-      if (!macros.Remove(name))
+      var tname = buffer[ntoken];
+      Span<char> name = stackalloc char[tname.Length + nsbuf.Length];
+      nsbuf[..].CopyTo(name);
+      tname.CopyTo(name[nsbuf.Length..]);
+
+      if (!macros.Remove(name.ToString()))
         throw Invalid(ntoken);
     }
 
@@ -392,155 +394,172 @@ namespace KSASM.Assembly
       // expand macros for name
       var ntoken = NextInnerTyped(TokenType.Word);
 
-      var macro = new MacroDef { Name = curNs + ntoken.Str() };
+      var tname = buffer[ntoken];
+      Span<char> nbuf = stackalloc char[tname.Length + nsbuf.Length];
+      nsbuf[..].CopyTo(nbuf);
+      tname.CopyTo(nbuf[nsbuf.Length..]);
+      var name = nbuf.ToString();
 
-      if (lexer.TakeType(TokenType.POpen, out _) && !lexer.TakeType(TokenType.PClose, out _))
+      var macro = new MacroDef { Name = name };
+
+      if (Reader.TakeType(TokenType.POpen, out _) && !Reader.TakeType(TokenType.PClose, out _))
       {
         while (true)
         {
-          if (lexer.TakeType(TokenType.Macro, out var mtoken))
+          if (Reader.TakeType(TokenType.Macro, out var mtoken))
           {
-            var mstr = mtoken.Span();
+            var mstr = buffer[mtoken];
             if (!mstr.StartsWith("..."))
               throw Invalid(mtoken);
             macro.Args[mstr[3..].ToString()] = macro.Args.Count;
             macro.HasRest = true;
-            if (!lexer.TakeType(TokenType.PClose, out _))
+            if (!Reader.TakeType(TokenType.PClose, out _))
               throw Invalid();
             break;
           }
-          if (!lexer.TakeType(TokenType.Word, out var atoken))
+          if (!Reader.TakeType(TokenType.Word, out var atoken))
             Invalid();
-          macro.Args[atoken.Str()] = macro.Args.Count;
-          if (lexer.TakeType(TokenType.Comma, out _))
+          macro.Args[buffer[atoken].ToString()] = macro.Args.Count;
+          if (Reader.TakeType(TokenType.Comma, out _))
             continue;
-          else if (lexer.TakeType(TokenType.PClose, out _))
+          else if (Reader.TakeType(TokenType.PClose, out _))
             break;
           else
             Invalid();
         }
       }
 
-      var frame = ctx.AddFrame(ntoken with { OverrideStr = macro.Name });
+      if (macro.Args.Count > MacroDef.MAX_ARGS)
+        throw new InvalidOperationException($"Too many macro args ${macro.Args.Count} > {MacroDef.MAX_ARGS}");
 
-      var chunk = new ChunkReader { P = this };
-      if (lexer.TakeType(TokenType.BOpen, out _))
-        chunk.TrackB = chunk.EndBClose = true;
-      else
-        chunk.EndLine = true;
+      using (var s = buffer.NewSynthSource($".macro {name}", ntoken.Index))
+      {
+        macro.Source = s.Source;
 
-      while (chunk.Take(out var token))
-        macro.Tokens.Add(token with { PreviousFrame = token.ParentFrame, ParentFrame = frame });
+        var chunk = new ChunkReader { P = this };
+        if (Reader.TakeType(TokenType.BOpen, out _))
+          chunk.TrackB = chunk.EndBClose = true;
+        else
+          chunk.EndLine = true;
 
-      if (chunk.TrackB && !lexer.TakeType(TokenType.BClose, out _))
-        throw Invalid();
-      else if (!chunk.TrackB && !lexer.TakeType(TokenType.EOL, out _))
-        throw Invalid();
+        while (chunk.Take(out var token))
+          s.CopyToken(token.Index);
+
+        if (chunk.TrackB && !Reader.TakeType(TokenType.BClose, out _))
+          throw Invalid();
+        else if (!chunk.TrackB && !Reader.TakeType(TokenType.EOL, out _))
+          throw Invalid();
+      }
 
       macros[macro.Name] = macro;
     }
 
     private void MacroExpand(string name, Token nameToken)
     {
-      if (!macros.TryGetValue(name, out var macro) && !macros.TryGetValue(curNs + name, out macro))
-        Invalid(nameToken);
+      if (!macros.TryGetValue(name, out var macro) && !macros.TryGetValue($"{nsbuf[..]}{name}", out macro))
+        throw Invalid(nameToken);
 
-      using var tokenLease = tokenListPool.Lease();
-      using var rangeLease = rangeListPool.Lease();
+      Span<FixedRange> argRanges = stackalloc FixedRange[MacroDef.MAX_ARGS];
+      var argCount = 0;
 
-      var argTokens = tokenLease.List;
-      var argRanges = rangeLease.List;
-      var argStart = 0;
-
-      if (lexer.TakeType(TokenType.POpen, out _))
+      if (Reader.TakeType(TokenType.POpen, out _))
       {
+        using var s = buffer.NewSynthSource($".{macro.Name} args", nameToken.Index);
+
         var done = false;
         while (!done)
         {
-          var isRest = macro.HasRest && argRanges.Count == macro.Args.Count - 1;
+          var isRest = macro.HasRest && argCount == macro.Args.Count - 1;
           var chunk = new ChunkReader { P = this, TrackP = true, TrackB = true };
           // don't consume brackets for rest
-          if (!isRest && lexer.TakeType(TokenType.BOpen, out _))
+          if (!isRest && Reader.TakeType(TokenType.BOpen, out _))
             chunk.EndBClose = true;
           else
           {
             chunk.EndPClose = chunk.EndLine = true;
-            if (!macro.HasRest || argRanges.Count < macro.Args.Count - 1)
+            if (!isRest)
               chunk.EndComma = true; // only end on comma if we aren't in the ...rest arg
           }
 
+          var argStart = s.NextToken;
+
           while (chunk.Take(out var token))
-            argTokens.Add(token);
+            s.CopyToken(token.Index);
 
-          argRanges.Add(argStart..argTokens.Count);
-          argStart = argTokens.Count;
+          var argEnd = s.NextToken;
 
-          if (chunk.EndBClose && !lexer.TakeType(TokenType.BClose, out _))
+          argRanges[argCount++] = new(argStart.Index, argEnd.Index - argStart.Index);
+
+          if (chunk.EndBClose && !Reader.TakeType(TokenType.BClose, out _))
             throw Invalid();
 
-          if (lexer.TakeType(TokenType.PClose, out _))
+          if (Reader.TakeType(TokenType.PClose, out _))
             done = true;
           else if (isRest)
             throw Invalid(); // if we had rest args, the last param should run all the way until )
-          else if (!lexer.TakeType(TokenType.Comma, out _))
+          else if (!Reader.TakeType(TokenType.Comma, out _))
             throw Invalid();
         }
       }
 
-      var expanded = tokenListPool.Take();
-      foreach (var tk in macro.Tokens)
-      {
-        var token = tk;
-        if (token.Type == TokenType.Word && macro.Args.TryGetValue(token.Str(), out var argIdx))
-        {
-          if (argIdx >= argRanges.Count)
-            continue;
+      var rcount = readerStack.Length;
 
-          var range = argRanges[argIdx];
-          for (var i = range.Start.Value; i < range.End.Value; i++)
-            expanded.AddRange(argTokens[i]);
-          continue;
+      SourceIndex source;
+      using (var s = PushSynthSource($".{macro.Name} expand", nameToken.Index))
+      {
+        source = s.S.Source;
+        foreach (var token in buffer.SourceTokens(macro.Source))
+        {
+          // TODO: make StringIndex that uses shared buffer with sorted list of ranges. binary search for index
+          if (token.Type == TokenType.Word && macro.Args.TryGetValue(buffer[token].ToString(), out var argIdx))
+          {
+            if (argIdx >= argRanges.Length)
+              continue;
+
+            var range = argRanges[argIdx];
+            foreach (var atoken in buffer.TokenRange(range, true))
+              s.S.CopyToken(atoken.Index);
+            continue;
+          }
+          s.S.CopyToken(token.Index);
         }
-        expanded.Add(token);
       }
 
-      PushExpanded(nameToken, expanded);
-    }
-
-    private void PushExpanded(Token macro, List<Token> tokens)
-    {
-      var prevLexer = lexer;
-      PushTokens(macro, tokens);
-
-      var any = false;
-      foreach (var tok in tokens)
+      var anyImm = false;
+      foreach (var token in buffer.SourceTokens(source))
       {
-        if (tok.Type != TokenType.Macro)
+        if (token.Type != TokenType.Macro)
           continue;
-        var str = tok.Span();
-        if (str.Length > 2 && str[1] == '.')
+        var str = buffer[token];
+        if (str.Length > 2 && str.StartsWith(".."))
         {
-          any = true;
+          anyImm = true;
           break;
         }
       }
-      if (!any)
+
+      if (!anyImm)
         return;
+
+      // use a temporary buffer here to store the tokens, so temporary sources from expansion aren't embedded
+      var expanded = tempStack.Count > 0 ? tempStack.Pop() : new();
+      expanded.Clear();
 
       var startIfs = ifDepth;
 
-      var expanded = tokenListPool.Take();
-      while (lexer != prevLexer)
+      // consume tokens until the source we just added is completed
+      // the EOF check should never be true, it just forces cleaning the reader stack
+      while (!Reader.EOF && readerStack.Length > rcount)
       {
-        if (!lexer.Take(out var token))
+        if (!Reader.Take(out var token))
           throw Invalid();
 
         if (token.Type == TokenType.Macro)
         {
-          var tstr = token.Span();
+          var tstr = buffer[token];
           if (tstr.Length > 2 && tstr[1] == '.')
           {
-            ParseMacro(token with { OverrideStr = tstr[1..].ToString() });
+            ParseMacro(token, buffer[token][2..]);
             continue;
           }
         }
@@ -550,19 +569,77 @@ namespace KSASM.Assembly
           ifDepth--;
           continue;
         }
-        expanded.Add(token);
+        expanded.Add(token.Index);
       }
-      PushTokens(macro, expanded);
+
+      using (var s = PushSynthSource($".{macro.Name} expand immediate", nameToken.Index))
+      {
+        foreach (var tokIdx in expanded)
+          s.S.CopyToken(tokIdx);
+      }
+
+      expanded.Clear();
+      tempStack.Push(expanded);
     }
 
-    protected override bool Peek(out Token token) => lexer.Peek(out token);
+    private readonly struct SynthSourcePush(MacroParser parser, string name, TokenIndex producer) : IDisposable
+    {
+      public readonly ParseBuffer.SyntheticSourceBuilder S = parser.buffer.NewSynthSource(name, producer);
+
+      public TokenIndex MakeLabel(ReadOnlySpan<char> name, TokenIndex from)
+      {
+        using (var t = S.MakeToken(TokenType.Label, from))
+        {
+          t.AddData(name);
+          t.AddData(':');
+        }
+        return S.LastToken;
+      }
+
+      public TokenIndex MakeNumber(Value val, ValueMode mode, TokenIndex from)
+      {
+        using (var t = S.MakeToken(TokenType.Number, from))
+        {
+          t.AddValue(val, mode);
+        }
+        return S.LastToken;
+      }
+
+      public TokenIndex MakeWidth(Value val, ValueMode mode, TokenIndex from)
+      {
+        using (var t = S.MakeToken(TokenType.Width, from))
+        {
+          val.Convert(mode, ValueMode.Unsigned);
+          t.AddData('*');
+          t.AddValue(val, ValueMode.Unsigned);
+        }
+        return S.LastToken;
+      }
+
+      public TokenIndex MakePosition(int address, TokenIndex from)
+      {
+        using (var t = S.MakeToken(TokenType.Position, from))
+        {
+          t.AddData('@');
+          t.AddInt(address);
+        }
+        return S.LastToken;
+      }
+
+      public void Dispose()
+      {
+        S.Dispose();
+        parser.PushSource(S.Source);
+      }
+    }
 
     private class MacroDef
     {
+      public const int MAX_ARGS = 32;
       public string Name;
+      public SourceIndex Source;
       public Dictionary<string, int> Args = [];
       public bool HasRest;
-      public List<Token> Tokens = [];
     }
 
     private struct ChunkReader
@@ -580,16 +657,16 @@ namespace KSASM.Assembly
       {
         if (!IsInner)
         {
-          if (EndComma && P.lexer.PeekType(TokenType.Comma, out token))
+          if (EndComma && P.Reader.PeekType(TokenType.Comma, out token))
             return false;
-          if (EndPClose && P.lexer.PeekType(TokenType.PClose, out token))
+          if (EndPClose && P.Reader.PeekType(TokenType.PClose, out token))
             return false;
-          if (EndBClose && P.lexer.PeekType(TokenType.BClose, out token))
+          if (EndBClose && P.Reader.PeekType(TokenType.BClose, out token))
             return false;
-          if (EndLine && P.lexer.PeekType(TokenType.EOL, out token))
+          if (EndLine && P.Reader.PeekType(TokenType.EOL, out token))
             return false;
         }
-        if (!P.lexer.Take(out token))
+        if (!P.Reader.Take(out token))
           throw P.Invalid();
 
         if (TrackP)
@@ -610,22 +687,6 @@ namespace KSASM.Assembly
       }
 
       public bool IsInner => PDepth > 0 || BDepth > 0;
-    }
-  }
-
-  public class ListTokenStream(List<Token> tokens) : ITokenStream
-  {
-    private int index = 0;
-
-    public bool Next(out Token token)
-    {
-      if (index >= tokens.Count)
-      {
-        token = default;
-        return false;
-      }
-      token = tokens[index++];
-      return true;
     }
   }
 }

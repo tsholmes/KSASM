@@ -11,8 +11,15 @@ namespace KSASM.Assembly
 
     public static DebugSymbols Assemble(SourceString source, MemoryAccessor target)
     {
-      var ctx = new Context();
-      var parser = new Parser(source, ctx);
+      var buffer = new ParseBuffer();
+      var sindex = Lexer.LexSource(buffer, source, TokenIndex.Invalid);
+      var tokens = new AppendBuffer<Token>();
+      var mp = new MacroParser(buffer, sindex);
+      while (mp.Next(out var token))
+        tokens.Add(token);
+
+      var ctx = new Context(buffer);
+      var parser = new Parser(buffer, tokens);
       parser.Parse();
 
       foreach (var stmt in parser.Statements)
@@ -46,9 +53,9 @@ namespace KSASM.Assembly
     }
   }
 
-  public abstract class TokenProcessor(Context ctx)
+  public abstract class TokenProcessor(ParseBuffer buffer)
   {
-    protected readonly Context ctx = ctx;
+    protected readonly ParseBuffer buffer = buffer;
 
     protected abstract bool Peek(out Token token);
 
@@ -58,13 +65,60 @@ namespace KSASM.Assembly
       return Invalid(token);
     }
 
-    protected Exception Invalid(Token token) => throw new InvalidOperationException(
-      $"invalid token {token.Type} {ctx.StackPos(token)}");
+    protected Exception Invalid(Token token) =>
+      throw new InvalidOperationException($"invalid token {token.Type} '{buffer[token]}'\n{StackPos(token)}");
+
+    public static string StackPos(ParseBuffer buffer, Token token, int frameLimit = 20)
+    {
+      var sb = new StringBuilder();
+      var lastRoot = token.Index;
+      var current = token.Index;
+      var more = true;
+
+      var debug = new DebugSymbols(buffer);
+
+      for (var i = 0; i < 20; i++)
+      {
+        bool newRoot;
+        if (newRoot = current == TokenIndex.Invalid)
+          lastRoot = current = buffer[lastRoot].Producer;
+        if (current == TokenIndex.Invalid)
+        {
+          more = false;
+          break;
+        }
+
+        if (i > 0)
+          sb.AppendLine();
+
+        if (newRoot)
+          sb.AppendLine("== expanded from ==");
+
+        var tok = buffer[current];
+
+        var sname = buffer.SourceName(tok.Source);
+        var sline = debug.SourceLine(current, out var lnum, out var loff);
+
+        sb.Append(sname).Append(':').Append(lnum + 1).Append(':').Append(loff);
+        if (sline.Length > 0)
+          sb.AppendLine().Append(sline);
+
+        current = tok.Previous;
+      }
+
+      if (more && frameLimit > 1)
+        sb.AppendLine().Append("...");
+
+      return sb.ToString();
+    }
+
+    protected string StackPos(Token token, int frameLimit = 20) => StackPos(buffer, token, frameLimit);
   }
 
-  public class Context
+  public class Context(ParseBuffer buffer) : TokenProcessor(buffer)
   {
-    public readonly DebugSymbols Symbols = new();
+    public readonly DebugSymbols Symbols = new(buffer);
+    public readonly ParseBuffer Buffer = buffer;
 
     public readonly Dictionary<string, int> Labels = [];
     public readonly List<(int, DataType, List<Value>)> Values = [];
@@ -74,36 +128,6 @@ namespace KSASM.Assembly
 
     public int Addr = 0;
 
-    public int AddFrame(Token token) => Symbols.AddFrame(token);
-
-    public string StackPos(Token token, int frameLimit = 20)
-    {
-      var sb = new StringBuilder();
-
-      var iter = new DebugSymbols.FrameIter(Symbols, token);
-
-      for (var i = 0; i < frameLimit; i++)
-      {
-        if (!iter.Next(out var frame, out var newRoot))
-          break;
-
-        if (i > 0)
-          sb.AppendLine();
-
-        if (newRoot)
-          sb.AppendLine("== expanded from ==");
-
-        if (frame.Source != null)
-        {
-          var (line, lpos) = frame.Source.LinePos(frame.Pos);
-          sb.Append('\'').Append(frame.Span()).Append("'@");
-          sb.Append(frame.Source.Name).Append(':').Append(line).Append(':').Append(lpos);
-        }
-      }
-
-      return sb.ToString();
-    }
-
     public void EmitLabel(string label)
     {
       Symbols.AddLabel(label, Addr);
@@ -112,7 +136,7 @@ namespace KSASM.Assembly
 
     public void EmitInst(Token token, ulong encoded)
     {
-      Symbols.AddInst(Addr, token);
+      Symbols.AddInst(Addr, token.Index);
       Values.Add((Addr, DataType.U64, [new Value() { Unsigned = encoded }]));
       Addr += DataType.U64.SizeBytes();
     }
@@ -212,7 +236,7 @@ namespace KSASM.Assembly
             if (node.Val.StringVal != null)
             {
               if (!Labels.TryGetValue(node.Val.StringVal, out var lpos))
-                throw Invalid(node.Token);
+                throw Invalid(buffer[node.Token]);
               left.Unsigned = (ulong)lpos;
               left.Convert(ValueMode.Unsigned, mode);
             }
@@ -259,7 +283,6 @@ namespace KSASM.Assembly
       return vals.Pop();
     }
 
-    private Exception Invalid(Token token) => throw new InvalidOperationException(
-      $"invalid token {token.Type} '{token.Str()}' at {StackPos(token)}");
+    protected override bool Peek(out Token token) => throw new NotImplementedException();
   }
 }

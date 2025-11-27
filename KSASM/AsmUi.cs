@@ -207,13 +207,21 @@ namespace KSASM
 
       var sb = new StringBuilder();
       var pc = Current.Processor.PC;
-      sb.Append('@').Append(pc).AppendLine();
-      if (Current.Symbols != null)
+      if (Current.Symbols != null && Current.Symbols.InstToken(pc, out var itoken))
       {
-        var loc = Current.Symbols.SourceLine(pc);
-        sb.Append(loc).AppendLine();
+        itoken = Current.Symbols.RootToken(itoken);
+        var sname = Current.Symbols.SourceName(itoken);
+        var loc = Current.Symbols.SourceLine(itoken, out var lnum, out var loff);
         var id = Current.Symbols.ID(pc);
+
+        sb.Append('@').Append(pc).Append(": ");
+        sb.Append(sname).Append(':').Append(lnum + 1).Append(':').Append(loff).Append(' ');
         sb.Append(id.Label).Append('+').Append(id.Offset).AppendLine();
+        sb.Append(loc).AppendLine();
+      }
+      else
+      {
+        sb.Append('@').Append(pc).AppendLine();
       }
       sb.Append(Current.LastSteps).Append(" steps in ");
       sb.AppendFormat("{0:0.##}", Current.LastMs).Append("ms");

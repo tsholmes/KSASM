@@ -37,7 +37,7 @@ namespace KSASM
         return RunGame(args);
       }
 
-      // Library.CacheAll();
+      Library.CacheAll();
 
       var scriptName = pargs.Positional(0, out var sname) ? sname : "test";
 
@@ -50,6 +50,14 @@ namespace KSASM
       };
 
       var stopwatch = Stopwatch.StartNew();
+
+      // if (true)
+      // {
+      //   for (var i = 0; i < 100; i++)
+      //     Assembler.Assemble(source, proc.Memory);
+      //   Console.WriteLine($"{stopwatch.Elapsed.TotalMilliseconds:0.##}ms");
+      //   return 0;
+      // }
 
       Assembler.Assemble(source, proc.Memory);
 

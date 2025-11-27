@@ -1,66 +1,66 @@
 
-using System.Collections.Generic;
+using System;
 
 namespace KSASM.Assembly
 {
-  public class Lexer
+  public class Lexer : IDisposable
   {
-    public static TokenSource LexTokens(SourceString source)
+    public static SourceIndex LexSource(ParseBuffer buffer, SourceString source, TokenIndex producer)
     {
-      var tokens = new List<SToken>();
+      SourceIndex sourceIndex;
 
-      var lexer = new Lexer(source);
-      while (lexer.Next(out var token))
-        tokens.Add(token);
+      using (var lexer = new Lexer(buffer, source, producer))
+      {
+        sourceIndex = lexer.SourceIndex;
+        while (lexer.Next()) ;
+      }
 
-      if (tokens.Count == 0 || tokens[^1].Type != TokenType.EOL)
-        tokens.Add(new(TokenType.EOL, ^0..^0));
-
-      return new(source, tokens);
+      return sourceIndex;
     }
 
     private readonly SourceString source;
+    private readonly ParseBuffer.RawSourceBuilder s;
     private int index = 0;
 
-    private Lexer(SourceString source)
+    private SourceIndex SourceIndex => s.Source;
+
+    private Lexer(ParseBuffer buffer, SourceString source, TokenIndex producer)
     {
       this.source = source;
+      s = buffer.NewRawSource(source.Name, source.Source, producer);
     }
 
-    private bool Next(out SToken token)
+    private bool Next()
     {
       SkipWS();
 
       if (index == source.Length)
-      {
-        token = default;
         return false;
-      }
 
       var c = At(index);
 
       return c switch
       {
-        '\n' => TakeNext(TokenType.EOL, 1, out token),
-        '[' => TakeNext(TokenType.IOpen, 1, out token),
-        ']' => TakeNext(TokenType.IClose, 1, out token),
-        '+' or '-' => TakeNext(TokenType.Offset, 1, out token),
-        ',' => TakeNext(TokenType.Comma, 1, out token),
-        '$' when At(index + 1) == '(' => TakeNext(TokenType.COpen, 2, out token),
-        '$' when At(index + 1) == '[' => TakeNext(TokenType.CIOpen, 2, out token),
-        '(' => TakeNext(TokenType.POpen, 1, out token),
-        ')' => TakeNext(TokenType.PClose, 1, out token),
-        '{' => TakeNext(TokenType.BOpen, 1, out token),
-        '}' => TakeNext(TokenType.BClose, 1, out token),
-        '/' => TakeNext(TokenType.Div, 1, out token),
-        _ when IsWordStart(c) => TakeWordLike(out token),
-        '@' => TakePosition(out token),
-        '*' => TakeWidth(out token),
-        ':' => TakeType(out token),
-        _ when IsDigit(c) => TakeNumber(out token),
-        '.' => TakeMacro(out token),
-        '"' => TakeString(out token),
-        _ => TakeNext(TokenType.Invalid, 1, out token),
+        '\n' => Add(TokenType.EOL, 1),
+        '[' => Add(TokenType.IOpen, 1),
+        ']' => Add(TokenType.IClose, 1),
+        '+' or '-' => Add(TokenType.Offset, 1),
+        ',' => Add(TokenType.Comma, 1),
+        '$' when At(index + 1) == '(' => Add(TokenType.COpen, 2),
+        '$' when At(index + 1) == '[' => Add(TokenType.CIOpen, 2),
+        '(' => Add(TokenType.POpen, 1),
+        ')' => Add(TokenType.PClose, 1),
+        '{' => Add(TokenType.BOpen, 1),
+        '}' => Add(TokenType.BClose, 1),
+        '/' => Add(TokenType.Div, 1),
+        _ when IsWordStart(c) => TakeWordLike(),
+        '@' => TakePosition(),
+        '*' => TakeWidth(),
+        ':' => TakeType(),
+        _ when IsDigit(c) => TakeNumber(),
+        '.' => TakeMacro(),
+        '"' => TakeString(),
+        _ => Add(TokenType.Invalid, 1),
       };
     }
 
@@ -89,40 +89,40 @@ namespace KSASM.Assembly
         index++;
     }
 
-    private bool TakeNext(TokenType type, int len, out SToken token)
+    private bool Add(TokenType type, int len)
     {
-      token = new() { Type = type, Range = index..(index + len) };
+      s.AddToken(type, new(index, len));
       index += len;
       return true;
     }
 
-    private bool TakeWordLike(out SToken token)
+    private bool TakeWordLike()
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
         len++;
 
       if (len == 1 && At(index) == '_')
-        return TakeNext(TokenType.Placeholder, 1, out token);
+        return Add(TokenType.Placeholder, 1);
       else if (At(index + len) == ':' && IsBoundary(At(index + len + 1)))
-        return TakeNext(TokenType.Label, len + 1, out token);
+        return Add(TokenType.Label, len + 1);
       else
-        return TakeNext(TokenType.Word, len, out token);
+        return Add(TokenType.Word, len);
     }
 
-    private bool TakeMacro(out SToken token)
+    private bool TakeMacro()
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
         len++;
 
       if (len == 1)
-        return TakeNext(TokenType.Invalid, 1, out token);
+        return Add(TokenType.Invalid, 1);
       else
-        return TakeNext(TokenType.Macro, len, out token);
+        return Add(TokenType.Macro, len);
     }
 
-    private bool TakeString(out SToken token)
+    private bool TakeString()
     {
       var len = 1;
       while (index + len < source.Length && At(index + len) is not '"' and not '\n')
@@ -131,12 +131,12 @@ namespace KSASM.Assembly
       len++;
 
       if (At(index + len - 1) != '"')
-        return TakeNext(TokenType.Invalid, len, out token);
+        return Add(TokenType.Invalid, len);
       else
-        return TakeNext(TokenType.String, len, out token);
+        return Add(TokenType.String, len);
     }
 
-    private bool TakePosition(out SToken token)
+    private bool TakePosition()
     {
       var len = 1;
       // TODO: support hex positions?
@@ -144,36 +144,36 @@ namespace KSASM.Assembly
         len++;
 
       if (len == 1)
-        return TakeNext(TokenType.Invalid, 1, out token);
+        return Add(TokenType.Invalid, 1);
       else
-        return TakeNext(TokenType.Position, len, out token);
+        return Add(TokenType.Position, len);
     }
 
-    private bool TakeWidth(out SToken token)
+    private bool TakeWidth()
     {
       var len = 1;
       while (IsDigit(At(index + len)))
         len++;
 
       if (len == 1)
-        return TakeNext(TokenType.Mult, 1, out token);
+        return Add(TokenType.Mult, 1);
       else
-        return TakeNext(TokenType.Width, len, out token);
+        return Add(TokenType.Width, len);
     }
 
-    private bool TakeType(out SToken token)
+    private bool TakeType()
     {
       var len = 1;
       while (IsWordChar(At(index + len)))
         len++;
 
       if (len == 1)
-        return TakeNext(TokenType.Invalid, 1, out token);
+        return Add(TokenType.Invalid, 1);
       else
-        return TakeNext(TokenType.Type, len, out token);
+        return Add(TokenType.Type, len);
     }
 
-    private bool TakeNumber(out SToken token)
+    private bool TakeNumber()
     {
       var len = 1;
       var minLen = 1;
@@ -219,9 +219,9 @@ namespace KSASM.Assembly
         }
       }
       if (len < minLen)
-        return TakeNext(TokenType.Invalid, len, out token);
+        return Add(TokenType.Invalid, len);
       else
-        return TakeNext(TokenType.Number, len, out token);
+        return Add(TokenType.Number, len);
     }
 
     private char At(int index)
@@ -244,5 +244,11 @@ namespace KSASM.Assembly
     private static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
 
     private static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
+
+    public void Dispose()
+    {
+      s.AddToken(TokenType.EOL, new(source.Length, 0));
+      s.Dispose();
+    }
   }
 }

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -195,5 +196,165 @@ namespace KSASM
     {
       public void Dispose() => Pool.Return(List);
     }
+  }
+
+  public interface IAddr { public int Addr { get; } }
+
+  public readonly struct FixedRange(int start, int length) : IAddr
+  {
+    public static readonly FixedRange Invalid = new(-1, -1);
+
+    public readonly int Start = start;
+    public readonly int Length = length;
+
+    public readonly int End => Start + Length;
+
+    int IAddr.Addr => Start;
+
+    public static FixedRange From(Range range, int length)
+    {
+      var (start, len) = range.GetOffsetAndLength(length);
+      return new(start, len);
+    }
+
+    public FixedRange this[Range range]
+    {
+      get
+      {
+        var (off, len) = range.GetOffsetAndLength(Length);
+        return new(Start + off, len);
+      }
+    }
+
+    public static FixedRange operator +(FixedRange range, int offset) => new(range.Start + offset, range.Length);
+
+    public static implicit operator Range(FixedRange range) => range.Start..range.End;
+  }
+
+  public abstract class AppendBuffer
+  {
+    // consts separated out in non-generic base for easy access
+    public const int CHUNK_SHIFT = 12;
+    public const int CHUNK_SIZE = 1 << CHUNK_SHIFT;
+    public const int CHUNK_MASK = CHUNK_SIZE - 1;
+  }
+
+  public class AppendBuffer<T> : AppendBuffer where T : struct
+  {
+
+    private readonly T[] copyChunk = new T[CHUNK_SIZE];
+    private readonly List<T[]> chunks = [];
+    private int length = 0;
+
+    public int Length
+    {
+      get => length;
+      set => length = value <= length ? value : throw new IndexOutOfRangeException();
+    }
+
+    public ref T this[int index]
+    {
+      get
+      {
+        var ci = index >> CHUNK_SHIFT;
+        var co = index & CHUNK_MASK;
+        return ref chunks[ci][co];
+      }
+    }
+
+    public ReadOnlySpan<T> this[Range range] => this[FixedRange.From(range, length)];
+
+    public ReadOnlySpan<T> this[FixedRange range]
+    {
+      get
+      {
+        if (range.Length == 0)
+          return [];
+        if (range.Length > CHUNK_SIZE)
+          throw new InvalidOperationException($"range too large {range.Length}");
+
+        var ci = range.Start >> CHUNK_SHIFT;
+        var co = range.Start & CHUNK_MASK;
+        if (co + range.Length <= CHUNK_SIZE)
+          return chunks[ci].AsSpan()[co..(co + range.Length)];
+
+        var l1 = CHUNK_SIZE - co;
+        var l2 = range.Length - l1;
+
+        chunks[ci].AsSpan()[co..].CopyTo(copyChunk.AsSpan());
+        chunks[ci + 1].AsSpan()[..l2].CopyTo(copyChunk.AsSpan()[l1..]);
+
+        return copyChunk.AsSpan()[..range.Length];
+      }
+    }
+
+    public void Clear() => length = 0;
+
+    public int Add(T val)
+    {
+      var ci = length >> CHUNK_SHIFT;
+      var co = length & CHUNK_MASK;
+      if (ci == chunks.Count)
+        chunks.Add(new T[CHUNK_SIZE]);
+      chunks[ci][co] = val;
+      length++;
+      return length - 1;
+    }
+
+    public int AddRange(params ReadOnlySpan<T> data)
+    {
+      var start = length;
+      while (data.Length > 0)
+      {
+        var ci = length >> CHUNK_SHIFT;
+        var co = length & CHUNK_MASK;
+        if (ci == chunks.Count)
+          chunks.Add(new T[CHUNK_SIZE]);
+
+        var rem = CHUNK_SIZE - co;
+        if (rem > data.Length)
+          rem = data.Length;
+
+        data[..rem].CopyTo(chunks[ci].AsSpan(co));
+        data = data[rem..];
+
+        length += rem;
+      }
+      return start;
+    }
+
+    public Enumerator GetEnumerator() => new(this);
+
+    public struct Enumerator(AppendBuffer<T> buf)
+    {
+      private int index = -1;
+      public T Current => buf[index];
+      public bool MoveNext() => ++index < buf.Length;
+    }
+  }
+
+  public class RefStack<T> where T : struct
+  {
+    private const int INIT_SIZE = 10;
+
+    private T[] values = new T[INIT_SIZE];
+    private int length;
+
+    public int Length => length;
+
+    public ref T Top => ref values[length - 1];
+
+    public void Push(T val)
+    {
+      if (length == values.Length)
+      {
+        var oldValues = values;
+        values = new T[length * 2];
+        oldValues.CopyTo(values);
+      }
+      values[length++] = val;
+    }
+
+    public T Pop() => values[--length];
   }
 }

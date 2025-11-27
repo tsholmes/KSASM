@@ -4,164 +4,311 @@ using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
-  public class DebugSymbols
+  public class DebugSymbols(ParseBuffer buffer)
   {
-    private readonly List<Token> frames = [];
-    private readonly Dictionary<int, Token> instTokens = [];
-    private readonly Dictionary<string, int> labelToAddr = [];
-    private readonly Dictionary<int, string> addrToLabel = [];
-    private readonly List<DataRecord> dataRecords = [];
-    private bool dataProcessed = false;
+    private readonly ParseBuffer buffer = buffer;
+    private readonly AddrList<InstAddr> insts = new();
+    private readonly AddrList<LabelAddr> labels = new();
+    private readonly AddrList<DataRecord> data = new();
+    private readonly Dictionary<int, SourceLines> lines = [];
+    private readonly char[] lineBuffer = new char[AppendBuffer.CHUNK_SIZE];
 
-    private readonly Dictionary<int, AddrId> addrToId = [];
-    private readonly List<AddrId> allIds = [];
-
-    public int AddFrame(Token token)
+    public bool InstToken(int addr, out TokenIndex inst)
     {
-      frames.Add(token);
-      return frames.Count - 1;
+      if (!insts.FindExact(addr, out var iaddr, out _))
+      {
+        inst = TokenIndex.Invalid;
+        return false;
+      }
+      inst = iaddr.Inst;
+      return true;
     }
 
-    public void AddInst(int address, Token token) => instTokens[address] = token;
-    public ReadOnlySpan<char> SourceLine(int address)
+    public TokenIndex RootToken(TokenIndex tokeni)
     {
-      if (instTokens.TryGetValue(address, out var token))
-        return token.SourceLine();
-      return [];
+      var token = buffer[tokeni];
+      var root = token;
+      while (true)
+      {
+        if (token.Producer != TokenIndex.Invalid)
+          token = buffer[token.Producer];
+        else if (token.Previous != TokenIndex.Invalid)
+          token = buffer[token.Previous];
+        else
+          break;
+        if (token.Type != TokenType.Macro && buffer[token] != ".import")
+          root = token;
+      }
+      return root.Index;
     }
 
-    public AddrId ID(int address)
+    public string SourceName(TokenIndex tokeni) => buffer.Source(buffer[tokeni].Source).Name;
+
+    public ReadOnlySpan<char> SourceLine(TokenIndex tok, out int lnum, out int loff)
     {
-      ProcessData();
-      if (addrToId.TryGetValue(address, out var id))
-        return id;
+      var inst = buffer[tok];
+      var slines = GetLines(inst.Source);
 
-      if (allIds.Count == 0)
-        return new(address, "?", 0);
+      if (slines.Source.Synthetic)
+      {
+        if (!slines.Lines.LastLE(inst.Index.Index, out var lrange, out lnum) || lrange.End <= inst.Index.Index)
+        {
+          lnum = loff = 0;
+          return [];
+        }
 
-      var idx = allIds.BinarySearch(new AddrId(address + 1, "", 0));
+        var trem = tok.Index - lrange.Start;
+        loff = 0;
+
+        var len = 0;
+        for (var i = lrange.Start; i < lrange.End && len < lineBuffer.Length; i++)
+        {
+          var token = buffer[new TokenIndex(i, true)];
+          if (token.Type == TokenType.EOL)
+            break;
+          if (len > 0)
+            lineBuffer[len++] = ' ';
+          var tdata = buffer[token];
+          if (len + tdata.Length > lineBuffer.Length)
+            tdata = tdata[..(lineBuffer.Length - len)];
+          tdata.CopyTo(lineBuffer.AsSpan(len));
+          len += tdata.Length;
+          if (--trem == 0)
+            loff = len;
+        }
+        return lineBuffer.AsSpan(0, len);
+      }
+      else
+      {
+        if (!slines.Lines.LastLE(inst.Data.Start, out var line, out lnum))
+        {
+          lnum = loff = 0;
+          return [];
+        }
+
+        loff = inst.Data.Start - line.Start;
+        var ldata = buffer.Data(line);
+        if (ldata.Length > 0 && ldata[^1] == '\n')
+          ldata = ldata[..^1];
+        return ldata;
+      }
+    }
+
+    public AddrId ID(int addr)
+    {
+      if (!labels.LastLE(addr, out var label, out _))
+        return new(addr, "?", 0);
+
+      return new(addr, label.Label, addr - label.Addr);
+    }
+
+    public void AddInst(int addr, TokenIndex token) => insts.Add(new(addr, token));
+    public void AddLabel(string label, int addr) => labels.Add(new(addr, label));
+    public void AddData(int addr, DataType type, int width) => data.Add(new(addr, type, width));
+
+    private SourceLines GetLines(SourceIndex source)
+    {
+      var srecord = buffer.Source(source);
+      // token end is -1 until completed
+      if (lines.TryGetValue(source.Index, out var existing) && existing.Source.Tokens.End != -1)
+        return existing;
+      var slines = existing.Lines ?? new();
+      slines.Clear();
+
+      if (srecord.Synthetic)
+      {
+        var range = srecord.Tokens;
+        // if range unfinished, take all tokens to end
+        if (range.End == -1)
+          range = new(range.Start, buffer.SynthTokenCount);
+
+        var start = range.Start;
+        var current = start;
+        while (current < range.End)
+        {
+          var cend = (start + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
+          if (cend > range.End)
+            cend = range.End;
+          var tokens = buffer.SynthTokens(new(current, cend - current));
+          for (var i = 0; i < tokens.Length; i++)
+          {
+            var lend = i + 1 + current;
+            if (tokens[i].Type == TokenType.EOL || lend - start == AppendBuffer.CHUNK_SIZE)
+            {
+              slines.Add(new(start, lend - start));
+              start = lend;
+            }
+          }
+          current = cend;
+        }
+        slines.Add(new(start, range.End - start));
+      }
+      else
+      {
+        var range = srecord.Data;
+        var start = range.Start;
+        var current = start;
+        while (current < range.End)
+        {
+          var cend = (current + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
+          if (cend > range.End)
+            cend = range.End;
+          var data = buffer.Data(new(current, cend - current));
+          for (var i = 0; i < data.Length; i++)
+          {
+            var lend = i + 1 + current;
+            if (data[i] == '\n' || lend - start == AppendBuffer.CHUNK_SIZE)
+            {
+              slines.Add(new(start, lend - start));
+              start = lend;
+            }
+          }
+          current = cend;
+        }
+        slines.Add(new(start, range.End - start));
+      }
+
+      return lines[source.Index] = new(srecord, slines);
+    }
+
+    private readonly struct InstAddr(int addr, TokenIndex inst) : IAddr
+    {
+      public readonly int Addr = addr;
+      public readonly TokenIndex Inst = inst;
+      int IAddr.Addr => Addr;
+    }
+
+    private readonly struct LabelAddr(int addr, string label) : IAddr
+    {
+      public readonly int Addr = addr;
+      public readonly string Label = label;
+      int IAddr.Addr => Addr;
+    }
+
+    public readonly struct DataRecord(int addr, DataType type, int width) : IAddr
+    {
+      public readonly int Addr = addr;
+      public readonly DataType Type = type;
+      public readonly int Width = width;
+      int IAddr.Addr => Addr;
+    }
+
+    public readonly struct AddrId(int addr, string label, int offset)
+    {
+      public readonly int Addr = addr;
+      public readonly string Label = label;
+      public readonly int Offset = offset;
+    }
+
+    private readonly struct SourceLines(SourceRecord source, AddrList<FixedRange> lines)
+    {
+      public readonly SourceRecord Source = source;
+      public readonly AddrList<FixedRange> Lines = lines;
+    }
+  }
+
+  public class AddrList<T> where T : struct, IAddr
+  {
+    private T[] data = new T[10];
+    private int length = 0;
+    private bool sorted = true;
+
+    public int Length => length;
+
+    public void Clear() => length = 0;
+
+    public void Add(T el)
+    {
+      if (length == data.Length)
+      {
+        var oldData = data;
+        data = new T[length * 2];
+        oldData.CopyTo(data);
+      }
+      data[length++] = el;
+      sorted = length < 2;
+    }
+
+    public bool FindExact(int addr, out T res, out int idx)
+    {
+      idx = SearchAddr(addr);
+      if (idx < 0)
+      {
+        res = default;
+        return false;
+      }
+      res = data[idx];
+      return true;
+    }
+
+    public bool LastLE(int addr, out T res, out int idx)
+    {
+      idx = SearchAddr(addr + 1);
       if (idx < 0)
         idx = ~idx;
-
-      if (idx == allIds.Count)
+      idx--;
+      while (idx >= 0 && data[idx].Addr > addr)
         idx--;
-      if (allIds[idx].Address > address)
-        idx--;
-
-      id = allIds[idx];
-      return new(address, id.Label, id.Offset + address - id.Address);
-    }
-
-    public void AddLabel(string label, int addr)
-    {
-      labelToAddr[label] = addr;
-      addrToLabel[addr] = label;
-      dataProcessed = false;
-    }
-
-    public IEnumerable<string> Labels => labelToAddr.Keys;
-
-    public void AddData(int addr, DataType type, int width)
-    {
-      dataRecords.Add(new(addr, type, width));
-      dataProcessed = false;
-    }
-
-    private void ProcessData()
-    {
-      if (dataProcessed)
-        return;
-
-      var labels = new List<AddrId>();
-      foreach (var (addr, label) in addrToLabel)
-        labels.Add(new(addr, label, 0));
-
-      var addrs = new List<int>();
-      foreach (var iaddr in instTokens.Keys)
-        addrs.Add(iaddr);
-      foreach (var data in dataRecords)
+      if (idx < 0)
       {
-        for (var i = 0; i < data.Width; i++)
-          addrs.Add(data.Address + data.Type.SizeBytes() * i);
+        res = default;
+        return false;
       }
-
-      labels.Sort();
-      addrs.Sort();
-      dataRecords.Sort((a, b) => a.Address.CompareTo(b.Address));
-
-      addrToId.Clear();
-      allIds.Clear();
-
-      var li = 0;
-      foreach (var addr in addrs)
-      {
-        while (li < labels.Count - 1 && addr >= labels[li + 1].Address)
-          li++;
-
-        AddrId id;
-
-        if (li >= labels.Count || addr < labels[li].Address)
-          id = new(addr, "?", 0);
-        else
-          id = new(addr, labels[li].Label, addr - labels[li].Address);
-
-        addrToId[addr] = id;
-        allIds.Add(id);
-      }
-
-      dataProcessed = true;
+      res = data[idx];
+      return true;
     }
 
-    public record struct AddrId(int Address, string Label, int Offset) : IComparable, IComparable<AddrId>
+    public bool FirstGE(int addr, out T res, out int idx)
     {
-      public int CompareTo(AddrId other) => Address.CompareTo(other.Address);
-      public int CompareTo(object obj) => obj switch { AddrId other => CompareTo(other), _ => 0 };
+      idx = SearchAddr(addr - 1);
+      if (idx < 0)
+        idx = ~idx;
+      idx++;
+      while (idx < length && data[idx].Addr < addr)
+        idx++;
+      if (idx >= length)
+      {
+        res = default;
+        return false;
+      }
+      res = data[idx];
+      return true;
     }
-    public record struct DataRecord(int Address, DataType Type, int Width);
 
-    public record struct FrameIter
+    private int SearchAddr(int addr)
     {
-      private readonly DebugSymbols symbols;
-      private Token root;
-      private Token current;
-      private bool done;
-      private bool nextNew;
-
-      public FrameIter(DebugSymbols symbols, Token root)
+      if (length == 0)
+        return -1;
+      var ds = data.AsSpan(..length);
+      if (!sorted)
       {
-        this.symbols = symbols;
-        this.root = root;
-        current = root;
-        done = false;
+        ds.Sort(Comparer.Instance);
+        sorted = true;
       }
+      return ds.BinarySearch(new AddrComp(addr));
+    }
 
-      public bool Next(out Token token, out bool newRoot)
-      {
-        if (done)
-        {
-          token = default;
-          newRoot = default;
-          return false;
-        }
+    public Enumerator GetEnumerator() => new(this);
 
-        token = current;
-        newRoot = nextNew;
+    public struct Enumerator(AddrList<T> list)
+    {
+      private readonly AddrList<T> list = list;
+      private int index = -1;
 
-        nextNew = false;
+      public T Current => list.data[index];
+      public bool MoveNext() => ++index < list.length;
+    }
 
-        if (current.ParentFrame != -1)
-          current = symbols.frames[current.ParentFrame];
-        else if (root.PreviousFrame != -1)
-        {
-          root = symbols.frames[root.PreviousFrame];
-          current = root;
-          nextNew = true;
-        }
-        else
-          done = true;
+    private readonly struct AddrComp(int addr) : IComparable<T>
+    {
+      public readonly int Addr = addr;
+      public int CompareTo(T other) => Addr.CompareTo(other.Addr);
+    }
 
-        return true;
-      }
+    private class Comparer : Comparer<T>
+    {
+      public static readonly Comparer Instance = new();
+      public override int Compare(T x, T y) => x.Addr.CompareTo(y.Addr);
     }
   }
 }

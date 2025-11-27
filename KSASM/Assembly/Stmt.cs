@@ -111,6 +111,7 @@ namespace KSASM.Assembly
 
     public override void FirstPass(Context ctx)
     {
+      Context = ctx;
       if (OperandA.Mode == ParsedOpMode.Const)
         RegisterConst(ctx, OperandA.Consts, AType);
       if (OperandB.Mode == ParsedOpMode.Const)
@@ -125,7 +126,7 @@ namespace KSASM.Assembly
     }
 
     private Exception Invalid(string message) =>
-      throw new InvalidOperationException($"{message} at {Context.StackPos(OpToken)}");
+      throw new InvalidOperationException($"{message} at {TokenProcessor.StackPos(Context.Buffer, OpToken)}");
 
     private DataType AType => OperandA.Mode != ParsedOpMode.Placeholder
       ? Type ?? OperandA.Type ?? throw Invalid($"Missing A Type")

@@ -6,24 +6,64 @@ namespace KSASM.Assembly
 {
   public class Parser : TokenProcessor
   {
-    private readonly LexerReader lexer;
     public readonly List<Statement> Statements = [];
 
-    public Parser(SourceString source, Context ctx) : base(ctx)
+    private readonly AppendBuffer<Token> tokens;
+    private int index = 0;
+
+    public Parser(ParseBuffer buffer, AppendBuffer<Token> tokens) : base(buffer)
     {
-      var tsource = Lexer.LexTokens(source);
-      lexer = new(new MacroParser(tsource.AsStream(), ctx), -2);
+      this.tokens = tokens;
     }
+
+    private bool EOF => index >= tokens.Length;
+
+    protected override bool Peek(out Token token)
+    {
+      if (EOF)
+      {
+        token = default;
+        return false;
+      }
+      token = tokens[index];
+      return true;
+    }
+
+    private bool Take(out Token token)
+    {
+      if (!Peek(out token))
+        return false;
+      index++;
+      return true;
+    }
+
+    private bool TakeType(TokenType type)
+    {
+      if (EOF || tokens[index].Type != type)
+        return false;
+      index++;
+      return true;
+    }
+    private bool TakeType(TokenType type, out Token token)
+    {
+      if (!Peek(out token) || token.Type != type)
+        return false;
+      index++;
+      return true;
+    }
+
+    private bool PeekType(TokenType type) => !EOF && tokens[index].Type == type;
+    private bool PeekType(TokenType type, out Token token) => Peek(out token) && token.Type == type;
 
     public void Parse()
     {
-      while (!lexer.EOF())
+      while (!EOF)
         ParseLine();
     }
 
     private void ParseLine()
     {
-      while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
+      while (!EOF && !PeekType(TokenType.EOL))
       {
         if (TakeType(TokenType.Label, out var ltoken))
           AddLabel(ltoken);
@@ -32,29 +72,23 @@ namespace KSASM.Assembly
         else
           break;
       }
-      if (TakeType(TokenType.EOL, out _))
+      if (TakeType(TokenType.EOL))
         return;
-      if (PeekType(TokenType.Type, out _))
+      if (PeekType(TokenType.Type))
         ParseDataLine();
       else
         ParseInstruction();
 
-      if (!TakeType(TokenType.EOL, out _))
+      if (!TakeType(TokenType.EOL))
         Invalid();
     }
 
-    private bool PeekType(TokenType type, out Token token) =>
-      lexer.Peek(out token) && token.Type == type;
-
-    private bool TakeType(TokenType type, out Token token) =>
-      PeekType(type, out token) && lexer.Take(out token);
-
     private void AddLabel(Token token) =>
-      Statements.Add(new LabelStatement { Token = token, Label = new(token[..^1]) });
+      Statements.Add(new LabelStatement { Token = token, Label = new(buffer[token][..^1]) });
 
     private void AddPosition(Token token)
     {
-      if (!int.TryParse(token[1..], out var addr))
+      if (!int.TryParse(buffer[token][1..], out var addr))
         Invalid(token);
       Statements.Add(new PositionStatement { Token = token, Addr = addr });
     }
@@ -64,14 +98,14 @@ namespace KSASM.Assembly
       if (!TakeType(TokenType.Type, out var token))
         Invalid();
 
-      if (!Enum.TryParse(token[1..], true, out DataType curType))
+      if (!Enum.TryParse(buffer[token][1..], true, out DataType curType))
         Invalid(token);
 
-      while (!lexer.EOF() && !PeekType(TokenType.EOL, out _))
+      while (!EOF && !PeekType(TokenType.EOL))
       {
         if (TakeType(TokenType.Type, out token))
         {
-          if (!Enum.TryParse(token[1..], true, out curType))
+          if (!Enum.TryParse(buffer[token][1..], true, out curType))
             Invalid(token);
         }
         else if (TakeType(TokenType.Label, out token))
@@ -79,7 +113,7 @@ namespace KSASM.Assembly
         else if (TakeType(TokenType.Position, out token))
           AddPosition(token);
         else if (TakeType(TokenType.Word, out token))
-          Statements.Add(new ValueStatement { Token = token, Type = curType, StrValue = token.Str() });
+          Statements.Add(new ValueStatement { Token = token, Type = curType, StrValue = buffer[token].ToString() });
         else if (TakeType(TokenType.Number, out token))
         {
           var stmt = new ValueStatement { Token = token, Type = curType };
@@ -87,20 +121,20 @@ namespace KSASM.Assembly
           switch (curType.VMode())
           {
             case ValueMode.Unsigned:
-              valid = Values.TryParseUnsigned(token, out stmt.Value.Unsigned);
+              valid = Values.TryParseUnsigned(buffer[token], out stmt.Value.Unsigned);
               break;
             case ValueMode.Signed:
-              valid = Values.TryParseSigned(token, out stmt.Value.Signed);
+              valid = Values.TryParseSigned(buffer[token], out stmt.Value.Signed);
               break;
             case ValueMode.Float:
-              valid = Values.TryParseFloat(token, out stmt.Value.Float);
+              valid = Values.TryParseFloat(buffer[token], out stmt.Value.Float);
               break;
           }
           if (!valid)
             Invalid(token);
           if (TakeType(TokenType.Width, out token))
           {
-            if (!int.TryParse(token[1..], out stmt.Width))
+            if (!int.TryParse(buffer[token][1..], out stmt.Width))
               Invalid(token);
           }
           Statements.Add(stmt);
@@ -111,7 +145,7 @@ namespace KSASM.Assembly
             Invalid(token);
 
           var stmt = new ValueListStatement { Token = token, Values = [] };
-          var str = token[1..^1];
+          var str = buffer[token][1..^1];
           for (var i = 0; i < str.Length; i++)
           {
             var c = str[i];
@@ -143,7 +177,7 @@ namespace KSASM.Assembly
           };
           if (TakeType(TokenType.Width, out token))
           {
-            if (!int.TryParse(token[1..], out stmt.Width))
+            if (!int.TryParse(buffer[token][1..], out stmt.Width))
               throw Invalid(token);
           }
           Statements.Add(stmt);
@@ -155,21 +189,21 @@ namespace KSASM.Assembly
 
     private void ParseInstruction()
     {
-      var inst = new InstructionStatement { Context = this.ctx };
+      var inst = new InstructionStatement();
 
       if (!TakeType(TokenType.Word, out inst.OpToken))
         Invalid();
-      if (!Enum.TryParse(inst.OpToken, true, out inst.Op))
+      if (!Enum.TryParse(buffer[inst.OpToken], true, out inst.Op))
         Invalid(inst.OpToken);
 
       if (TakeType(TokenType.Type, out var ttoken))
       {
-        if (!Enum.TryParse(ttoken[1..], true, out DataType parsedType))
+        if (!Enum.TryParse(buffer[ttoken][1..], true, out DataType parsedType))
           Invalid(ttoken);
         inst.Type = parsedType;
       }
 
-      if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(wtoken[1..], out inst.Width))
+      if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(buffer[wtoken][1..], out inst.Width))
         Invalid(wtoken);
 
       inst.OperandA = ParseOperand();
@@ -206,7 +240,7 @@ namespace KSASM.Assembly
       else
       {
         var first = ParseAddr(indirect, false);
-        if (lexer.Peek(out var token) &&
+        if (Peek(out var token) &&
             (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
         {
           op.Base = first;
@@ -222,7 +256,7 @@ namespace KSASM.Assembly
 
       if (TakeType(TokenType.Type, out var ttoken))
       {
-        if (!Enum.TryParse(ttoken[1..], true, out DataType type))
+        if (!Enum.TryParse(buffer[ttoken][1..], true, out DataType type))
           Invalid(ttoken);
         op.Type = type;
       }
@@ -237,15 +271,15 @@ namespace KSASM.Assembly
       addr.Indirect = indirect || TakeType(TokenType.IOpen, out _);
 
       if (TakeType(TokenType.Offset, out var otoken))
-        addr.Offset = otoken.Str();
+        addr.Offset = buffer[otoken].ToString();
       else if (requireOffset)
         Invalid();
 
       if (TakeType(TokenType.Word, out var wtoken))
-        addr.StrAddr = wtoken.Str();
+        addr.StrAddr = buffer[wtoken].ToString();
       else if (TakeType(TokenType.Number, out var ntoken))
       {
-        if (!Values.TryParseValue(ntoken, out var val, out var mode))
+        if (!Values.TryParseValue(buffer[ntoken], out var val, out var mode))
           Invalid(ntoken);
         if (mode != ValueMode.Unsigned)
           Invalid(ntoken);
@@ -294,7 +328,7 @@ namespace KSASM.Assembly
           if (TakeType(TokenType.Offset, out var otoken))
           {
             parseMulDiv();
-            expr.PushOp(otoken, otoken[0] == '-' ? ConstOp.Sub : ConstOp.Add);
+            expr.PushOp(otoken.Index, buffer[otoken][0] == '-' ? ConstOp.Sub : ConstOp.Add);
           }
           else
             break;
@@ -308,19 +342,19 @@ namespace KSASM.Assembly
           if (TakeType(TokenType.Mult, out var mtoken))
           {
             parseGroup();
-            expr.PushOp(mtoken, ConstOp.Mul);
+            expr.PushOp(mtoken.Index, ConstOp.Mul);
           }
           else if (TakeType(TokenType.Div, out var dtoken))
           {
             parseGroup();
-            expr.PushOp(dtoken, ConstOp.Div);
+            expr.PushOp(dtoken.Index, ConstOp.Div);
           }
           else if (TakeType(TokenType.Width, out var wtoken))
           {
-            if (!Values.TryParseValue(wtoken[1..], out var val, out var mode))
+            if (!Values.TryParseValue(buffer[wtoken][1..], out var val, out var mode))
               throw Invalid(wtoken);
-            expr.PushVal(wtoken, new(Value: val, Mode: mode));
-            expr.PushOp(wtoken, ConstOp.Mul);
+            expr.PushVal(wtoken.Index, new(Value: val, Mode: mode));
+            expr.PushOp(wtoken.Index, ConstOp.Mul);
           }
           else
             break;
@@ -335,18 +369,18 @@ namespace KSASM.Assembly
             throw Invalid();
         }
         else if (TakeType(TokenType.Word, out var wtoken))
-          expr.PushVal(wtoken, new(StringVal: wtoken.Str()));
+          expr.PushVal(wtoken.Index, new(StringVal: buffer[wtoken].ToString()));
         else if (TakeType(TokenType.Offset, out var otoken))
         {
           parseGroup();
-          if (otoken[0] == '-')
-            expr.PushOp(otoken, ConstOp.Neg);
+          if (buffer[otoken][0] == '-')
+            expr.PushOp(otoken.Index, ConstOp.Neg);
         }
         else if (TakeType(TokenType.Number, out var ntoken))
         {
-          if (!Values.TryParseValue(ntoken, out var val, out var mode))
+          if (!Values.TryParseValue(buffer[ntoken], out var val, out var mode))
             throw Invalid(ntoken);
-          expr.PushVal(ntoken, new(Value: val, Mode: mode));
+          expr.PushVal(ntoken.Index, new(Value: val, Mode: mode));
         }
         else
           throw Invalid();
@@ -354,8 +388,6 @@ namespace KSASM.Assembly
       parseAddSub();
       return expr;
     }
-
-    protected override bool Peek(out Token token) => lexer.Peek(out token);
   }
 
   public enum ParsedOpMode
@@ -396,12 +428,12 @@ namespace KSASM.Assembly
 
   public enum ConstOp { Leaf, Neg, Add, Sub, Mul, Div }
 
-  public record struct ExprNode(ConstOp Op, Token Token, ConstVal Val = default);
+  public record struct ExprNode(ConstOp Op, TokenIndex Token, ConstVal Val = default);
 
   public class ConstExpr : List<ExprNode>
   {
-    public void PushVal(Token token, ConstVal val) => DoAdd(new(ConstOp.Leaf, token, val));
-    public void PushOp(Token token, ConstOp op) => DoAdd(new(op, token));
+    public void PushVal(TokenIndex token, ConstVal val) => DoAdd(new(ConstOp.Leaf, token, val));
+    public void PushOp(TokenIndex token, ConstOp op) => DoAdd(new(op, token));
 
     public ExprNode Root => Count > 0 ? this[^1] : default;
 

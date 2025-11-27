@@ -1,105 +1,16 @@
 
 using System;
-using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
-  public interface ISource
+  public readonly struct SourceString(string name, string source)
   {
-    public int Length { get; }
-    public char this[int idx] { get; }
-    public ReadOnlySpan<char> this[Range range] { get; }
-    public string TokenStr(Token token);
-    public ReadOnlySpan<char> TokenSpan(Token token);
-    public ReadOnlySpan<char> Line(int line);
-    public (int line, int lpos) LinePos(int pos);
-  }
-
-  public class SourceString : ISource
-  {
-    public readonly string Name;
-    public readonly string Source;
-    private readonly List<int> lineStarts = [];
-    public SourceString(string name, string source)
-    {
-      this.Name = name;
-      this.Source = source;
-      lineStarts.Add(0);
-      for (var i = 0; i < source.Length; i++)
-        if (source[i] == '\n')
-          lineStarts.Add(i + 1);
-      lineStarts.Add(source.Length + 1);
-    }
+    public readonly string Name = name;
+    public readonly string Source = source;
 
     public int Length => Source.Length;
 
     public char this[int idx] => Source[idx];
     public ReadOnlySpan<char> this[Range range] => Source.AsSpan()[range];
-
-    public string TokenStr(Token token) => Source[token.Pos..(token.Pos + token.Len)];
-
-    public ReadOnlySpan<char> TokenSpan(Token token) =>
-      Source.AsSpan()[token.Pos..(token.Pos + token.Len)];
-
-    public ReadOnlySpan<char> Line(int line)
-    {
-      var start = lineStarts[line];
-      var end = line < lineStarts.Count - 1 ? lineStarts[line + 1] : Source.Length;
-      if (end > start)
-        end--; // cut off NL
-      return this[start..end];
-    }
-
-    public (int line, int lpos) LinePos(int pos)
-    {
-      var line = lineStarts.BinarySearch(pos + 1);
-      if (line < 0)
-        line = ~line;
-      var lpos = pos - lineStarts[line - 1];
-      return (line, lpos);
-    }
-  }
-
-  public record struct SToken(TokenType Type, Range Range);
-
-  public record class TokenSource(SourceString Source, List<SToken> Tokens)
-  {
-    public int Count => Tokens.Count;
-
-    public Token this[int index]
-    {
-      get
-      {
-        var tok = Tokens[index];
-        var (off, len) = tok.Range.GetOffsetAndLength(Source.Length);
-        return new()
-        {
-          Source = Source,
-          Type = tok.Type,
-          Pos = off,
-          Len = len,
-          ParentFrame = -1,
-          PreviousFrame = -1
-        };
-      }
-    }
-
-    public ITokenStream AsStream() => new Stream(this);
-
-    private record class Stream(TokenSource Source) : ITokenStream
-    {
-      private int index = 0;
-
-      public bool Next(out Token token)
-      {
-        if (index >= Source.Count)
-        {
-          token = default;
-          return false;
-        }
-        token = Source[index++];
-        return true;
-      }
-    }
   }
 }

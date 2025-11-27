@@ -31,106 +31,6 @@ namespace KSASM.Assembly
     Div, // /
   }
 
-  public struct Token
-  {
-    public SourceString Source;
-    public TokenType Type;
-    public int Pos;
-    public int Len;
-    public string OverrideStr;
-    public int ParentFrame;
-    public int PreviousFrame;
-
-    public string Str() => OverrideStr ?? Source?.TokenStr(this) ?? "";
-    public ReadOnlySpan<char> Span()
-    {
-      if (OverrideStr != null)
-        return OverrideStr;
-      if (Source != null)
-        return Source.TokenSpan(this);
-      return [];
-    }
-
-    public ReadOnlySpan<char> this[Range range] => Span()[range];
-    public char this[int index] => Span()[index];
-
-    public ReadOnlySpan<char> SourceLine()
-    {
-      var (line, _) = Source.LinePos(Pos);
-      return Source.Line(line - 1);
-    }
-
-    public static implicit operator ReadOnlySpan<char>(Token token) => token.Span();
-  }
-
-  public interface ITokenStream
-  {
-    public bool Next(out Token token);
-  }
-
-  // TODO: rename to TokenReader. read from TokenSource
-  public class LexerReader
-  {
-    private readonly ITokenStream stream;
-
-    private bool hasNext = false;
-    private Token next;
-    private bool eof = false;
-    private readonly int parentFrame;
-
-    public LexerReader(ITokenStream stream, int parentFrame)
-    {
-      this.stream = stream;
-      this.parentFrame = parentFrame;
-    }
-
-    public bool Peek(out Token token)
-    {
-      FillNext();
-      token = next;
-      return hasNext;
-    }
-
-    public bool PeekType(TokenType type, out Token token)
-    {
-      if (!Peek(out token))
-        return false;
-      return type == token.Type;
-    }
-
-    public bool Take(out Token token)
-    {
-      FillNext();
-      token = next;
-      var has = hasNext;
-      hasNext = false;
-      return has;
-    }
-
-    public bool TakeType(TokenType type, out Token token) =>
-      PeekType(type, out token) && Take(out token);
-
-    public bool EOF()
-    {
-      FillNext();
-      return eof;
-    }
-
-    private void FillNext()
-    {
-      if (!hasNext && !eof)
-      {
-        hasNext = stream.Next(out next);
-        if (hasNext && parentFrame >= -1 && next.ParentFrame != parentFrame)
-        {
-          next.PreviousFrame = next.ParentFrame;
-          next.ParentFrame = parentFrame;
-        }
-      }
-      eof = !hasNext;
-    }
-  }
-
   public static class Values
   {
     public static bool TryParseUnsigned(ReadOnlySpan<char> str, out ulong val) =>
@@ -199,5 +99,14 @@ namespace KSASM.Assembly
       }
       return ulong.TryParse(str[1..], NumberStyles.BinaryNumber, null, out val);
     }
+
+    public static bool TryFormat(Value value, ValueMode mode, Span<char> buf, out int length) =>
+      mode switch
+      {
+        ValueMode.Unsigned => value.Unsigned.TryFormat(buf, out length),
+        ValueMode.Signed => value.Signed.TryFormat(buf, out length),
+        ValueMode.Float => value.Float.TryFormat(buf, out length),
+        _ => throw new NotImplementedException($"{mode}"),
+      };
   }
 }
