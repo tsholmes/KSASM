@@ -36,19 +36,6 @@ namespace KSASM
       return true;
     }
 
-    [HarmonyPatch(typeof(Mod), nameof(Mod.LoadAssetBundles)), HarmonyTranspiler]
-    public static IEnumerable<CodeInstruction> Mod_LoadAssetBundles_Transpile(IEnumerable<CodeInstruction> instructions)
-    {
-      var matcher = new CodeMatcher(instructions);
-      matcher.MatchStartForward(CodeMatch.Calls(() => XmlLoader.Load<AssetBundle>("", null)));
-      matcher.ThrowIfInvalid("Could not find LoadAssetBundles transpile point");
-
-      matcher.RemoveInstruction();
-      matcher.Insert(CodeInstruction.Call(() => XmlMergeLoader.Load("", null)));
-
-      return matcher.Instructions();
-    }
-
     [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
     public static void ModLibrary_LoadAll_Suffix()
     {

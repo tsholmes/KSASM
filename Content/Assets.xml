@@ -26,9 +26,4 @@
       <Vertex Id="GaugeInstancedVert" />
     </Component>
   </GaugeCanvas>
-  <MergeVehicle>
-    <Value Id="*">
-      <Canvas Id="KSASMTerminal" />
-    </Value>
-  </MergeVehicle>
 </Assets>
