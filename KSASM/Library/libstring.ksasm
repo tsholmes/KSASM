@@ -51,26 +51,26 @@
       $(str.copy.end, str.copy.small1, str.copy.small2, str.copy.small3, \
         str.copy.small4, str.copy.small5, str.copy.small6)
     copy:u8*7 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small6:
     copy:u8*6 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small5:
     copy:u8*5 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small4:
     copy:u8*4 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small3:
     copy:u8*3 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small2:
     copy:u8*2 [str.copy.to], [str.copy.from]
-    jump _, .fnret
+    jump _, .str.copy.fnret
   str.copy.small1:
     copy:u8*1 [str.copy.to], [str.copy.from]
   str.copy.end:
-    jump _, .fnret
+    jump _, .str.copy.fnret
 
 :p24 str.append.local: 0*8
 .fn(str.append, {:p24, to, *2, out}, {:p24, from, *2})
@@ -78,7 +78,7 @@
   sum:p24*2 str.append.local, $(0) # move local ptr to end
   .str.copy(str.append.local:p24, str.append.from:p24)
   add:p24 $[str.append.to+3], $[str.append.from+3] # add from length
-  jump _, .fnret
+  jump _, .str.append.fnret
 
 :u8 char.zero: "0" char.neg: "-"
 :u8 str.fmt.buf: 0*64 str.fmt.buf.end:
@@ -107,10 +107,10 @@
   str.itoa.end:
     .str.copy(str.itoa.to:p24, str.itoa.local:p24)
     copy:p24 $[str.itoa.to + 3], $[str.itoa.local + 3]
-    jump _, .fnret
+    jump _, .str.itoa.fnret
   str.itoa.zero:
     copy:u8 [str.itoa.to], char.zero
     copy:p24 $[str.itoa.to+3], $(1)
-    jump _, .fnret
+    jump _, .str.itoa.fnret
 
 }

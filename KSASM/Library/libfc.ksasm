@@ -32,14 +32,14 @@
 })
 
 .fn(burn_wait)
-  branchifzero fc.burns.outdated:u8, .fnret
+  branchifzero fc.burns.outdated:u8, .burn_wait.fnret
   sleep:u8 _, $(1)
   jump:p24 fc.burn_wait, _
 
 .fn(burn_clear)
   copy:u64 fc.burns.index, $(0)
   _burn_clear_loop:
-    branchifzero fc.burns.count:u64, .fnret
+    branchifzero fc.burns.count:u64, .burn_clear.fnret
     copy:u8 fc.burn.delete, $(1)
     jump:p24 fc._burn_clear_loop, _
 

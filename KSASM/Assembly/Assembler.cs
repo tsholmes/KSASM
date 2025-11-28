@@ -252,6 +252,11 @@ namespace KSASM.Assembly
             ops.Negate(ref right);
             vals.Push(right);
             break;
+          case ConstOp.Not:
+            right = vals.Pop();
+            ops.BitNot(ref right);
+            vals.Push(right);
+            break;
           case ConstOp.Add:
             right = vals.Pop();
             left = vals.Pop();

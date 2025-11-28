@@ -7,7 +7,7 @@
 
 .macro id 1
 
-.region data 1024
+.region data 2048
 
 .device.define(.system.id, {
   :f64 time: 0
@@ -16,5 +16,21 @@
   :u64 terminal_data: 0*64 # 8*64 = 512 = 32*16 chars
 })
 
+# valid printables:
+# 45-57 (- . / 0-9)
+# 65-90 (A-Z)
+# 97-122 (a-z)
+# space excluded
+:u64 printable.temp: 0*2
+.fn(printable, {:u8, c, , out})
+  copy system.printable.temp:i16, system.printable.c:u8
+  swz:i16*6 system.printable.temp, $(0)
+  sub:i16*6 system.printable.temp, $(44,58,64,91,96,123)
+  sign:i16*6 system.printable.temp, _ # signs will be +- on match, otherwise (--, 0-, +0, ++)
+  sum:i16*6 system.printable.temp, $(0,0,1,1,2,2) # if any matched, one of these will be zero
+  mulr:i16*3 system.printable.temp, $(0)
+  sign system.printable.c:u8, system.printable.temp:i16
+  xor:u8 system.printable.c, $(1)
+  jump _, .printable.fnret
 .endns
 }

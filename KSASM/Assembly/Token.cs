@@ -29,6 +29,7 @@ namespace KSASM.Assembly
     BClose, // }
     Mult, // * when not part of width
     Div, // /
+    Not, // ~
   }
 
   public static class Values

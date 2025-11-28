@@ -18,6 +18,12 @@ namespace KSASM
     public B UintParameter(out ParamDeviceField<V, uint> field) =>
       Parameter(DataType.U64, UintValueConverter.Instance, out field);
 
+    public B Ulong(DeviceFieldGetter<V, ulong> getter, DeviceFieldSetter<V, ulong> setter = null) =>
+      Leaf(DataType.U64, UlongValueConverter.Instance, getter, setter);
+
+    public B UlongParameter(out ParamDeviceField<V, ulong> field, DeviceFieldSetter<T, V> onSet = null) =>
+      Parameter(DataType.U64, UlongValueConverter.Instance, out field);
+
     public B Double(DeviceFieldGetter<V, double> getter, DeviceFieldSetter<V, double> setter = null) =>
       Leaf(DataType.F64, DoubleValueConverter.Instance, getter, setter);
 
@@ -36,12 +42,14 @@ namespace KSASM
 
   public class StringDeviceField<T>(int maxLen, DeviceFieldGetter<T, string> getter) : IDeviceField<T>
   {
+    private static System.Text.Encoding Encoding = System.Text.Encoding.ASCII;
     public int Length => maxLen;
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
       var str = getter(ref parent);
-      var bytes = System.Text.Encoding.ASCII.GetBytes(str, deviceBuf);
+      var trimmed = Trim(str);
+      var bytes = Encoding.GetBytes(trimmed, deviceBuf);
       if (bytes < maxLen)
         deviceBuf[bytes..].Clear();
       deviceBuf.Slice(offset, readBuf.Length).CopyTo(readBuf);
@@ -50,6 +58,31 @@ namespace KSASM
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       // read only
+    }
+
+    private ReadOnlySpan<char> Trim(ReadOnlySpan<char> str)
+    {
+      var bcount = 0;
+      var ccount = 0;
+      var checkLen = str.Length;
+      while (ccount < str.Length)
+      {
+        if (ccount + checkLen > str.Length)
+          checkLen = str.Length - ccount;
+        var b = Encoding.GetByteCount(str[ccount..(ccount + checkLen)]);
+        if (bcount + b > maxLen)
+        {
+          checkLen >>= 1;
+          if (checkLen == 0)
+            break;
+        }
+        else
+        {
+          bcount += b;
+          ccount += checkLen;
+        }
+      }
+      return str[..ccount];
     }
   }
 
@@ -69,6 +102,12 @@ namespace KSASM
   {
     public override uint FromUnsigned(ulong val) => (uint)val;
     public override ulong ToUnsigned(uint val) => val;
+  }
+
+  public class UlongValueConverter : UnsignedValueConverter<UlongValueConverter, ulong>
+  {
+    public override ulong FromUnsigned(ulong val) => val;
+    public override ulong ToUnsigned(ulong val) => val;
   }
 
   public class DoubleValueConverter : FloatValueConverter<DoubleValueConverter, double>

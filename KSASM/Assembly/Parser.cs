@@ -376,6 +376,11 @@ namespace KSASM.Assembly
           if (buffer[otoken][0] == '-')
             expr.PushOp(otoken.Index, ConstOp.Neg);
         }
+        else if (TakeType(TokenType.Not, out var bntoken))
+        {
+          parseGroup();
+          expr.PushOp(bntoken.Index, ConstOp.Not);
+        }
         else if (TakeType(TokenType.Number, out var ntoken))
         {
           if (!Values.TryParseValue(buffer[ntoken], out var val, out var mode))
@@ -426,7 +431,7 @@ namespace KSASM.Assembly
     public bool Indirect;
   }
 
-  public enum ConstOp { Leaf, Neg, Add, Sub, Mul, Div }
+  public enum ConstOp { Leaf, Neg, Not, Add, Sub, Mul, Div }
 
   public record struct ExprNode(ConstOp Op, TokenIndex Token, ConstVal Val = default);
 

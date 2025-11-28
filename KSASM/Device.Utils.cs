@@ -175,4 +175,12 @@ namespace KSASM
     public uint Length;
     public uint Index;
   }
+
+  public struct SearchListView<T>
+  {
+    public T Parent;
+    public uint Length;
+    public uint Index;
+    public ulong Key;
+  }
 }

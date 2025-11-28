@@ -36,7 +36,7 @@
   ..macro _retname_full ..addns(._retname)
   :p24 .label(.._retname) 0
   .._fn_arg_labels(name, args)
-  .macro fnret [.._retname_full]:p24
+  .macro ..concat(name .fnret) [.._retname_full]:p24
   .macro name .._fn_macro_args(args) {
     .._fn_in_args(name, args)
     call:p24 .._retname_full, ..addns(name)

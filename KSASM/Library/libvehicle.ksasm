@@ -26,6 +26,13 @@
   .endns
   patches: .types.listview(patches.)
   patch: .types.patch(patch.)
+  parts: .types.listview(parts.)
+  part: .ns part.
+    :u64 id: 0
+    :u64 parent: 0
+    :u8 name.len: 0
+    :u64 name: 0*8 # 64 chars max
+  .endns
 })
 
 .endns

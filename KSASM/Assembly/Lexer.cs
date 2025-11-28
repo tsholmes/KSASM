@@ -53,6 +53,7 @@ namespace KSASM.Assembly
         '{' => Add(TokenType.BOpen, 1),
         '}' => Add(TokenType.BClose, 1),
         '/' => Add(TokenType.Div, 1),
+        '~' => Add(TokenType.Not, 1),
         _ when IsWordStart(c) => TakeWordLike(),
         '@' => TakePosition(),
         '*' => TakeWidth(),
