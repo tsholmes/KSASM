@@ -30,6 +30,7 @@ This describes the textual language the assembler parses to generate the instruc
 | `BClose` | `}` | |
 | `Mult` | `*` | when not followed by digit |
 | `Div` | `/` | |
+| `Not` | `~` | |
 
 ## Grammar
 
@@ -84,7 +85,7 @@ muldiv-expr = group-expr muldiv-expr-right*
 
 muldiv-expr-right = Width | ((Mult | Div) group-expr)
 
-group-expr = Number | Word | (POpen addsub-expr PClose) | (Offset group-expr)
+group-expr = Number | Word | (POpen addsub-expr PClose) | (Offset group-expr) | (Not group-expr)
 ```
 
 ## Macros
