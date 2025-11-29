@@ -102,10 +102,50 @@ namespace KSASM.Assembly
     public AddrId ID(int addr)
     {
       if (!labels.LastLE(addr, out var label, out _))
-        return new(addr, "?", 0);
+        return new(addr, "", 0);
 
       return new(addr, label.Label, addr - label.Addr);
     }
+
+    public void GetAddrInfo(int startAddr, Span<AddrInfo> infos)
+    {
+      infos.Clear();
+      var endAddr = startAddr + infos.Length;
+
+      if (insts.FirstGE(startAddr, out _, out int index))
+      {
+        while (index < insts.Length)
+        {
+          var inst = insts[index++];
+          if (inst.Addr >= endAddr)
+            break;
+          infos[inst.Addr - startAddr].Inst = inst.Inst;
+        }
+      }
+      if (labels.FirstGE(startAddr, out _, out index))
+      {
+        while (index < labels.Length)
+        {
+          var label = labels[index++];
+          if (label.Addr >= endAddr)
+            break;
+          infos[label.Addr - startAddr].LabelIndex = index;
+        }
+      }
+      if (data.FirstGE(startAddr, out _, out index))
+      {
+        while (index < data.Length)
+        {
+          var dat = data[index++];
+          if (dat.Addr >= endAddr)
+            break;
+          infos[dat.Addr - startAddr].Type = dat.Type;
+          infos[dat.Addr - startAddr].Width = dat.Width;
+        }
+      }
+    }
+
+    public ReadOnlySpan<char> Label(int index) => labels[index].Label;
 
     public void AddInst(int addr, TokenIndex token) => insts.Add(new(addr, token));
     public void AddLabel(string label, int addr) => labels.Add(new(addr, label));
@@ -212,6 +252,14 @@ namespace KSASM.Assembly
     }
   }
 
+  public struct AddrInfo
+  {
+    public TokenIndex? Inst;
+    public DataType? Type;
+    public int? Width;
+    public int? LabelIndex;
+  }
+
   public class AddrList<T> where T : struct, IAddr
   {
     private T[] data = new T[10];
@@ -219,6 +267,17 @@ namespace KSASM.Assembly
     private bool sorted = true;
 
     public int Length => length;
+
+    public T this[int index]
+    {
+      get
+      {
+        if (index < 0 || index >= length)
+          throw new IndexOutOfRangeException();
+        SortIfNeeded();
+        return data[index];
+      }
+    }
 
     public void Clear() => length = 0;
 
@@ -251,7 +310,8 @@ namespace KSASM.Assembly
       idx = SearchAddr(addr + 1);
       if (idx < 0)
         idx = ~idx;
-      idx--;
+      if (idx >= length)
+        idx = length - 1;
       while (idx >= 0 && data[idx].Addr > addr)
         idx--;
       if (idx < 0)
@@ -268,7 +328,6 @@ namespace KSASM.Assembly
       idx = SearchAddr(addr - 1);
       if (idx < 0)
         idx = ~idx;
-      idx++;
       while (idx < length && data[idx].Addr < addr)
         idx++;
       if (idx >= length)
@@ -284,13 +343,18 @@ namespace KSASM.Assembly
     {
       if (length == 0)
         return -1;
+      SortIfNeeded();
       var ds = data.AsSpan(..length);
-      if (!sorted)
-      {
-        ds.Sort(Comparer.Instance);
-        sorted = true;
-      }
       return ds.BinarySearch(new AddrComp(addr));
+    }
+
+    private void SortIfNeeded()
+    {
+      if (length < 2 || sorted)
+        return;
+      var ds = data.AsSpan(..length);
+      ds.Sort(Comparer.Instance);
+      sorted = true;
     }
 
     public Enumerator GetEnumerator() => new(this);

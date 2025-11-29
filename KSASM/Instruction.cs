@@ -1,4 +1,7 @@
 
+using System;
+using KSASM.Assembly;
+
 namespace KSASM
 {
   public struct Instruction
@@ -97,6 +100,99 @@ namespace KSASM
       encoded |= BaseEncoding.Encode((ulong)AddrBase);
 
       return encoded;
+    }
+
+    public int Format(Span<char> output, DebugSymbols debug = null)
+    {
+      var line = new LineBuilder(stackalloc char[128]);
+
+      var sameTypes = AType == BType;
+
+      line.Add(OpCode, "g");
+
+      if (DataWidth > 1)
+      {
+        line.Add('*');
+        line.Add(DataWidth, "g");
+      }
+
+      if (sameTypes)
+      {
+        line.Add(':');
+        line.Add(AType, "g");
+      }
+
+      line.Sp();
+
+      var ia = OperandMode.HasFlag(OperandMode.IndirectA);
+      var ib = OperandMode.HasFlag(OperandMode.IndirectB);
+
+      if (OperandMode.HasFlag(OperandMode.AddrBaseOffAB))
+      {
+        if (BaseIndirect) line.Add('[');
+        line.AddAddr(AddrBase, debug);
+        if (BaseIndirect) line.Add(']');
+
+        if (ia) line.Add('[');
+        if (OffsetA >= 0) line.Add('+');
+        line.Add(OffsetA, "g");
+        if (ia) line.Add(']');
+        if (!sameTypes)
+        {
+          line.Add(':');
+          line.Add(AType, "g");
+        }
+
+        line.Add(',');
+        line.Sp();
+
+        if (ib) line.Add('[');
+        if (OffsetB >= 0) line.Add('+');
+        line.Add(OffsetB, "g");
+        if (ib) line.Add(']');
+        if (!sameTypes)
+        {
+          line.Add(':');
+          line.Add(BType, "g");
+        }
+      }
+      else
+      {
+        if (ia) line.Add('[');
+        line.AddAddr(AddrBase, debug);
+        if (ia) line.Add(']');
+        if (!sameTypes)
+        {
+          line.Add(':');
+          line.Add(AType, "g");
+        }
+
+        line.Add(',');
+        line.Sp();
+
+        if (ib) line.Add('[');
+        line.AddAddr(AddrBase + OffsetB, debug);
+        if (ib) line.Add(']');
+        if (!sameTypes)
+        {
+          line.Add(':');
+          line.Add(BType, "g");
+        }
+      }
+
+      var fline = line.Line;
+      if (fline.Length > output.Length)
+      {
+        fline = fline[..(output.Length - 3)];
+        fline.CopyTo(output);
+        "...".CopyTo(output[^3..]);
+        return output.Length;
+      }
+      else
+      {
+        fline.CopyTo(output);
+        return fline.Length;
+      }
     }
   }
 }

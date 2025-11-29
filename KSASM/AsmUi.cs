@@ -99,12 +99,38 @@ namespace KSASM
       if (vehicle != KSA.Program.ControlledVehicle)
         return false;
 
+      isTyping = false;
+      Step(vehicle);
+
       if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
       {
         ImGui.End();
         return false;
       }
 
+      if (ImGui.BeginTabBar("##tabs"))
+      {
+        if (ImGui.BeginTabItem("Editor##editor"))
+        {
+          DrawEditor();
+          ImGui.EndTabItem();
+        }
+        if (ImGui.BeginTabItem("Debug##debug"))
+        {
+          DrawDebug();
+          ImGui.EndTabItem();
+        }
+        ImGui.EndTabBar();
+      }
+
+      DrawControls();
+
+      ImGui.End();
+      return false;
+    }
+
+    private static void DrawEditor()
+    {
       if (ImGui.BeginCombo("##Library", "Load Library Script"))
       {
         for (var i = 0; i < Library.Index.Count; i++)
@@ -126,13 +152,90 @@ namespace KSASM
       );
       isTyping = ImGui.IsItemActive();
 
-      Step(vehicle);
-
       if (ImGui.Button("Assemble##asm"))
         Assemble();
+    }
 
-      ImGui.SameLine();
+    private const int VALS_PER_LINE = 16;
+    private const int VAL_LINES = 16;
+    private const int TOTAL_VALS = VALS_PER_LINE * VAL_LINES;
+    private static int debugAddress = 0;
+    private static bool debugPC = true;
+    private static void ScrollToAddr(int addr, int align = 1)
+    {
+      debugAddress -= debugAddress % align;
+      debugAddress += addr % align;
 
+      if (addr < debugAddress || addr >= debugAddress + TOTAL_VALS)
+        debugAddress = addr - VALS_PER_LINE * 3;
+      else if (debugAddress > addr - VALS_PER_LINE * 3)
+        debugAddress -= (debugAddress - (addr - VALS_PER_LINE * 3) + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
+      else if (addr - TOTAL_VALS + VALS_PER_LINE * 4 > debugAddress)
+        debugAddress += ((addr - TOTAL_VALS + VALS_PER_LINE * 4) - debugAddress + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
+
+      if (debugAddress < 0)
+        debugAddress = 0;
+      if (debugAddress > Processor.MAIN_MEM_SIZE - TOTAL_VALS)
+      {
+        debugAddress = Processor.MAIN_MEM_SIZE - TOTAL_VALS;
+        if (addr % align != 0)
+          debugAddress -= VALS_PER_LINE;
+      }
+
+      debugAddress -= debugAddress % align;
+      debugAddress += addr % align;
+    }
+    private static void DrawDebug()
+    {
+      if (debugPC)
+        ScrollToAddr(Current.Processor.PC, 8);
+
+      var pcoff = Current.Processor.PC - debugAddress;
+
+      var line = new DataLineView(stackalloc char[128], stackalloc char[32], Current.Symbols);
+
+      line.Clear();
+
+      line.Add('@');
+      line.Add(debugAddress, "X6");
+
+      ImGui.Text(line);
+
+      Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
+      Current.Symbols?.GetAddrInfo(debugAddress, infos);
+
+      Span<byte> data = stackalloc byte[TOTAL_VALS];
+      Current.Processor.MappedMemory.Read(data, debugAddress);
+
+      line.Clear();
+      line.Empty(6);
+      for (var i = 0; i < VALS_PER_LINE; i++)
+      {
+        line.Sp();
+        line.Add(i, "X2");
+      }
+      ImGui.Text(line);
+
+      var offset = 0;
+      for (var lnum = 0; lnum < VAL_LINES; lnum++)
+      {
+        line.Clear();
+        var addr = debugAddress + lnum * VALS_PER_LINE;
+        line.Add(addr, "X6");
+        line.Sp();
+        for (var i = 0; i < VALS_PER_LINE; i++)
+        {
+          if (offset == pcoff)
+            line.HighlightData(8, VALS_PER_LINE, new(128, 16, 16));
+          line.AddData(infos[offset], data[offset..]);
+          offset++;
+        }
+        ImGui.Text(line);
+      }
+    }
+
+    private static void DrawControls()
+    {
       if (ImGui.Button("Run##run"))
         Restart();
 
@@ -155,9 +258,6 @@ namespace KSASM
         stats = "";
         output.Clear();
       }
-
-      ImGui.End();
-      return false;
     }
 
     public static void LoadLibrary(string name)
