@@ -1,0 +1,30 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ModName>KSASM</ModName>
+    <KSADir>C:\Program Files\Kitten Space Agency\</KSADir>
+    <KSAContent>$(KSADir)Content\</KSAContent>
+    <ModDir>$(KSAContent)$(ModName)\</ModDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
+    <KSARef Include="KSA" />
+    <KSARef Include="Brutal.Imgui" />
+    <KSARef Include="Brutal.Core.Numerics" />
+    <KSARef Include="Brutal.Core.Strings" />
+    <KSARef Include="Brutal.ImGui.Abstractions" />
+
+    <ModFile Include="$(OutputPath)\$(ModName).dll" />
+    <ModFile Include="..\Content\*.*" />
+
+    <Reference Include="@(KSARef)">
+      <HintPath>$(KSADir)%(Identity).dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <_ModFiles Include="@(ModFile)">
+      <Name>%(FileName)%(Extension)</Name>
+      <Src>%(FullPath)</Src>
+      <Dest>$(ModDir)%(FileName)%(Extension)</Dest>
+    </_ModFiles>
+  </ItemGroup>
+</Project>

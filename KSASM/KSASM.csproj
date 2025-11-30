@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="KSASM.props" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -7,9 +8,8 @@
     <LanguageTargets>$(MSBuildToolsPath)\Microsoft.CSharp.targets</LanguageTargets>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <LangVersion>14.0</LangVersion>
-
     <OutputPath>bin\$(Configuration)</OutputPath>
-    <AssemblyName>KSASM</AssemblyName>
+    <AssemblyName>$(ModName)</AssemblyName>
     <OutputType>Exe</OutputType>
     <StartupObject>KSASM.Program</StartupObject>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -31,27 +31,9 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
-    <Reference Include="KSA">
-      <HintPath>C:\Program Files\Kitten Space Agency\KSA.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Brutal.ImGui">
-      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.ImGui.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Brutal.Core.Numerics">
-      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.Core.Numerics.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Brutal.Core.Strings">
-      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.Core.Strings.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Brutal.ImGui.Abstractions">
-      <HintPath>C:\Program Files\Kitten Space Agency\Brutal.ImGui.Abstractions.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-  </ItemGroup>
+  <Target Name="CopyToMods" AfterTargets="Build">
+    <RemoveDir Directories="$(ModDir)" />
+    <Message Text="%(_ModFiles.Name) -> %(_ModFiles.Dest)" Importance="high" />
+    <Copy SourceFiles="%(_ModFiles.Src)" DestinationFiles="%(_ModFiles.Dest)" />
+  </Target>
 </Project>
