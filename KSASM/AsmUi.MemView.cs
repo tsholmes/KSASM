@@ -15,11 +15,10 @@ namespace KSASM
     private static bool debugShowInst = true;
     private static bool debugShowData = true;
     private static int hoverAddress = -1;
-    private static ImGuiFilter searchFilter;
+    private static InputFilter searchFilter;
 
     private static void DrawMemView()
     {
-      isTyping = false;
       searchFilter ??= new();
       Span<char> lineBuf = stackalloc char[512];
       var dline = new DataLineView(lineBuf, VALS_PER_LINE, Current.Symbols);
@@ -40,7 +39,6 @@ namespace KSASM
           searchFilter.Clear();
         }
         searchFilter.Draw("##debugLabelFilter", -float.Epsilon);
-        isTyping = ImGui.IsItemActive();
 
         var more = 0;
         var count = Current.Symbols?.LabelCount ?? 0;

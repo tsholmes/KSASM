@@ -9,10 +9,10 @@ namespace KSASM
 {
   public static partial class AsmUi
   {
-    private static readonly byte[] buffer = new byte[65536];
-
+    private static InputString editorInput;
     private static void DrawEditor()
     {
+      editorInput ??= new(65536);
       if (ImGui.BeginCombo("##Library", "Load Library Script"))
       {
         for (var i = 0; i < Library.Index.Count; i++)
@@ -28,11 +28,10 @@ namespace KSASM
 
       ImGui.InputTextMultiline(
         "###source",
-        buffer.AsSpan(),
+        editorInput.Input,
         new float2(600, 400),
         ImGuiInputTextFlags.None
       );
-      isTyping = ImGui.IsItemActive();
 
       if (ImGui.Button("Assemble##asm"))
         Assemble();
@@ -40,14 +39,12 @@ namespace KSASM
 
     private static void Assemble()
     {
+      var input = editorInput.Input;
       Current.Reset();
       var stopwatch = Stopwatch.StartNew();
       try
       {
-        var len = buffer.IndexOf((byte)0);
-        var source = System.Text.Encoding.ASCII.GetString(buffer, 0, len);
-
-        Current.Symbols = Assembler.Assemble(new("script", source), Current.Processor.Memory);
+        Current.Symbols = Assembler.Assemble(new("script", input.ToString()), Current.Processor.Memory);
 
         stopwatch.Stop();
         AddOutput($"Assembled in {stopwatch.Elapsed.Milliseconds:0.##}ms");
@@ -61,9 +58,7 @@ namespace KSASM
     public static void LoadLibrary(string name)
     {
       var source = Library.LoadImport(name);
-      var sbytes = System.Text.Encoding.ASCII.GetBytes(source.Source);
-      sbytes.CopyTo(buffer);
-      buffer[sbytes.Length] = 0;
+      editorInput = new(65536, source.Source);
     }
   }
 }

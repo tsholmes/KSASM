@@ -96,6 +96,7 @@ namespace KSASM
       isTyping = false;
       Step(vehicle);
 
+      ImGui.SetNextWindowSizeConstraints(new(600, 400), new(1e10f, 1e10f));
       if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
       {
         ImGui.End();
@@ -114,10 +115,17 @@ namespace KSASM
           DrawMemView();
           ImGui.EndTabItem();
         }
+        if (ImGui.BeginTabItem("MemWatch##memwatch"))
+        {
+          DrawMemWatch();
+          ImGui.EndTabItem();
+        }
         ImGui.EndTabBar();
       }
 
       DrawControls();
+
+      isTyping = ImGui.GetIO().WantTextInput;
 
       ImGui.End();
       return false;
@@ -125,6 +133,8 @@ namespace KSASM
 
     private static void DrawControls()
     {
+      if (ImGui.GetCursorPosY() < 400)
+        ImGui.SetCursorPosY(400);
       if (ImGui.Button("Run##run")) Restart();
       ImGui.SameLine();
       if (ImGui.Button("Resume##resume")) Resume();
@@ -219,14 +229,6 @@ namespace KSASM
       Console.WriteLine(line);
       while (output.Count > 20)
         output.RemoveAt(0);
-    }
-
-    private class ImGuiFilter
-    {
-      private ImGuiTextFilter filter;
-      public void Clear() => filter.Clear();
-      public void Draw(ImString label = default, float width = default) => filter.Draw(label, width);
-      public bool PassFilter(ImString text) => filter.PassFilter(text);
     }
   }
 

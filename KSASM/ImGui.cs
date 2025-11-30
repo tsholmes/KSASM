@@ -1,5 +1,6 @@
 
 using System;
+using System.Linq.Expressions;
 using Brutal.ImGuiApi;
 using Brutal.Numerics;
 using KSASM.Assembly;
@@ -231,5 +232,66 @@ namespace KSASM
       line[..pad].Fill(' ');
       length = len;
     }
+  }
+
+  public static class ImGuiX
+  {
+    public static bool InputEnum<T>(ImString label, ref T value) where T : struct, Enum
+    {
+      var changed = false;
+      var line = new LineBuilder(stackalloc char[16]);
+
+      line.Clear();
+      line.Add(value, "g");
+      if (ImGui.BeginCombo(label, line.Line))
+      {
+        var cast = Cast<T, long>.F;
+        var curlval = cast(value);
+        var vals = Enum.GetValues<T>();
+
+        for (var i = 0; i < vals.Length; i++)
+        {
+          ImGui.PushID(i);
+          line.Clear();
+          line.Add(vals[i], "g");
+          if (ImGui.Selectable(line.Line, cast(vals[i]) == curlval))
+          {
+            value = vals[i];
+            changed = true;
+          }
+          ImGui.PopID();
+        }
+
+        ImGui.EndCombo();
+      }
+
+      return changed;
+    }
+
+    private class Cast<A, B> where A : struct where B : struct
+    {
+      public static readonly Func<A, B> F = Make();
+
+      private static Func<A, B> Make()
+      {
+        var p = Expression.Parameter(typeof(A));
+        var c = Expression.Convert(p, typeof(B));
+        return Expression.Lambda<Func<A, B>>(c, p).Compile();
+      }
+    }
+  }
+
+  public class InputFilter
+  {
+    private ImGuiTextFilter filter;
+    public void Clear() => filter.Clear();
+    public void Draw(ImString label = default, float width = default) => filter.Draw(label, width);
+    public bool PassFilter(ImString text) => filter.PassFilter(text);
+  }
+
+  public class InputString(int capacity, ReadOnlySpan<char> initialContent = default)
+  {
+    public readonly ImInputString Input = new(capacity, initialContent);
+    public ReadOnlySpan<char> AsString() => (ImString)Input;
   }
 }

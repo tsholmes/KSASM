@@ -148,6 +148,17 @@ namespace KSASM.Assembly
     public int LabelCount => labels.Length;
     public LabelAddr Label(int index) => labels[index];
 
+    public LabelAddr? FindLabel(ReadOnlySpan<char> label)
+    {
+      for (var i = 0; i < labels.Length; i++)
+      {
+        var l = labels[i];
+        if (label.Equals(l.Label, StringComparison.Ordinal))
+          return l;
+      }
+      return null;
+    }
+
     public void AddInst(int addr, TokenIndex token) => insts.Add(new(addr, token));
     public void AddLabel(string label, int addr) => labels.Add(new(addr, label));
     public void AddData(int addr, DataType type, int width) => data.Add(new(addr, type, width));
