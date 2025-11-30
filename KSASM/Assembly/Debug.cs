@@ -107,12 +107,12 @@ namespace KSASM.Assembly
       return new(addr, label.Label, addr - label.Addr);
     }
 
-    public void GetAddrInfo(int startAddr, Span<AddrInfo> infos)
+    public void GetAddrInfo(int startAddr, Span<AddrInfo> infos, bool includeInst = true, bool includeData = true)
     {
       infos.Clear();
       var endAddr = startAddr + infos.Length;
 
-      if (insts.FirstGE(startAddr, out _, out int index))
+      if (includeInst && insts.FirstGE(startAddr, out _, out int index))
       {
         while (index < insts.Length)
         {
@@ -132,7 +132,7 @@ namespace KSASM.Assembly
           infos[label.Addr - startAddr].LabelIndex = index;
         }
       }
-      if (data.FirstGE(startAddr, out _, out index))
+      if (includeData && data.FirstGE(startAddr, out _, out index))
       {
         while (index < data.Length)
         {
@@ -353,7 +353,7 @@ namespace KSASM.Assembly
       if (length < 2 || sorted)
         return;
       var ds = data.AsSpan(..length);
-      ds.Sort(Comparer.Instance);
+      ds.SortStable(Comparer.Instance);
       sorted = true;
     }
 

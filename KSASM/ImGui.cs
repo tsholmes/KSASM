@@ -81,6 +81,8 @@ namespace KSASM
           valLine.Length = 21;
           valLine.Add("...");
         }
+        else
+          valLine.PadLeft(24);
         curval = valLine.Line;
       }
       else if (infoRem == 0 && info.Type.HasValue && data.Length >= info.Type.Value.SizeBytes())
@@ -122,6 +124,7 @@ namespace KSASM
       valLine.Add(type);
       if (valLine.Length > type.SizeBytes() * 3)
         valLine.Length = len;
+      valLine.PadLeft(type.SizeBytes() * 3);
       curval = valLine.Line;
       infoRem = type.SizeBytes();
       infoWidthRem--;
@@ -217,6 +220,16 @@ namespace KSASM
         Add('+');
         Add(id.Offset, "g");
       }
+    }
+
+    public void PadLeft(int len)
+    {
+      var pad = len - length;
+      if (pad <= 0)
+        return;
+      line[..length].CopyTo(line[pad..]);
+      line[..pad].Fill(' ');
+      length = len;
     }
   }
 }

@@ -357,4 +357,21 @@ namespace KSASM
 
     public T Pop() => values[--length];
   }
+
+  public static partial class Extensions
+  {
+    public static void SortStable<T>(this Span<T> span, Comparer<T> comparer)
+    {
+      // n^2 insertion sort
+      for (var i = 1; i < span.Length; i++)
+      {
+        var j = i;
+        while (j > 0 && comparer.Compare(span[j - 1], span[j]) > 0)
+        {
+          (span[j - 1], span[j]) = (span[j], span[j - 1]);
+          j--;
+        }
+      }
+    }
+  }
 }

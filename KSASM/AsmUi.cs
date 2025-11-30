@@ -158,6 +158,8 @@ namespace KSASM
     private const int TOTAL_VALS = VALS_PER_LINE * VAL_LINES;
     private static int debugAddress = 0;
     private static bool debugPC = true;
+    private static bool debugShowInst = true;
+    private static bool debugShowData = true;
     private static int hoverAddress = -1;
     private static void ScrollToAddr(int addr, int align = 1)
     {
@@ -185,6 +187,22 @@ namespace KSASM
     }
     private static void DrawDebug()
     {
+      ImGui.BeginDisabled(debugPC);
+      ImGui.SetNextItemWidth(ImGui.GetFontSize() * 8f);
+      ImGui.InputInt("##debugAddress", ref debugAddress, VALS_PER_LINE, TOTAL_VALS, ImGuiInputTextFlags.CharsHexadecimal);
+      ImGui.EndDisabled();
+
+      debugAddress = Math.Clamp(debugAddress, 0, Processor.MAIN_MEM_SIZE - TOTAL_VALS);
+
+      ImGui.SameLine();
+      ImGui.Checkbox("Follow PC", ref debugPC);
+
+      ImGui.SameLine();
+      ImGui.Checkbox("Show Inst", ref debugShowInst);
+
+      ImGui.SameLine();
+      ImGui.Checkbox("Show Data", ref debugShowData);
+
       if (debugPC)
         ScrollToAddr(Current.Processor.PC, 8);
 
@@ -195,7 +213,7 @@ namespace KSASM
       var line = new LineBuilder(lineBuf);
 
       Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
-      Current.Symbols?.GetAddrInfo(debugAddress, infos);
+      Current.Symbols?.GetAddrInfo(debugAddress, infos, debugShowInst, debugShowData);
 
       Span<byte> data = stackalloc byte[TOTAL_VALS];
       Current.Processor.MappedMemory.Read(data, debugAddress);
@@ -204,8 +222,9 @@ namespace KSASM
       dline.Empty(7);
       for (var i = 0; i < VALS_PER_LINE; i++)
       {
+        var col = (debugAddress + i) & 15;
         dline.Sp();
-        dline.Add(i, "X2");
+        dline.Add(col, "X2");
       }
       ImGui.Text(dline);
 
