@@ -6,16 +6,18 @@ using KSASM.Assembly;
 
 namespace KSASM
 {
-  public ref struct DataLineView(Span<char> line, Span<char> valbuf, DebugSymbols debug = null)
+  public ref struct DataLineView(Span<char> buffer, int dataPerLine, DebugSymbols debug = null)
   {
-    private LineBuilder line = new(line);
-    private readonly Span<char> valbuf = valbuf;
+    private LineBuilder line = new(buffer[..128]);
+    private LineBuilder valLine = new(buffer[128..]);
+    private readonly int dataPerLine = dataPerLine;
     private readonly DebugSymbols debug = debug;
     private Span<char> curval = [];
     private AddrInfo info = default;
     private int dataCount = 0;
     private int infoRem = 0;
     private int infoWidthRem = 0;
+    private int highlightNext = 0;
     private int highlightRem = 0;
     private ImColor8 highlightCr = default;
 
@@ -34,27 +36,36 @@ namespace KSASM
     public void Empty(int len) => line.Empty(len);
     public void Sp() => line.Sp();
 
-    public void HighlightData(int count, int maxCount, ImColor8 cr)
+    public void HighlightData(int count, ImColor8 cr)
     {
+      if (highlightRem > 0)
+        return;
       var dcount = count;
-      if (dataCount + dcount > maxCount)
-        dcount = maxCount - dataCount;
+      if (dataCount + dcount > dataPerLine)
+        dcount = dataPerLine - dataCount;
 
-      highlightRem = count - dcount;
+      highlightNext = count - dcount;
       highlightCr = cr;
 
       var drawList = ImGui.GetWindowDrawList();
       var pos = ImGui.GetCursorScreenPos();
       pos.X += TextSizes[line.Length].X;
 
-      var ccount = dcount * 3 - 1;
+      var ccount = dcount * 3;
       drawList.AddRectFilled(pos, pos + TextSizes[ccount], cr);
+      highlightRem = dcount;
     }
 
-    public void AddData(AddrInfo info, Span<byte> data)
+    public void AddData(AddrInfo info, Span<byte> data, out floatRect rect)
     {
+      var rmin = ImGui.GetCursorScreenPos() + new float2(TextSizes[line.Length].X, 0);
+      var rmax = rmin + TextSizes[3];
+      rect = new() { Min = rmin, Max = rmax };
+
+      if (highlightNext > 0 && dataCount == 0)
+        HighlightData(highlightNext, highlightCr);
       if (highlightRem > 0)
-        HighlightData(highlightRem, highlightRem, highlightCr);
+        highlightRem--;
       if (infoRem == 0 && infoWidthRem > 0)
         FillDataValue(data);
       if (infoRem == 0 && info.Inst.HasValue && data.Length >= 8)
@@ -63,9 +74,14 @@ namespace KSASM
         infoRem = 8;
         var val = Encoding.Decode(data, DataType.U64);
         var inst = Instruction.Decode(val.Unsigned);
-        curval = valbuf[..23];
-        var len = inst.Format(curval, debug);
-        curval = curval[..len];
+        valLine.Clear();
+        inst.Format(ref valLine, debug);
+        if (valLine.Length > 24)
+        {
+          valLine.Length = 21;
+          valLine.Add("...");
+        }
+        curval = valLine.Line;
       }
       else if (infoRem == 0 && info.Type.HasValue && data.Length >= info.Type.Value.SizeBytes())
       {
@@ -81,10 +97,12 @@ namespace KSASM
         if (dlen < 3) line.Empty(3 - dlen);
         infoRem--;
         curval = curval[dlen..];
-        return;
       }
-      Add(data[0], "X2");
-      Sp();
+      else
+      {
+        Sp();
+        Add(data[0], "X2");
+      }
       dataCount++;
     }
 
@@ -98,24 +116,13 @@ namespace KSASM
         return;
       }
       var val = Encoding.Decode(data, type);
-      int len;
-      var valid = type.VMode() switch
-      {
-        ValueMode.Unsigned => val.Unsigned.TryFormat(valbuf, out len, type == DataType.P24 ? "X6" : "g"),
-        ValueMode.Signed => val.Signed.TryFormat(valbuf, out len),
-        ValueMode.Float => val.Float.TryFormat(valbuf, out len),
-        _ => throw new InvalidOperationException($"{type.VMode()}"),
-      };
-      if (!valid)
-        throw new InvalidOperationException();
-      valbuf[len++] = ':';
-      if (!Enum.TryFormat(type, valbuf[len..], out var elen, "g"))
-        throw new InvalidOperationException();
-      if (len + elen <= (type.SizeBytes() * 3 - 1))
-        len += elen;
-      else
-        len--;
-      curval = valbuf[..len];
+      valLine.Clear();
+      valLine.Add(val, type);
+      var len = valLine.Length;
+      valLine.Add(type);
+      if (valLine.Length > type.SizeBytes() * 3)
+        valLine.Length = len;
+      curval = valLine.Line;
       infoRem = type.SizeBytes();
       infoWidthRem--;
     }
@@ -140,7 +147,11 @@ namespace KSASM
     private readonly Span<char> line = line;
     private int length = 0;
 
-    public int Length => length;
+    public int Length
+    {
+      get => length;
+      set => length = value >= 0 && value <= length ? value : throw new IndexOutOfRangeException($"{value}");
+    }
 
     public Span<char> Line => line[..length];
 
@@ -155,6 +166,23 @@ namespace KSASM
       if (!val.TryFormat(line[length..], out int written, format, null))
         throw new InvalidOperationException();
       length += written;
+    }
+
+    public void Add(Value val, DataType type)
+    {
+      switch (type.VMode())
+      {
+        case ValueMode.Unsigned: Add(val.Unsigned, type == DataType.P24 ? "X6" : "g"); break;
+        case ValueMode.Signed: Add(val.Signed, "g"); break;
+        case ValueMode.Float: Add(val.Float, "g"); break;
+        default: throw new InvalidOperationException($"{type.VMode()}");
+      }
+    }
+
+    public void Add(DataType type)
+    {
+      Add(':');
+      Add(type, "g");
     }
 
     public void Add(ReadOnlySpan<char> chars)

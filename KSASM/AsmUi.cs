@@ -16,13 +16,10 @@ namespace KSASM
   [HarmonyPatch]
   public static class AsmUi
   {
-    [HarmonyPatch(typeof(FlightComputer), nameof(FlightComputer.DrawUi)), HarmonyPostfix]
-    public static void FlightComputer_DrawUi_Postfix(
-      ref bool __result,
-      Viewport inViewport,
-      Astronomical.UiContext uiContext)
+    [HarmonyPatch(typeof(Vehicle), nameof(Vehicle.OnDrawUi)), HarmonyPrefix]
+    public static void Vehicle_OnDrawUi_Postfix(ref bool __result, Vehicle __instance, Viewport inViewport)
     {
-      __result |= DrawUi(uiContext.Astronomical as Vehicle, inViewport, uiContext);
+      __result |= DrawUi(__instance, inViewport);
     }
 
     [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]
@@ -94,7 +91,7 @@ namespace KSASM
     private static GaugeCanvas terminalCanvas;
     private static readonly List<TerminalLabel> terminalLabels = [];
 
-    public static bool DrawUi(Vehicle vehicle, Viewport inViewport, Astronomical.UiContext uiContext)
+    public static bool DrawUi(Vehicle vehicle, Viewport inViewport)
     {
       if (vehicle != KSA.Program.ControlledVehicle)
         return false;
@@ -161,6 +158,7 @@ namespace KSASM
     private const int TOTAL_VALS = VALS_PER_LINE * VAL_LINES;
     private static int debugAddress = 0;
     private static bool debugPC = true;
+    private static int hoverAddress = -1;
     private static void ScrollToAddr(int addr, int align = 1)
     {
       debugAddress -= debugAddress % align;
@@ -192,14 +190,9 @@ namespace KSASM
 
       var pcoff = Current.Processor.PC - debugAddress;
 
-      var line = new DataLineView(stackalloc char[128], stackalloc char[32], Current.Symbols);
-
-      line.Clear();
-
-      line.Add('@');
-      line.Add(debugAddress, "X6");
-
-      ImGui.Text(line);
+      Span<char> lineBuf = stackalloc char[512];
+      var dline = new DataLineView(lineBuf, VALS_PER_LINE, Current.Symbols);
+      var line = new LineBuilder(lineBuf);
 
       Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
       Current.Symbols?.GetAddrInfo(debugAddress, infos);
@@ -207,46 +200,148 @@ namespace KSASM
       Span<byte> data = stackalloc byte[TOTAL_VALS];
       Current.Processor.MappedMemory.Read(data, debugAddress);
 
-      line.Clear();
-      line.Empty(6);
+      dline.Clear();
+      dline.Empty(7);
       for (var i = 0; i < VALS_PER_LINE; i++)
       {
-        line.Sp();
-        line.Add(i, "X2");
+        dline.Sp();
+        dline.Add(i, "X2");
       }
-      ImGui.Text(line);
+      ImGui.Text(dline);
+
+      var hoverStart = -1;
+      var hoverLen = 0;
+
+      if (hoverAddress >= debugAddress & hoverAddress < debugAddress + TOTAL_VALS)
+      {
+        var hoff = hoverAddress - debugAddress;
+        var instOff = -1;
+        var dataOff = -1;
+        var dataLen = 0;
+        for (var i = hoff; i >= 0; i--)
+        {
+          if (instOff == -1 && hoff - i < 8 && infos[i].Inst.HasValue)
+            instOff = i;
+          if (dataOff == -1 && infos[i].Type.HasValue)
+          {
+            var dlen = infos[i].Type.Value.SizeBytes() * infos[i].Width.Value;
+            if (hoff - i < dlen)
+            {
+              dataOff = i;
+              dataLen = dlen;
+            }
+          }
+        }
+        if (instOff >= 0)
+        {
+          hoverStart = instOff;
+          hoverLen = 8;
+        }
+        else if (dataOff >= 0)
+        {
+          hoverStart = dataOff;
+          hoverLen = dataLen;
+        }
+        else
+        {
+          hoverStart = hoff;
+          hoverLen = 1;
+        }
+      }
+
+      var mouse = ImGui.GetMousePos();
 
       var offset = 0;
+      var nextHoverOff = -1;
       for (var lnum = 0; lnum < VAL_LINES; lnum++)
       {
-        line.Clear();
+        dline.Clear();
         var addr = debugAddress + lnum * VALS_PER_LINE;
-        line.Add(addr, "X6");
-        line.Sp();
+        dline.Add(addr, "X6");
+        dline.Sp();
         for (var i = 0; i < VALS_PER_LINE; i++)
         {
           if (offset == pcoff)
-            line.HighlightData(8, VALS_PER_LINE, new(128, 16, 16));
-          line.AddData(infos[offset], data[offset..]);
+            dline.HighlightData(8, new(128, 16, 16));
+          else if (offset == hoverStart)
+            dline.HighlightData(hoverLen, new(128, 128, 128));
+          dline.AddData(infos[offset], data[offset..], out var rect);
+          if (rect.Contains(mouse))
+            nextHoverOff = offset;
           offset++;
         }
-        ImGui.Text(line);
+        ImGui.Text(dline);
       }
+
+      if (nextHoverOff >= hoverStart && nextHoverOff < hoverStart + hoverLen && ImGui.BeginTooltip())
+      {
+        var addr = debugAddress + hoverStart;
+        var id = Current.Symbols?.ID(addr) ?? default;
+
+        line.Clear();
+        line.Add(addr, "X6");
+        if (!string.IsNullOrEmpty(id.Label))
+        {
+          line.Add(": ");
+          line.Add(id.Label);
+          if (id.Offset != 0)
+          {
+            line.Add('+');
+            line.Add(id.Offset, "g");
+          }
+        }
+        ImGui.Text(dline);
+
+        var info = infos[hoverStart];
+        if (info.Inst.HasValue && hoverStart + 8 <= TOTAL_VALS)
+        {
+          var inst = Instruction.Decode(Encoding.Decode(data[hoverStart..], DataType.U64).Unsigned);
+          line.Clear();
+          inst.Format(ref line, Current.Symbols);
+          ImGui.Text(line.Line);
+        }
+        else if (info.Type.HasValue)
+        {
+          var type = info.Type.Value;
+          var width = info.Width.Value;
+          line.Clear();
+          line.Add(type);
+          line.Add('*');
+          line.Add(width, "g");
+          ImGui.Text(line.Line);
+
+          var doff = hoverStart;
+
+          for (var i = 0; i < width && doff + type.SizeBytes() <= TOTAL_VALS; i++, doff += type.SizeBytes())
+          {
+            line.Clear();
+            var val = Encoding.Decode(data[doff..], type);
+            line.Add(val, type);
+            ImGui.Text(line.Line);
+          }
+        }
+        else
+        {
+          line.Clear();
+          line.Add(data[hoverStart], "X2");
+          ImGui.Text(line.Line);
+        }
+
+        ImGui.EndTooltip();
+      }
+
+      hoverAddress = nextHoverOff + debugAddress;
     }
 
     private static void DrawControls()
     {
-      if (ImGui.Button("Run##run"))
-        Restart();
-
+      if (ImGui.Button("Run##run")) Restart();
       ImGui.SameLine();
-
+      if (ImGui.Button("Resume##resume")) Resume();
+      ImGui.SameLine();
       doStep = ImGui.Button("Step##step");
-
       ImGui.SameLine();
-
-      if (ImGui.Button("Stop##stop"))
-        Stop();
+      if (ImGui.Button("Stop##stop")) Stop();
 
       ImGui.Text(stats);
 
@@ -346,6 +441,11 @@ namespace KSASM
       Current.Processor.SleepTime = 0;
     }
 
+    private static void Resume()
+    {
+      Current.Processor.SleepTime = 0;
+    }
+
     private static void Stop()
     {
       Current.Processor.SleepTime = ulong.MaxValue;
@@ -364,5 +464,11 @@ namespace KSASM
   {
     public uint4 PackedText = Terminal.CharCodes[0];
     public override uint4 PackData0() => PackedText;
+  }
+
+  public static partial class Extensions
+  {
+    public static bool Contains(this in floatRect r, float2 p) =>
+      p.X >= r.Min.X && p.X < r.Max.X && p.Y >= r.Min.Y && p.Y < r.Max.Y;
   }
 }

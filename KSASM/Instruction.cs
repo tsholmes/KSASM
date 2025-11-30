@@ -102,10 +102,8 @@ namespace KSASM
       return encoded;
     }
 
-    public int Format(Span<char> output, DebugSymbols debug = null)
+    public void Format(ref LineBuilder line, DebugSymbols debug = null)
     {
-      var line = new LineBuilder(stackalloc char[128]);
-
       var sameTypes = AType == BType;
 
       line.Add(OpCode, "g");
@@ -178,20 +176,6 @@ namespace KSASM
           line.Add(':');
           line.Add(BType, "g");
         }
-      }
-
-      var fline = line.Line;
-      if (fline.Length > output.Length)
-      {
-        fline = fline[..(output.Length - 3)];
-        fline.CopyTo(output);
-        "...".CopyTo(output[^3..]);
-        return output.Length;
-      }
-      else
-      {
-        fline.CopyTo(output);
-        return fline.Length;
       }
     }
   }
