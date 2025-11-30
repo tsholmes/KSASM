@@ -145,7 +145,8 @@ namespace KSASM.Assembly
       }
     }
 
-    public ReadOnlySpan<char> Label(int index) => labels[index].Label;
+    public int LabelCount => labels.Length;
+    public LabelAddr Label(int index) => labels[index];
 
     public void AddInst(int addr, TokenIndex token) => insts.Add(new(addr, token));
     public void AddLabel(string label, int addr) => labels.Add(new(addr, label));
@@ -223,7 +224,7 @@ namespace KSASM.Assembly
       int IAddr.Addr => Addr;
     }
 
-    private readonly struct LabelAddr(int addr, string label) : IAddr
+    public readonly struct LabelAddr(int addr, string label) : IAddr
     {
       public readonly int Addr = addr;
       public readonly string Label = label;

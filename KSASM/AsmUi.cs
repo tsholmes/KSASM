@@ -161,6 +161,7 @@ namespace KSASM
     private static bool debugShowInst = true;
     private static bool debugShowData = true;
     private static int hoverAddress = -1;
+    private static ImGuiFilter searchFilter;
     private static void ScrollToAddr(int addr, int align = 1)
     {
       debugAddress -= debugAddress % align;
@@ -187,14 +188,75 @@ namespace KSASM
     }
     private static void DrawDebug()
     {
+      isTyping = false;
+      searchFilter ??= new();
+      Span<char> lineBuf = stackalloc char[512];
+      var dline = new DataLineView(lineBuf, VALS_PER_LINE, Current.Symbols);
+      var line = new LineBuilder(lineBuf);
+
       ImGui.BeginDisabled(debugPC);
       ImGui.SetNextItemWidth(ImGui.GetFontSize() * 8f);
       ImGui.InputInt("##debugAddress", ref debugAddress, VALS_PER_LINE, TOTAL_VALS, ImGuiInputTextFlags.CharsHexadecimal);
+      var dhovered = debugPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+
+      ImGui.SameLine();
+      ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16f);
+      if (ImGui.BeginCombo("##debugLabel", "Goto Label", ImGuiComboFlags.HeightLargest))
+      {
+        if (ImGui.IsWindowAppearing())
+        {
+          ImGui.SetKeyboardFocusHere();
+          searchFilter.Clear();
+        }
+        searchFilter.Draw("##debugLabelFilter", -float.Epsilon);
+        isTyping = ImGui.IsItemActive();
+
+        var more = 0;
+        var count = Current.Symbols?.LabelCount ?? 0;
+        var matchCount = 0;
+        const int MAX_LABELS = 14;
+        Span<AddrInfo> linfo = stackalloc AddrInfo[1];
+        for (var i = 0; i < count; i++)
+        {
+          var label = Current.Symbols.Label(i);
+          if (!searchFilter.PassFilter(label.Label))
+            continue;
+          if (matchCount == MAX_LABELS)
+          {
+            more++;
+            continue;
+          }
+          matchCount++;
+          line.Clear();
+          line.Add(label.Addr, "X6");
+          line.Sp();
+          line.Add(label.Label);
+          ImGui.PushID(i);
+          if (ImGui.Selectable(line.Line))
+          {
+            Current.Symbols.GetAddrInfo(label.Addr, linfo, false, debugShowData);
+            ScrollToAddr(label.Addr, linfo[0].Type?.SizeBytes() ?? 1);
+          }
+          ImGui.PopID();
+        }
+        if (more > 0)
+        {
+          line.Clear();
+          line.Add('+');
+          line.Add(more, "g");
+          line.Add(" more");
+          ImGui.Text(line.Line);
+        }
+
+        ImGui.EndCombo();
+      }
+      dhovered |= debugPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
       ImGui.EndDisabled();
+      if (dhovered)
+        ImGui.SetTooltip("Disable 'Follow PC' to edit address");
 
       debugAddress = Math.Clamp(debugAddress, 0, Processor.MAIN_MEM_SIZE - TOTAL_VALS);
 
-      ImGui.SameLine();
       ImGui.Checkbox("Follow PC", ref debugPC);
 
       ImGui.SameLine();
@@ -207,10 +269,6 @@ namespace KSASM
         ScrollToAddr(Current.Processor.PC, 8);
 
       var pcoff = Current.Processor.PC - debugAddress;
-
-      Span<char> lineBuf = stackalloc char[512];
-      var dline = new DataLineView(lineBuf, VALS_PER_LINE, Current.Symbols);
-      var line = new LineBuilder(lineBuf);
 
       Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
       Current.Symbols?.GetAddrInfo(debugAddress, infos, debugShowInst, debugShowData);
@@ -291,6 +349,10 @@ namespace KSASM
         }
         ImGui.Text(dline);
       }
+
+      // dont draw hover tooltip if search combo is open
+      if (!ImGui.IsWindowFocused())
+        nextHoverOff = -1;
 
       if (nextHoverOff >= hoverStart && nextHoverOff < hoverStart + hoverLen && ImGui.BeginTooltip())
       {
@@ -476,6 +538,14 @@ namespace KSASM
       Console.WriteLine(line);
       while (output.Count > 20)
         output.RemoveAt(0);
+    }
+
+    private class ImGuiFilter
+    {
+      private ImGuiTextFilter filter;
+      public void Clear() => filter.Clear();
+      public void Draw(ImString label = default, float width = default) => filter.Draw(label, width);
+      public bool PassFilter(ImString text) => filter.PassFilter(text);
     }
   }
 
