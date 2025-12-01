@@ -92,10 +92,7 @@
   str.itoa.loop:
     copy:i64 $[str.itoa.local + 16], str.itoa.val
     div:i64 str.itoa.val, $(10)
-    # TODO: replace this with mod
-      mul:i64 str.itoa.val, $(10)
-      sub:i64 $[str.itoa.local + 16], str.itoa.val
-      div:i64 str.itoa.val, $(10)
+    mod:i64 $[str.itoa.local + 16], $(10)
     add:p24*2 str.itoa.local, $(-1, 1)
     copy:u8 [str.itoa.local], char.zero
     add:u8 [str.itoa.local], $[str.itoa.local + 16]
