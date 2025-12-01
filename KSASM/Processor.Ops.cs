@@ -20,6 +20,18 @@ namespace KSASM
 
       Memory.Write(opA, B);
     }
+    private delegate double FloatUnaryOp(double b);
+    private void UnaryBToAFloat(ValuePointer opA, ValuePointer opB, FloatUnaryOp op)
+    {
+      Memory.Read(opB, B);
+      B.Convert(ValueMode.Float);
+
+      for (var i = 0; i < B.Width; i++)
+        B.Values[i].Float = op(B.Values[i].Float);
+
+      B.Convert(opA.Type.VMode());
+      Memory.Write(opA, B);
+    }
 
     private delegate void BinaryOp(ValueOps ops, ref Value a, Value b);
     private void BinaryBToA(ValuePointer opA, ValuePointer opB, BinaryOp op)
@@ -97,8 +109,10 @@ namespace KSASM
     private void OpBitXor(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.BitXor(ref A, B));
 
-    private void OpShiftLeft(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpShiftRight(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpShiftLeft(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.ShiftLeft(ref A, B));
+    private void OpShiftRight(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.ShiftRight(ref A, B));
 
     private void OpAdd(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.Add(ref A, B));
@@ -109,38 +123,41 @@ namespace KSASM
     private void OpDivide(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.Div(ref A, B));
 
-    private void OpRemainder(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpModulus(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpPower(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpRemainder(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Remainder(ref A, B));
+    private void OpModulus(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Modulus(ref A, B));
+    private void OpPower(ValuePointer opA, ValuePointer opB) =>
+      BinaryBToA(opA, opB, (ops, ref A, B) => ops.Power(ref A, B));
 
     private void OpMax(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.Max(ref A, B));
     private void OpMin(ValuePointer opA, ValuePointer opB) =>
       BinaryBToA(opA, opB, (ops, ref A, B) => ops.Min(ref A, B));
 
-    private void OpFloor(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpCeil(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpRound(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpTrunc(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpSqrt(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpExp(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpPow2(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpPow10(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpLog(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpLog2(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpLog10(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpSin(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpCos(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpTan(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpSinh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpCosh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpTanh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAsin(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAcos(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAtan(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAsinh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAcosh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
-    private void OpAtanh(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
+    private void OpFloor(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Floor);
+    private void OpCeil(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Ceiling);
+    private void OpRound(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Round);
+    private void OpTrunc(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Truncate);
+    private void OpSqrt(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Sqrt);
+    private void OpExp(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Exp);
+    private void OpPow2(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(f, 2));
+    private void OpPow10(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(f, 10));
+    private void OpLog(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log);
+    private void OpLog2(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log2);
+    private void OpLog10(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log10);
+    private void OpSin(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Sin);
+    private void OpCos(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Cos);
+    private void OpTan(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Tan);
+    private void OpSinh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Sinh);
+    private void OpCosh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Cosh);
+    private void OpTanh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Tanh);
+    private void OpAsin(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Asin);
+    private void OpAcos(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Acos);
+    private void OpAtan(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Atan);
+    private void OpAsinh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Asinh);
+    private void OpAcosh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Acosh);
+    private void OpAtanh(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Atanh);
 
     private void OpRand(ValuePointer opA, ValuePointer opB) => throw new NotImplementedException();
 

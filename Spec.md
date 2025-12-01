@@ -111,7 +111,7 @@ Some operations noted below always convert to `Float` before execution, converti
 |     | subtract     | sub   | An = An - Bn                            | . |
 |     | multiply     | mul   | An = An * Bn                            | . |
 |     | divide       | div   | An = An / Bn                            | . |
-|     | remainder    | rem   | An = remainder(An / Bn)                 | `\|An\|` in `[0, \|Bn\|)` with sign `An/Bn` |
+|     | remainder    | rem   | An = remainder(An / Bn)                 | `\|An\|` in `[0, \|Bn\|)` with sign `An` |
 |     | modulus      | mod   | An = An % Bn                            | `[0, \|Bn\|)` |
 |     | power        | pow   | An = An ** Bn                           | . |
 |     | max          |       | An = max(An, Bn)                        | . |
