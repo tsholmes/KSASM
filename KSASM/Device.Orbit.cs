@@ -1,4 +1,6 @@
 
+using System;
+using Brutal.Numerics;
 using KSA;
 
 namespace KSASM
@@ -31,6 +33,13 @@ namespace KSASM
 
     public B Astronomical(DeviceFieldBufGetter<V, Astronomical> getter) => NonNull(getter, b => b
       .Uint((ref a) => a.Hash)
+      .Double((ref a) => a.MeanRadius)
+      .Double((ref a) => a is Vehicle v ? v.TotalMass : a.Mass)
+      .Double((ref a) => a.IsStar() ? double.PositiveInfinity : a.SphereOfInfluence)
+      .Frame(FrameDef.Ecl)
+      .Frame(FrameDef.Cci)
+      .Frame(FrameDef.Cce)
+      .Frame(FrameDef.Orb)
       .Orbit((ref a, _) => (a as IOrbiting)?.Orbit)
       .List((ref a) => a.Children, (b, get) => b.ChildHash(new(get)))
       .String(32, (ref a, _) => a.Id)
@@ -45,5 +54,25 @@ namespace KSASM
       .FlightPlan((ref b, _) => b.FlightPlan)
       .Bool((ref b) => false, (ref b, del) => { if (del) b.Vehicle.FlightComputer.RemoveBurn(b); })
     );
+  }
+
+  public class FrameDef(Func<Astronomical, double3> pos, Func<Astronomical, double3> vel)
+  {
+    public readonly Func<Astronomical, double3> Pos = pos;
+    public readonly Func<Astronomical, double3> Vel = vel;
+
+    public static readonly FrameDef Ecl = new(a => a.GetPositionEcl(), a => a.GetVelocityEcl());
+    public static readonly FrameDef Cci = new(a => a.GetPositionCci(), a => a.GetVelocityCci());
+    public static readonly FrameDef Cce = new(a => a.GetPositionCce(), a => a.GetVelocityCce());
+    public static readonly FrameDef Orb = new(a => a.GetPositionOrb(), a => a.GetVelocityOrb());
+  }
+
+  public static partial class Extensions
+  {
+    public static B Frame<B, T, V>(this DeviceFieldBuilder<B, T, V> b, FrameDef frame)
+      where B : DeviceFieldBuilder<B, T, V>
+      where V : Astronomical => b
+        .Double3((ref a, _) => frame.Pos(a))
+        .Double3((ref a, _) => frame.Vel(a));
   }
 }
