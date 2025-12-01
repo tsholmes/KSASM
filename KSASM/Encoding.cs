@@ -33,7 +33,7 @@ namespace KSASM
       DataType.U64 => 8,
       DataType.F64 => 8,
       DataType.P24 => 3,
-      DataType.C128 => 16,
+      // DataType.C128 => 16,
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),
     };
 
@@ -46,7 +46,7 @@ namespace KSASM
       DataType.U64 => ValueMode.Unsigned,
       DataType.F64 => ValueMode.Float,
       DataType.P24 => ValueMode.Unsigned,
-      DataType.C128 => ValueMode.Complex,
+      // DataType.C128 => ValueMode.Complex,
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),
     };
 
@@ -91,7 +91,7 @@ namespace KSASM
         case DataType.U64: val.Unsigned = eval.U64; break;
         case DataType.F64: val.Float = eval.F64; break;
         case DataType.P24: val.Unsigned = eval.P24; break;
-        case DataType.C128:
+        // case DataType.C128:
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
       }
@@ -110,7 +110,7 @@ namespace KSASM
         case DataType.U64: eval.U64 = val.Unsigned; break;
         case DataType.F64: eval.F64 = val.Float; break;
         case DataType.P24: eval.P24 = (uint)val.Unsigned; break;
-        case DataType.C128:
+        // case DataType.C128:
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
       }

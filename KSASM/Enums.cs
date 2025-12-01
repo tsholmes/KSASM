@@ -12,7 +12,7 @@ namespace KSASM
     U64 = 4,
     F64 = 5,
     P24 = 6,
-    C128 = 7,
+    // C128 = 7,
   }
 
   [Flags]

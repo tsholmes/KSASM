@@ -12,7 +12,7 @@ namespace KSASM
     Unsigned,
     Signed,
     Float,
-    Complex,
+    // Complex,
   }
 
   public struct ValuePointer
