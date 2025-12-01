@@ -1,9 +1,9 @@
 <Assets>
   <GaugeCanvas Id="KSASMTerminal">
     <DisplayName Value="KSASM Terminal" />
-    <AnchorUv X="1" Y="1" />
-    <PivotUv X="1" Y="1" />
-    <OffsetUv X="-0.001" Y="-0.300" />
+    <AnchorUv X="1" Y="0" />
+    <PivotUv X="1" Y="0" />
+    <OffsetUv X="-0.01" Y="0.02" />
     <SizeUv X="0.2" Y="0.16" Locked="true" />
     <Component Name="Back">
       <AnchorUv X="0" Y="0" />

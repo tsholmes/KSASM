@@ -9,10 +9,22 @@ namespace KSASM
 {
   public static partial class AsmUi
   {
+    private const string DEFAULT_SCRIPT = """
+      .region CONST 65536
+      .region maindata 1024
+
+      :u8 hello: "Hello World!" hello.end:
+
+      @0
+      main:
+        debugstr:p24 $(hello), $(hello.end-hello)
+        sleep:u64 _, $(-1)
+        jump:p24 _, main
+      """;
     private static InputString editorInput;
     private static void DrawEditor()
     {
-      editorInput ??= new(65536);
+      editorInput ??= new(65536, DEFAULT_SCRIPT);
       if (ImGui.BeginCombo("##Library", "Load Library Script"))
       {
         for (var i = 0; i < Library.Index.Count; i++)

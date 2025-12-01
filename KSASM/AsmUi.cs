@@ -31,6 +31,13 @@ namespace KSASM
       return true;
     }
 
+    [HarmonyPatch(typeof(GaugeCanvas), nameof(GaugeCanvas.OnDrawMenuBar)), HarmonyPostfix]
+    public static void GaugeCanvas_OnDrawMenuBar_Postfix()
+    {
+      if (ImGui.MenuItem("KSASM", default, enabled))
+        enabled = !enabled;
+    }
+
     [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
     public static void ModLibrary_LoadAll_Suffix()
     {
@@ -73,9 +80,10 @@ namespace KSASM
     private const ImGuiWindowFlags WINDOW_FLAGS =
       ImGuiWindowFlags.NoResize |
       ImGuiWindowFlags.NoScrollbar |
-      ImGuiWindowFlags.NoCollapse |
       ImGuiWindowFlags.AlwaysAutoResize |
       ImGuiWindowFlags.NoSavedSettings;
+
+    private static bool enabled = true;
 
     private static string stats = "";
     private static readonly List<string> output = [];
@@ -96,8 +104,12 @@ namespace KSASM
       isTyping = false;
       Step(vehicle);
 
+      if (!enabled)
+        return false;
+
       ImGui.SetNextWindowSizeConstraints(new(600, 400), new(1e10f, 1e10f));
-      if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", WINDOW_FLAGS))
+      ImGui.SetNextWindowPos(ScreenReference.UvToPixels(new(0.15f, 0.1f)), ImGuiCond.Appearing);
+      if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", ref enabled, WINDOW_FLAGS))
       {
         ImGui.End();
         return false;

@@ -3,7 +3,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using HarmonyLib;
 using KSASM.Assembly;
 
 namespace KSASM
@@ -22,8 +21,7 @@ namespace KSASM
       MemoryAccessor.DebugWrite = pargs.HasFlag("debug", "write") || pargs.HasFlag("debug", "mem");
       Processor.DebugOps = pargs.HasFlag("debug", "ops");
 
-      Library.LibraryDir = Path.Join(Directory.GetCurrentDirectory(), "Library");
-      Library.RefreshIndex();
+      KSASMMod.CWD = Directory.GetCurrentDirectory();
 
       Directory.SetCurrentDirectory(KSADir);
 
@@ -31,11 +29,16 @@ namespace KSASM
 
       if (pargs.HasFlag("game"))
       {
-        RunPatches();
+        var mod = new KSASMMod();
+        mod.ImmediateLoad(null);
+
         if (pargs.Positional(0, out var name))
           AsmUi.LoadLibrary(name);
         return RunGame(args);
       }
+
+      Library.LibraryDir = Path.Join(KSASMMod.CWD, "Library");
+      Library.RefreshIndex();
 
       Library.CacheAll();
 
@@ -80,12 +83,6 @@ namespace KSASM
       if (File.Exists(path))
         return System.Reflection.Assembly.LoadFrom(path);
       return null;
-    }
-
-    private static void RunPatches()
-    {
-      var harmony = new Harmony("KSASM");
-      new PatchClassProcessor(harmony, typeof(AsmUi)).Patch();
     }
 
     private static int RunGame(string[] args)
