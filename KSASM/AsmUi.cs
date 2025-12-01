@@ -87,6 +87,7 @@ namespace KSASM
 
     private static string stats = "";
     private static readonly List<string> output = [];
+    private static bool logged = false;
 
     private static bool isTyping = false;
     private static bool doStep = false;
@@ -157,8 +158,17 @@ namespace KSASM
 
       ImGui.Text(stats);
 
-      foreach (var line in output)
-        ImGui.Text(line);
+      if (ImGui.BeginChild("##logs", new(-float.Epsilon, 200), windowFlags: ImGuiWindowFlags.HorizontalScrollbar))
+      {
+        foreach (var line in output)
+          ImGui.Text(line);
+
+        if (logged)
+          ImGui.SetScrollHereY();
+        logged = false;
+
+        ImGui.EndChild();
+      }
 
       if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear##clear"))
       {
@@ -239,8 +249,9 @@ namespace KSASM
     {
       output.Add(line);
       Console.WriteLine(line);
-      while (output.Count > 20)
+      while (output.Count > 100)
         output.RemoveAt(0);
+      logged = true;
     }
   }
 

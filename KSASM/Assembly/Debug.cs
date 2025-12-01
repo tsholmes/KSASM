@@ -58,30 +58,30 @@ namespace KSASM.Assembly
           return [];
         }
 
+        var line = new LineBuilder(lineBuffer);
+
         var trem = tok.Index - lrange.Start;
         loff = 0;
 
-        var len = 0;
         var prevType = TokenType.Invalid;
         var prevEnd = (char)0;
-        for (var i = lrange.Start; i < lrange.End && len < lineBuffer.Length; i++)
+        for (var i = lrange.Start; i < lrange.End && line.Length < lineBuffer.Length; i++)
         {
           var token = buffer[new TokenIndex(i)];
           if (token.Type == TokenType.EOL)
             break;
           var tdata = buffer[token];
-          if (len > 0 && tdata.Length > 0 && Lexer.NeedsSpace(prevType, prevEnd, token.Type, tdata[0]))
-            lineBuffer[len++] = ' ';
+          if (line.Length > 0 && tdata.Length > 0 && Lexer.NeedsSpace(prevType, prevEnd, token.Type, tdata[0]))
+            line.Sp();
           prevType = token.Type;
           prevEnd = tdata.Length > 0 ? tdata[^1] : default;
-          if (len + tdata.Length > lineBuffer.Length)
-            tdata = tdata[..(lineBuffer.Length - len)];
-          tdata.CopyTo(lineBuffer.AsSpan(len));
-          len += tdata.Length;
+          if (line.Length + tdata.Length > lineBuffer.Length)
+            tdata = tdata[..(lineBuffer.Length - line.Length)];
+          line.Add(tdata);
           if (--trem == 0)
-            loff = len;
+            loff = line.Length;
         }
-        return lineBuffer.AsSpan(0, len);
+        return line.Line;
       }
       else
       {
