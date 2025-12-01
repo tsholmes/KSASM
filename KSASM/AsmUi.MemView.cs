@@ -227,6 +227,20 @@ namespace KSASM
             line.Clear();
             var val = Encoding.Decode(data[doff..], type);
             line.Add(val, type);
+            if (type == DataType.P24 && Current.Symbols != null)
+            {
+              id = Current.Symbols.ID((int)val.Unsigned);
+              if (id.Label != null)
+              {
+                line.Sp();
+                line.Add(id.Label);
+                if (id.Offset != 0)
+                {
+                  line.Add('+');
+                  line.Add(id.Offset, "g");
+                }
+              }
+            }
             ImGui.Text(line.Line);
           }
         }

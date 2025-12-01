@@ -123,6 +123,11 @@ namespace KSASM
           DrawEditor();
           ImGui.EndTabItem();
         }
+        if (ImGui.BeginTabItem("InstView##instview"))
+        {
+          DrawInstView();
+          ImGui.EndTabItem();
+        }
         if (ImGui.BeginTabItem("MemView##memview"))
         {
           DrawMemView();

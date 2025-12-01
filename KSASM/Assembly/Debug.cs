@@ -262,6 +262,36 @@ namespace KSASM.Assembly
       public readonly SourceRecord Source = source;
       public readonly AddrList<FixedRange> Lines = lines;
     }
+
+    public InstIterator InstIter() => new(this);
+
+    public struct InstIterator(DebugSymbols debug)
+    {
+      private readonly DebugSymbols debug = debug;
+      private int labelIndex = 0;
+      private int instIndex = 0;
+
+      public bool Next(out int addr, out string label)
+      {
+        if (debug == null || instIndex >= debug.insts.Length)
+        {
+          addr = default;
+          label = null;
+          return false;
+        }
+
+        addr = debug.insts[instIndex++].Addr;
+        while (labelIndex < debug.labels.Length && debug.labels[labelIndex].Addr < addr)
+          labelIndex++;
+
+        if (labelIndex < debug.labels.Length && debug.labels[labelIndex].Addr == addr)
+          label = debug.labels[labelIndex].Label;
+        else
+          label = null;
+
+        return true;
+      }
+    }
   }
 
   public struct AddrInfo
