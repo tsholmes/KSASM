@@ -1,0 +1,78 @@
+.import libutils
+.import libstring
+.import libsystem
+
+.ifndef libterm { .macro libterm
+.ns term.
+
+.region data 2048
+
+:p24 ptr: system.terminal_data 0
+:u64 temp: 0 temp1: 0
+:p24 temps: 0*2
+
+.macro _lstart {
+  sub:p24 term.ptr, $(system.terminal_data)
+  and:p24 term.ptr, $(~31)
+  add:p24 term.ptr, $(system.terminal_data)
+}
+
+.fn(clear)
+  copy:p24 term.ptr, $(system.terminal_data)
+  copy:u64*8 $[system.terminal_data+64*0], $(0)
+  copy:u64*8 $[system.terminal_data+64*1], $(0)
+  copy:u64*8 $[system.terminal_data+64*2], $(0)
+  copy:u64*8 $[system.terminal_data+64*3], $(0)
+  copy:u64*8 $[system.terminal_data+64*4], $(0)
+  copy:u64*8 $[system.terminal_data+64*5], $(0)
+  copy:u64*8 $[system.terminal_data+64*6], $(0)
+  copy:u64*8 $[system.terminal_data+64*7], $(0)
+  jump _, .term.clear.fnret
+
+.fn(up)
+  copy:u64*8 $[system.terminal_data+32*0], $[system.terminal_data+32*1]
+  copy:u64*8 $[system.terminal_data+32*2], $[system.terminal_data+32*3]
+  copy:u64*8 $[system.terminal_data+32*4], $[system.terminal_data+32*5]
+  copy:u64*8 $[system.terminal_data+32*6], $[system.terminal_data+32*7]
+  copy:u64*8 $[system.terminal_data+32*8], $[system.terminal_data+32*9]
+  copy:u64*8 $[system.terminal_data+32*10], $[system.terminal_data+32*11]
+  copy:u64*8 $[system.terminal_data+32*12], $[system.terminal_data+32*13]
+  copy:u64*8 $[system.terminal_data+32*14], $[system.terminal_data+32*15]
+  copy:u64*4 $[system.terminal_data+32*15], $(0)
+  .term._lstart
+  sub:p24 term.ptr, $(32)
+  jump _, .term.up.fnret
+
+.fn(_tryup)
+  copy term.temp:i64, term.ptr:p24
+  sub:i64 term.temp, $(system.terminal_data+32*16)
+  bneg term.temp:i64, .term._tryup.fnret
+  copy:p24 term.up.ret, term._tryup.ret
+  jump:p24 term.up, _
+
+.fn(nl)
+  .term._lstart
+  add:p24 term.ptr, $(32)
+  copy:p24 term._tryup.ret, term.nl.ret
+  jump:p24 term._tryup, _
+
+.fn(print, {:p24, msg, *2})
+  copy term.temp:i64, term.ptr:p24
+  sub:i64 term.temp, $(system.terminal_data)
+  and:i64 term.temp, $(~31)
+  add:i64 term.temp, $(32)
+  add:i64 term.temp, $(system.terminal_data)
+  sub term.temp:i64, term.ptr:p24
+  min term.temp:i64, $[term.print.msg+3]:p24
+  copy $[term.temp+3]:p24, term.temp:i64
+  copy term.temp:p24, term.print.msg
+  .str.copy(term.ptr:p24, term.temp:p24)
+  add:p24 term.ptr, $[term.temp+3]
+  add:p24 term.print.msg, $[term.temp+3]
+  sub:p24 $[term.print.msg+3], $[term.temp+3]
+  .term._tryup
+  bpos:p24 $[term.print.msg+3], term.print
+  jump _, .term.print.fnret
+
+.endns
+}

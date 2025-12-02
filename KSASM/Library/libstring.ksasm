@@ -1,7 +1,7 @@
 .import libutils
 
 .ifndef libstring { .macro libstring
-.region libstring 1024
+.region libstring 2048
 
 # :p24 name: addr name.len: len
 .macro str.ptr(name, addr, len) :p24 .label(name) addr .label(.concat(name .len)) len
