@@ -141,8 +141,8 @@ namespace KSASM
     private void OpTrunc(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Truncate);
     private void OpSqrt(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Sqrt);
     private void OpExp(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Exp);
-    private void OpPow2(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(f, 2));
-    private void OpPow10(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(f, 10));
+    private void OpPow2(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(2, f));
+    private void OpPow10(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, f => Math.Pow(10, f));
     private void OpLog(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log);
     private void OpLog2(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log2);
     private void OpLog10(ValuePointer opA, ValuePointer opB) => UnaryBToAFloat(opA, opB, Math.Log10);

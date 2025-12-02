@@ -80,7 +80,7 @@
   add:p24 $[str.append.to+3], $[str.append.from+3] # add from length
   jump _, .str.append.fnret
 
-:u8 char.zero: "0" char.neg: "-"
+:u8 char.zero: "0" char.neg: "-" char.dot: "."
 :u8 str.fmt.buf: 0*64 str.fmt.buf.end:
 
 :u64 str.itoa.local: 0*8
@@ -109,5 +109,70 @@
     copy:u8 [str.itoa.to], char.zero
     copy:p24 $[str.itoa.to+3], $(1)
     jump _, .str.itoa.fnret
+
+:u8 str.ftoa_unit.prefixes: "fpnum kMGTP"
+
+:f64 str.ftoa_unit.sign: 0 str.ftoa_unit.temp: 0
+:i16 str.ftoa_unit.pindex: 0
+:p24 str.ftoa_unit.work: 0*2
+.fn(str.ftoa_unit, {:p24, to, *2, out}, {:f64, val}, {:p24, unit, *2})
+  copy:p24*2 str.ftoa_unit.work, str.ftoa_unit.to
+  sign:f64 str.ftoa_unit.sign, str.ftoa_unit.val
+  copy str.ftoa_unit.sign:i64, str.ftoa_unit.sign:f64
+  add:i64 str.ftoa_unit.sign, $(1)
+  bpos:i64 str.ftoa_unit.sign, str.ftoa_unit.nonneg
+  copy:u8 [str.ftoa_unit.work], char.neg
+  add:u8 str.ftoa_unit.work, $(1)
+str.ftoa_unit.nonneg:
+  abs:f64 str.ftoa_unit.val, _
+  log10:f64 str.ftoa_unit.temp, str.ftoa_unit.val
+  div:f64 str.ftoa_unit.temp, $(3)
+  floor str.ftoa_unit.pindex:i16, str.ftoa_unit.temp:f64
+  max:i16 str.ftoa_unit.pindex, $(-5)
+  min:i16 str.ftoa_unit.pindex, $(5)
+  copy str.ftoa_unit.temp:f64, str.ftoa_unit.pindex:i16
+  add:i16 str.ftoa_unit.pindex, $(5)
+  mul:f64 str.ftoa_unit.temp, $(3)
+  pow10:f64 str.ftoa_unit.temp, _
+  div:f64 str.ftoa_unit.val, str.ftoa_unit.temp
+  .str.itoa(str.ftoa_unit.work:p24, str.ftoa_unit.val:f64)
+  sum:p24*2 str.ftoa_unit.work, $(0,0)
+  copy:u8 [str.ftoa_unit.work], char.dot
+  add:p24 str.ftoa_unit.work, $(1)
+# add eps to handle fp error
+  add:f64 str.ftoa_unit.val, $(1e-5)
+# 0.1
+  mul:f64 str.ftoa_unit.val, $(10)
+  mod:f64 str.ftoa_unit.val, $(10)
+  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
+  add:u8 [str.ftoa_unit.work], char.zero
+  add:p24 str.ftoa_unit.work, $(1)
+# 0.01
+  mul:f64 str.ftoa_unit.val, $(10)
+  mod:f64 str.ftoa_unit.val, $(10)
+  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
+  add:u8 [str.ftoa_unit.work], char.zero
+  add:p24 str.ftoa_unit.work, $(1)
+# 0.001
+  mul:f64 str.ftoa_unit.val, $(10)
+  mod:f64 str.ftoa_unit.val, $(10)
+  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
+  add:u8 [str.ftoa_unit.work], char.zero
+  add:p24 str.ftoa_unit.work, $(1)
+# prefix
+  copy:i16 str.ftoa_unit.temp, str.ftoa_unit.pindex
+  sub:i16 str.ftoa_unit.temp, $(5)
+  bzero str.ftoa_unit.temp:i16, str.ftoa_unit.endprefix
+  copy str.ftoa_unit.temp:p24, str.ftoa_unit.pindex:i16
+  add:p24 str.ftoa_unit.temp, $(str.ftoa_unit.prefixes)
+  copy:u8 [str.ftoa_unit.work], [str.ftoa_unit.temp]
+  add:p24 str.ftoa_unit.work, $(1)
+str.ftoa_unit.endprefix:
+# calc final length before unit
+  copy:p24 $[str.ftoa_unit.to+3], str.ftoa_unit.work
+  sub:p24 $[str.ftoa_unit.to+3], str.ftoa_unit.to
+  .str.append(str.ftoa_unit.to:p24, str.ftoa_unit.unit:p24)
+str.ftoa_unit.end:
+  jump _, .str.ftoa_unit.fnret
 
 }
