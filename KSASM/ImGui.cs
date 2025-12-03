@@ -50,17 +50,17 @@ namespace KSASM
 
       var drawList = ImGui.GetWindowDrawList();
       var pos = ImGui.GetCursorScreenPos();
-      pos.X += TextSizes[line.Length].X;
+      pos.X += ImGuiX.TextSizes[line.Length].X;
 
       var ccount = dcount * 3;
-      drawList.AddRectFilled(pos, pos + TextSizes[ccount], cr);
+      drawList.AddRectFilled(pos, pos + ImGuiX.TextSizes[ccount], cr);
       highlightRem = dcount;
     }
 
     public void AddData(AddrInfo info, Span<byte> data, out floatRect rect)
     {
-      var rmin = ImGui.GetCursorScreenPos() + new float2(TextSizes[line.Length].X, 0);
-      var rmax = rmin + TextSizes[3];
+      var rmin = ImGui.GetCursorScreenPos() + new float2(ImGuiX.TextSizes[line.Length].X, 0);
+      var rmax = rmin + ImGuiX.TextSizes[3];
       rect = new() { Min = rmin, Max = rmax };
 
       if (highlightNext > 0 && dataCount == 0)
@@ -133,17 +133,6 @@ namespace KSASM
 
     public static implicit operator ReadOnlySpan<char>(in DataLineView line) => line.Line;
     public static implicit operator ImString(in DataLineView line) => line.Line;
-
-    private static float2[] TextSizes => field ??= CalcTextSizes();
-    private static float2[] CalcTextSizes()
-    {
-      Span<char> text = stackalloc char[257];
-      text.Fill('X');
-      var sizes = new float2[257];
-      for (var i = 1; i <= 256; i++)
-        sizes[i] = ImGui.CalcTextSize(text[..i]);
-      return sizes;
-    }
   }
 
   public ref struct LineBuilder(Span<char> line)
@@ -236,6 +225,17 @@ namespace KSASM
 
   public static class ImGuiX
   {
+    public static float2[] TextSizes => field ??= CalcTextSizes();
+    private static float2[] CalcTextSizes()
+    {
+      Span<char> text = stackalloc char[257];
+      text.Fill('X');
+      var sizes = new float2[257];
+      for (var i = 1; i <= 256; i++)
+        sizes[i] = ImGui.CalcTextSize(text[..i]);
+      return sizes;
+    }
+
     public static bool InputEnum<T>(ImString label, ref T value) where T : struct, Enum
     {
       var changed = false;

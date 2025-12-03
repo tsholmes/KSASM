@@ -4,14 +4,20 @@ using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
-  public class DebugSymbols(ParseBuffer buffer)
+  public class DebugSymbols(ParseBuffer buffer, AppendBuffer<Token> tokens)
   {
     private readonly ParseBuffer buffer = buffer;
+    private readonly AppendBuffer<Token> tokens = tokens;
     private readonly AddrList<InstAddr> insts = new();
     private readonly AddrList<LabelAddr> labels = new();
     private readonly AddrList<DataRecord> data = new();
     private readonly Dictionary<int, SourceLines> lines = [];
     private readonly char[] lineBuffer = new char[AppendBuffer.CHUNK_SIZE];
+
+    private SourceLines? finalLines;
+
+    public ParseBuffer Buffer => buffer;
+    public AppendBuffer<Token>.Enumerator FinalTokens => tokens.GetEnumerator();
 
     public bool InstToken(int addr, out TokenIndex inst)
     {
@@ -45,6 +51,8 @@ namespace KSASM.Assembly
 
     public ReadOnlySpan<char> SourceName(TokenIndex tokeni) => buffer.SourceName(buffer[tokeni].Source);
 
+    public SourceLineIterator SourceLineIter(SourceIndex index) => new(this, index);
+
     public ReadOnlySpan<char> SourceLine(TokenIndex tok, out int lnum, out int loff)
     {
       var inst = buffer[tok];
@@ -58,29 +66,25 @@ namespace KSASM.Assembly
           return [];
         }
 
-        var line = new LineBuilder(lineBuffer);
-
-        var trem = tok.Index - lrange.Start;
         loff = 0;
 
-        var prevType = TokenType.Invalid;
-        var prevEnd = (char)0;
+        var line = new LineBuilder(lineBuffer);
+        var tline = new TokenLineBuilder();
+
         for (var i = lrange.Start; i < lrange.End && line.Length < lineBuffer.Length; i++)
         {
           var token = buffer[new TokenIndex(i)];
-          if (token.Type == TokenType.EOL)
-            break;
           var tdata = buffer[token];
-          if (line.Length > 0 && tdata.Length > 0 && Lexer.NeedsSpace(prevType, prevEnd, token.Type, tdata[0]))
+          var trange = tline.Add(token.Type, tdata, out var sp);
+          if (trange.End > lineBuffer.Length)
+            trange = new(trange.Start, lineBuffer.Length - trange.Start);
+          if (i == tok.Index)
+            loff = trange.Start;
+          if (sp)
             line.Sp();
-          prevType = token.Type;
-          prevEnd = tdata.Length > 0 ? tdata[^1] : default;
-          if (line.Length + tdata.Length > lineBuffer.Length)
-            tdata = tdata[..(lineBuffer.Length - line.Length)];
-          line.Add(tdata);
-          if (--trem == 0)
-            loff = line.Length;
+          line.Add(tdata[..trange.Length]);
         }
+
         return line.Line;
       }
       else
@@ -181,6 +185,7 @@ namespace KSASM.Assembly
 
         var start = range.Start;
         var current = start;
+        var lastLen = -1;
         while (current < range.End)
         {
           var cend = (start + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
@@ -192,7 +197,10 @@ namespace KSASM.Assembly
             var lend = i + 1 + current;
             if (tokens[i].Type == TokenType.EOL || lend - start == AppendBuffer.CHUNK_SIZE)
             {
-              slines.Add(new(start, lend - start));
+              var end = tokens[i].Type == TokenType.EOL ? lend - 1 : lend;
+              if (end - start > 0 || lastLen > 0) // skip multiple blank lines
+                slines.Add(new(start, end - start));
+              lastLen = end - start;
               start = lend;
             }
           }
@@ -216,7 +224,8 @@ namespace KSASM.Assembly
             var lend = i + 1 + current;
             if (data[i] == '\n' || lend - start == AppendBuffer.CHUNK_SIZE)
             {
-              slines.Add(new(start, lend - start));
+              var end = data[i] == '\n' ? lend - 1 : lend;
+              slines.Add(new(start, end - start));
               start = lend;
             }
           }
@@ -226,6 +235,35 @@ namespace KSASM.Assembly
       }
 
       return lines[source.Index] = new(srecord, slines);
+    }
+
+    private SourceLines GetFinalLines()
+    {
+      if (finalLines != null)
+        return finalLines.Value;
+
+      var lines = new AddrList<FixedRange>();
+      var start = 0;
+      var lastLen = -1;
+      for (var i = 0; i < tokens.Length; i++)
+      {
+        var tok = tokens[i];
+        if (tok.Type == TokenType.EOL)
+        {
+          if (i != start || lastLen > 0) // skip multiple empty lines in a row
+            lines.Add(new(start, i - start));
+          lastLen = i - start;
+          start = i + 1;
+        }
+      }
+      if (start < tokens.Length)
+        lines.Add(new(start, tokens.Length - start));
+
+      finalLines = new(
+        new("output", FixedRange.Invalid, FixedRange.Invalid, true, TokenIndex.Invalid),
+        lines);
+
+      return finalLines.Value;
     }
 
     private readonly struct InstAddr(int addr, TokenIndex inst) : IAddr
@@ -290,6 +328,131 @@ namespace KSASM.Assembly
           label = null;
 
         return true;
+      }
+    }
+
+    public struct SourceLineIterator(DebugSymbols debug, SourceIndex sindex)
+    {
+      private readonly DebugSymbols debug = debug;
+      private readonly SourceIndex sindex = sindex;
+      private readonly SourceLines slines =
+        sindex.Index < 0 ? debug.GetFinalLines() : debug.GetLines(sindex);
+
+      private int lindex = -1;
+      private int lastTokStart = 0;
+      private int nextTokStart = sindex.Index < 0 ? 0 : debug.buffer.Source(sindex).Tokens.Start;
+
+      public bool Next()
+      {
+        if (debug == null)
+          return false;
+        if (++lindex >= slines.Lines.Length)
+          return false;
+        lastTokStart = nextTokStart;
+        return true;
+      }
+
+      public SourceLineTokenIterator Tokens() =>
+        new(debug, sindex, slines.Source, slines.Lines[lindex], lastTokStart);
+
+      public void Build(ref LineBuilder line)
+      {
+        if (slines.Source.Synthetic)
+        {
+          var iter = Tokens();
+          var lastEnd = 0;
+          while (iter.Next(out var token, out var range) && token.Type != TokenType.EOL)
+          {
+            if (range.Start > lastEnd && slines.Source.Synthetic)
+              line.Sp();
+            line.Add(debug.buffer[token]);
+            lastEnd = range.End;
+
+            nextTokStart = token.Index.Index + 1;
+          }
+        }
+        else
+          debug.buffer.Data(slines.Lines[lindex]);
+      }
+    }
+
+    public struct SourceLineTokenIterator(
+      DebugSymbols debug, SourceIndex sindex, SourceRecord source, FixedRange range, int tokenStart = -1)
+    {
+      private readonly DebugSymbols debug = debug;
+      private readonly SourceRecord source = source;
+      private readonly SourceIndex sindex = sindex;
+      private readonly FixedRange range = range;
+      private readonly int tokenStart = tokenStart;
+      private TokenLineBuilder line = new();
+
+      private int tindex = -1;
+
+      public bool Next(out Token token, out FixedRange lrange) =>
+        sindex.Index < 0
+        ? NextFinal(out token, out lrange)
+        : source.Synthetic
+          ? NextSynth(out token, out lrange)
+          : NextRaw(out token, out lrange);
+
+      private bool NextFinal(out Token token, out FixedRange lrange)
+      {
+        if (++tindex >= range.Length)
+        {
+          token = default;
+          lrange = default;
+          return false;
+        }
+        token = debug.tokens[range.Start + tindex];
+        lrange = line.Add(token.Type, debug.buffer[token], out _);
+        return true;
+      }
+
+      private bool NextSynth(out Token token, out FixedRange lrange)
+      {
+        if (++tindex >= range.Length)
+        {
+          token = default;
+          lrange = default;
+          return false;
+        }
+        token = debug.buffer[new TokenIndex(tindex + range.Start)];
+        lrange = line.Add(token.Type, debug.buffer[token], out _);
+        return true;
+      }
+
+      private bool NextRaw(out Token token, out FixedRange lrange)
+      {
+        while ((++tindex + tokenStart) < source.Tokens.End)
+        {
+          token = debug.buffer[new TokenIndex(tindex + tokenStart)];
+          if (token.Data.Start >= range.Start & token.Data.End <= range.End)
+          {
+            lrange = token.Data - range.Start;
+            return true;
+          }
+        }
+        token = default;
+        lrange = default;
+        return false;
+      }
+    }
+
+    private struct TokenLineBuilder()
+    {
+      private int length = 0;
+      private TokenType lastType = TokenType.Invalid;
+      private char lastEnd = default;
+
+      public FixedRange Add(TokenType type, ReadOnlySpan<char> data, out bool sp)
+      {
+        sp = length > 0 && data.Length > 0 && Lexer.NeedsSpace(lastType, lastEnd, type, data[0]);
+        lastType = type;
+        lastEnd = data.Length > 0 ? data[^1] : default;
+        var range = new FixedRange(length, data.Length);
+        if (sp) range += 1;
+        length = range.End;
+        return range;
       }
     }
   }

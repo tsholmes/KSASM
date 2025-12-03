@@ -38,6 +38,7 @@ namespace KSASM.Assembly
 
     public ReadOnlySpan<char> SourceName(SourceIndex source) => sources[source.Index].Name;
     public SourceRecord Source(SourceIndex source) => sources[source.Index];
+    public int SourceCount => sources.Length;
     public TokenReader SourceReader(SourceIndex source) => new(this, source);
     public TokenEnumerable SourceTokens(SourceIndex src) => TokenRange(sources[src.Index].Tokens);
     public TokenEnumerable TokenRange(FixedRange range) => new(this, range);

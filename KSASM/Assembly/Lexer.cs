@@ -255,6 +255,10 @@ namespace KSASM.Assembly
         (TokenType.Label or TokenType.Comma, _, _, _) => true,
         (_, _, TokenType.Mult, _) => true,
         _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
+        (_, '(' or '[', TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => false,
+        (_, _, TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => true,
+        (TokenType.PClose, _, _, ')' or ']') => false,
+        (TokenType.PClose, _, _, _) => true,
         _ => false,
       };
   }

@@ -18,7 +18,7 @@ namespace KSASM.Assembly
       while (mp.Next(out var token))
         tokens.Add(token);
 
-      var ctx = new Context(buffer);
+      var ctx = new Context(buffer, tokens);
       var parser = new Parser(buffer, tokens);
       parser.Parse();
 
@@ -75,7 +75,7 @@ namespace KSASM.Assembly
       var current = token.Index;
       var more = true;
 
-      var debug = new DebugSymbols(buffer);
+      var debug = new DebugSymbols(buffer, null);
 
       for (var i = 0; i < 20; i++)
       {
@@ -115,9 +115,9 @@ namespace KSASM.Assembly
     protected string StackPos(Token token, int frameLimit = 20) => StackPos(buffer, token, frameLimit);
   }
 
-  public class Context(ParseBuffer buffer) : TokenProcessor(buffer)
+  public class Context(ParseBuffer buffer, AppendBuffer<Token> tokens) : TokenProcessor(buffer)
   {
-    public readonly DebugSymbols Symbols = new(buffer);
+    public readonly DebugSymbols Symbols = new(buffer, tokens);
     public readonly ParseBuffer Buffer = buffer;
 
     public readonly Dictionary<string, int> Labels = [];

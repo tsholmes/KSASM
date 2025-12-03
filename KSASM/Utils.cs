@@ -227,6 +227,7 @@ namespace KSASM
     }
 
     public static FixedRange operator +(FixedRange range, int offset) => new(range.Start + offset, range.Length);
+    public static FixedRange operator -(FixedRange range, int offset) => new(range.Start - offset, range.Length);
 
     public static implicit operator Range(FixedRange range) => range.Start..range.End;
   }
@@ -330,6 +331,7 @@ namespace KSASM
       private int index = -1;
       public T Current => buf[index];
       public bool MoveNext() => ++index < buf.Length;
+      public Enumerator GetEnumerator() => this;
     }
   }
 

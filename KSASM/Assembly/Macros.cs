@@ -69,7 +69,7 @@ namespace KSASM.Assembly
         else
         {
           if (token.Type == TokenType.Label)
-            token = AddNs(token, TokenIndex.Invalid, out _);
+            token = AddNs(token, token.Index, out _);
           return true;
         }
       }

@@ -108,9 +108,13 @@ namespace KSASM
       if (!enabled)
         return false;
 
+      var line = new LineBuilder(stackalloc char[128]);
+      line.Add("KSASM##");
+      line.Add(vehicle.Id);
+
       ImGui.SetNextWindowSizeConstraints(new(600, 400), new(1e10f, 1e10f));
       ImGui.SetNextWindowPos(ScreenReference.UvToPixels(new(0.15f, 0.1f)), ImGuiCond.Appearing);
-      if (!ImGui.Begin($"KSASM##KSASM-{vehicle.Id}", ref enabled, WINDOW_FLAGS))
+      if (!ImGui.Begin(line.Line, ref enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed())
       {
         ImGui.End();
         return false;
@@ -118,22 +122,27 @@ namespace KSASM
 
       if (ImGui.BeginTabBar("##tabs"))
       {
-        if (ImGui.BeginTabItem("Editor##editor"))
+        if (ImGui.BeginTabItem("Editor"))
         {
           DrawEditor();
           ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("InstView##instview"))
+        if (ImGui.BeginTabItem("MacroView"))
+        {
+          DrawMacroView();
+          ImGui.EndTabItem();
+        }
+        if (ImGui.BeginTabItem("InstView"))
         {
           DrawInstView();
           ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("MemView##memview"))
+        if (ImGui.BeginTabItem("MemView"))
         {
           DrawMemView();
           ImGui.EndTabItem();
         }
-        if (ImGui.BeginTabItem("MemWatch##memwatch"))
+        if (ImGui.BeginTabItem("MemWatch"))
         {
           DrawMemWatch();
           ImGui.EndTabItem();
@@ -153,13 +162,13 @@ namespace KSASM
     {
       if (ImGui.GetCursorPosY() < 400)
         ImGui.SetCursorPosY(400);
-      if (ImGui.Button("Run##run")) Restart();
+      if (ImGui.Button("Run")) Restart();
       ImGui.SameLine();
-      if (ImGui.Button("Resume##resume")) Resume();
+      if (ImGui.Button("Resume")) Resume();
       ImGui.SameLine();
-      doStep = ImGui.Button("Step##step");
+      doStep = ImGui.Button("Step");
       ImGui.SameLine();
-      if (ImGui.Button("Stop##stop")) Stop();
+      if (ImGui.Button("Stop")) Stop();
 
       ImGui.Text(stats);
 
@@ -175,7 +184,7 @@ namespace KSASM
         ImGui.EndChild();
       }
 
-      if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear##clear"))
+      if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear"))
       {
         stats = "";
         output.Clear();

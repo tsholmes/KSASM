@@ -1,14 +1,7 @@
 .ifndef libutils { .macro libutils
 
-.macro withns(ns, inner) {
-  .if(ns) { .ns ns }
-    inner
-  .if(ns) { .endns }
-}
-
-.macro type(name, vals) {
-  .macro name(ns) { .withns(ns, { vals }) }
-}
+.macro withns(ns, inner) .if(ns) { .ns ns } inner .if(ns) { .endns }
+.macro type(name, vals) .macro name(ns) { .withns(ns, { vals }) }
 
 .macro _fn_arg_name(type, name, width, out) name
 .macro _fn_arg_lname(fname, name) .concat(fname ..tomacro(name))
