@@ -1,5 +1,6 @@
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using Brutal.ImGuiApi;
 using Brutal.Numerics;
@@ -226,6 +227,7 @@ namespace KSASM
   public static class ImGuiX
   {
     public static float2[] TextSizes => field ??= CalcTextSizes();
+    public static float[] TextWidths => field ??= TextSizes.Select(sz => sz.X).ToArray();
     private static float2[] CalcTextSizes()
     {
       Span<char> text = stackalloc char[257];
@@ -234,6 +236,13 @@ namespace KSASM
       for (var i = 1; i <= 256; i++)
         sizes[i] = ImGui.CalcTextSize(text[..i]);
       return sizes;
+    }
+
+    public static float2x2 TextRect(float2 cursor, FixedRange text)
+    {
+      var rmin = new float2(cursor.X + TextSizes[text.Start].X, cursor.Y);
+      var rmax = new float2(rmin.X + TextSizes[text.Length].X, rmin.Y + ImGui.GetTextLineHeightWithSpacing());
+      return new(rmin, rmax);
     }
 
     public static bool InputEnum<T>(ImString label, ref T value) where T : struct, Enum

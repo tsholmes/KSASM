@@ -514,7 +514,7 @@ namespace KSASM.Assembly
 
             var range = argRanges[argIdx];
             foreach (var atoken in buffer.TokenRange(range))
-              s.S.CopyToken(atoken.Index);
+              s.S.CopyToken(atoken.Previous);
             continue;
           }
           s.S.CopyToken(token.Index);
@@ -522,12 +522,15 @@ namespace KSASM.Assembly
       }
 
       var anyImm = false;
+      var firstToken = TokenIndex.Invalid;
       foreach (var token in buffer.SourceTokens(source))
       {
+        if (firstToken == TokenIndex.Invalid)
+          firstToken = token.Index;
         if (token.Type != TokenType.Macro)
           continue;
         var str = buffer[token];
-        if (str.Length > 2 && str.StartsWith(".."))
+        if (str.Length > 2 && str[1] == '.')
         {
           anyImm = true;
           break;
@@ -568,7 +571,7 @@ namespace KSASM.Assembly
         expanded.Add(token.Index);
       }
 
-      using (var s = PushSynthSource($".{macro.Name} expand immediate", nameToken.Index))
+      using (var s = PushSynthSource($".{macro.Name} expand immediate", firstToken))
       {
         foreach (var tokIdx in expanded)
           s.S.CopyToken(tokIdx);

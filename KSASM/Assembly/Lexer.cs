@@ -256,6 +256,7 @@ namespace KSASM.Assembly
         (_, _, TokenType.Mult, _) => true,
         _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
         (_, '(' or '[', TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => false,
+        (_, _, TokenType.POpen, _) when IsWordChar(firstEnd) => false,
         (_, _, TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => true,
         (TokenType.PClose, _, _, ')' or ']') => false,
         (TokenType.PClose, _, _, _) => true,
