@@ -172,17 +172,15 @@ namespace KSASM
 
       ImGui.Text(stats);
 
-      if (ImGui.BeginChild("##logs", new(-float.Epsilon, 200), windowFlags: ImGuiWindowFlags.HorizontalScrollbar))
-      {
-        foreach (var line in output)
-          ImGui.Text(line);
+      ImGui.BeginChild("##logs", new(-float.Epsilon, 200), windowFlags: ImGuiWindowFlags.HorizontalScrollbar);
+      foreach (var line in output)
+        ImGui.Text(line);
 
-        if (logged)
-          ImGui.SetScrollHereY();
-        logged = false;
+      if (logged)
+        ImGui.SetScrollHereY();
+      logged = false;
 
-        ImGui.EndChild();
-      }
+      ImGui.EndChild();
 
       if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear"))
       {

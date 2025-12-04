@@ -523,10 +523,13 @@ namespace KSASM.Assembly
 
       var anyImm = false;
       var firstToken = TokenIndex.Invalid;
+      var firstNonEOL = TokenIndex.Invalid;
       foreach (var token in buffer.SourceTokens(source))
       {
         if (firstToken == TokenIndex.Invalid)
           firstToken = token.Index;
+        if (token.Type != TokenType.EOL && firstNonEOL == TokenIndex.Invalid)
+          firstToken = firstNonEOL = token.Index;
         if (token.Type != TokenType.Macro)
           continue;
         var str = buffer[token];

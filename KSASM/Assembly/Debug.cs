@@ -19,6 +19,31 @@ namespace KSASM.Assembly
 
     public ParseBuffer Buffer => buffer;
     public AppendBuffer<Token>.Enumerator FinalTokens => GetFinalTokens().GetEnumerator();
+    public int FinalCount => tokens.Length;
+
+    public Token Token(TokenIndex index)
+    {
+      if (index.Index < 0)
+        return finalTokens[~index.Index];
+      return buffer[index];
+    }
+
+    public TokenIndex GetProducer(Token token)
+    {
+      if (token.Source.Index < 0)
+        return token.Previous;
+      var source = buffer.Source(token.Source);
+      if (source.Producer == TokenIndex.Invalid)
+        return source.Producer;
+      var producer = buffer[source.Producer];
+      if (token.Previous != TokenIndex.Invalid)
+      {
+        var prev = buffer[token.Previous];
+        if (prev.Source.Index == producer.Source.Index)
+          return prev.Index;
+      }
+      return producer.Index;
+    }
 
     public bool InstToken(int addr, out TokenIndex inst)
     {
