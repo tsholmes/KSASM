@@ -13,6 +13,10 @@
   :f64 x: 0 y: 0 z: 0
 })
 
+.type(doublequat, {
+  :f64 x: 0 y: 0 z: 0 w: 0
+})
+
 .type(rframe, {
   .types.double3(pos.)
   .types.double3(vel.)
@@ -41,12 +45,15 @@
 .type(astronomical, {
   :u64 hash: 0
   :f64 mean_radius: 0
+  :f64 angular_velocity: 0
   :f64 mass: 0
   :f64 soi: 0
   .types.rframe(ecl.)
   .types.rframe(cci.)
   .types.rframe(cce.)
   .types.rframe(orb.)
+  orb2cci: .types.doublequat(orb2cci)
+  cci2cce: .types.doublequat(cci2cce)
   .types.orbit(orbit.)
   .types.listview(children.)
   :u64 child.hash: 0

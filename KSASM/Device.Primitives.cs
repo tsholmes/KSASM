@@ -34,6 +34,15 @@ namespace KSASM
         .Double((ref d3) => d3[2], (ref d3, v) => d3[2] = v)
       );
 
+    public B DoubleQuat(
+        DeviceFieldBufGetter<V, doubleQuat> getter, DeviceFieldSetter<V, doubleQuat> setter = null) =>
+      ValueComposite(getter, setter, b => b
+        .Double((ref dq) => dq[0], (ref dq, v) => dq[0] = v)
+        .Double((ref dq) => dq[1], (ref dq, v) => dq[1] = v)
+        .Double((ref dq) => dq[2], (ref dq, v) => dq[2] = v)
+        .Double((ref dq) => dq[3], (ref dq, v) => dq[3] = v)
+      );
+
     public B String(int maxLen, DeviceFieldBufGetter<V, string> getter) => Composite<string>(getter, b => b
       .Byte((ref s) => (byte)s.Length)
       .Field(new StringDeviceField<string>(maxLen, (ref s) => s))

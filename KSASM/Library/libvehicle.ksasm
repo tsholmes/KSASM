@@ -21,6 +21,10 @@
 .device.define(.vehicle.id, {
   :u64 hash: 0
   avel: .types.double3(avel.)
+  body2cci: .types.doublequat(body2cci.)
+  body2cce: .types.doublequat(body2cce.)
+  lvlh2cce: .types.doublequat(lvlh2cce.)
+  enu2cce: .types.doublequat(enu2cce.)
   inputs: .ns inputs.
     :u64 thrust_command: 0
   .endns
