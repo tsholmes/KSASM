@@ -18,8 +18,8 @@
 })
 
 .type(rframe, {
-  .types.double3(pos.)
-  .types.double3(vel.)
+  pos: .types.double3(pos.)
+  vel: .types.double3(vel.)
 })
 
 .type(orbit, {
