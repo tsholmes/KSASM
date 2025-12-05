@@ -7,23 +7,16 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
-    <KSARef Include="KSA" />
-    <KSARef Include="Brutal.Imgui" />
-    <KSARef Include="Brutal.Core.Logging" />
-    <KSARef Include="Brutal.Core.Numerics" />
-    <KSARef Include="Brutal.Core.Strings" />
-    <KSARef Include="Brutal.ImGui.Abstractions" />
 
     <ModFile Include="$(OutputPath)\$(ModName).dll" />
     <ModFile Include="..\Content\*.*" />
-    <ModFile Include="Library\lib*.ksasm">
-      <DestDir>Library\</DestDir>
-    </ModFile>
+    <ModFile Include="Library\lib*.ksasm" DestDir="Library\" />
 
-    <Reference Include="@(KSARef)">
-      <HintPath>$(KSADir)%(Identity).dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <_KsaAssemblies Include="$(KSADir)Brutal*.dll" Path="%(FullPath)" />
+    <_KsaAssemblies Include="$(KSADir)KSA.dll" Path="%(FullPath)" />
+    <_KsaAssemblies Include="$(KSADir)Planet*.dll" Path="%(FullPath)" />
+    <_KsaAssemblies Include="$(KSADir)Tomlet.dll" Path="%(FullPath)" />
+    <Reference Include="@(_KsaAssemblies->'%(FileName)')" HintPath="%(Path)" Private="False" />
 
     <_ModFiles Include="@(ModFile)">
       <Name>%(FileName)%(Extension)</Name>
