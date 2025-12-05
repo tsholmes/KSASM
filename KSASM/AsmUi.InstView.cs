@@ -1,6 +1,5 @@
 
 using Brutal.ImGuiApi;
-using Brutal.Numerics;
 
 namespace KSASM
 {
@@ -36,12 +35,7 @@ namespace KSASM
             ImGui.SeparatorText(line.Line);
           }
           if (addr == pc)
-          {
-            var rmin = ImGui.GetCursorScreenPos();
-            var avail = ImGui.GetContentRegionAvail();
-            var rmax = rmin + new float2(avail.X, ImGui.GetTextLineHeight());
-            ImGui.GetWindowDrawList().AddRectFilled(rmin, rmax, PCHighlight);
-          }
+            ImGuiX.DrawRect(ImGuiX.LineRect(), PCHighlight);
           line.Clear();
           var inst = Instruction.Decode(mem.Read(addr, DataType.U64).Unsigned);
           inst.Format(ref line, Current.Symbols);

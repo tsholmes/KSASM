@@ -168,9 +168,9 @@ namespace KSASM
         for (var i = 0; i < VALS_PER_LINE; i++)
         {
           if (offset == pcoff)
-            dline.HighlightData(8, new(128, 16, 16));
+            dline.HighlightData(8, PCHighlight);
           else if (offset == hoverStart)
-            dline.HighlightData(hoverLen, new(128, 128, 128));
+            dline.HighlightData(hoverLen, TokenHoverHilight);
           dline.AddData(infos[offset], data[offset..], out var rect);
           if (rect.Contains(mouse))
             nextHoverOff = offset;

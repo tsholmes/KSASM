@@ -49,12 +49,7 @@ namespace KSASM
       highlightNext = count - dcount;
       highlightCr = cr;
 
-      var drawList = ImGui.GetWindowDrawList();
-      var pos = ImGui.GetCursorScreenPos();
-      pos.X += ImGuiX.TextSizes[line.Length].X;
-
-      var ccount = dcount * 3;
-      drawList.AddRectFilled(pos, pos + ImGuiX.TextSizes[ccount], cr);
+      ImGuiX.DrawRect(ImGuiX.TextRect(new(line.Length, dcount * 3)), cr);
       highlightRem = dcount;
     }
 
@@ -238,12 +233,31 @@ namespace KSASM
       return sizes;
     }
 
-    public static float2x2 TextRect(float2 cursor, FixedRange text)
+    public static float4 TextRect(FixedRange text, float2? cursor = null)
     {
-      var rmin = new float2(cursor.X + TextSizes[text.Start].X, cursor.Y);
+      var cpos = cursor ?? ImGui.GetCursorScreenPos();
+      var rmin = new float2(cpos.X + TextSizes[text.Start].X, cpos.Y);
       var rmax = new float2(rmin.X + TextSizes[text.Length].X, rmin.Y + ImGui.GetTextLineHeightWithSpacing());
       return new(rmin, rmax);
     }
+
+    public static float4 TextUnderlineRect(FixedRange text, float2? cursor = null)
+    {
+      var cpos = cursor ?? ImGui.GetCursorScreenPos();
+      const float UNDERLINE_HEIGHT = 2f;
+      var rmin = cpos + new float2(TextWidths[text.Start], ImGui.GetTextLineHeightWithSpacing() - UNDERLINE_HEIGHT);
+      var rmax = rmin + new float2(TextWidths[text.Length], UNDERLINE_HEIGHT);
+      return new(rmin, rmax);
+    }
+
+    public static float4 LineRect(float2? cursor = null)
+    {
+      var cpos = cursor ?? ImGui.GetCursorScreenPos();
+      return new(cpos, cpos + new float2(10000, ImGui.GetTextLineHeightWithSpacing()));
+    }
+
+    public static void DrawRect(float4 rect, ImColor8 color) =>
+      ImGui.GetWindowDrawList().AddRectFilled(rect.XY, rect.ZW, color);
 
     public static bool InputEnum<T>(ImString label, ref T value) where T : struct, Enum
     {

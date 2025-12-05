@@ -101,10 +101,10 @@ namespace KSASM
         if (i < macroStack.Count - 1)
         {
           var cursor = ImGui.GetCursorScreenPos();
-          var rect = ImGuiX.TextRect(cursor, new(line.Length, sname.Length));
-          ImGui.SetCursorScreenPos(rect.X);
+          var rect = ImGuiX.TextRect(new(line.Length, sname.Length), cursor);
+          ImGui.SetCursorScreenPos(rect.XY);
           ImGui.PushID(i);
-          if (ImGui.Button("##macroStack", rect.Y - rect.X))
+          if (ImGui.Button("##macroStack", rect.ZW - rect.XY))
             trimTo = i + 1;
           ImGui.PopID();
           ImGui.SetCursorScreenPos(cursor);
@@ -161,16 +161,17 @@ namespace KSASM
             doMacroScroll = false;
           }
 
-          var rect = ImGuiX.TextRect(lstart, range);
+          var rect = ImGuiX.TextRect(range, lstart);
+          var urect = ImGuiX.TextUnderlineRect(range, lstart);
           if (hasInst && (inst == token.Index || inst == token.Previous))
-            ImGui.GetWindowDrawList().AddRectFilled(lstart, new(lstart.X + maxWidth, rect.Y.Y), PCHighlight);
+            ImGuiX.DrawRect(ImGuiX.LineRect(lstart), PCHighlight);
 
-          if (!hovering || mouse.X < rect.X.X || mouse.X >= rect.Y.X || mouse.Y < rect.X.Y || mouse.Y >= rect.Y.Y)
+          if (!hovering || mouse.X < rect.X || mouse.X >= rect.Z || mouse.Y < rect.Y || mouse.Y >= rect.W)
           {
             if (token.Index == curMacro.Producer)
-              ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, TokenHighlight);
+              ImGuiX.DrawRect(rect, TokenHighlight);
             else if (!macroFromEnd && token.Index.Index >= 0 && macroProducts[token.Index.Index] != default)
-              ImGui.GetWindowDrawList().AddRectFilled(new(rect.X.X, rect.Y.Y - 2), rect.Y, TokenHighlight);
+              ImGuiX.DrawRect(urect, TokenHighlight);
             continue;
           }
 
@@ -193,7 +194,7 @@ namespace KSASM
 
           if (validTarget)
           {
-            ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, TokenHoverHilight);
+            ImGuiX.DrawRect(rect, TokenHoverHilight);
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             {
               macroStack.Add(new(target.Source, target.Index));
