@@ -223,30 +223,30 @@ namespace KSASM.Assembly
         if (range.End == -1)
           range = new(range.Start, buffer.TokenCount);
 
-        var start = range.Start;
-        var current = start;
+        var lineStart = range.Start;
+        var chunkStart = lineStart;
         var lastLen = -1;
-        while (current < range.End)
+        while (chunkStart < range.End)
         {
-          var cend = (start + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
+          var cend = (chunkStart + AppendBuffer.CHUNK_SIZE) & ~AppendBuffer.CHUNK_MASK;
           if (cend > range.End)
             cend = range.End;
-          var tokens = buffer.TokenSpan(new(current, cend - current));
+          var tokens = buffer.TokenSpan(new(chunkStart, cend - chunkStart));
           for (var i = 0; i < tokens.Length; i++)
           {
-            var lend = i + 1 + current;
-            if (tokens[i].Type == TokenType.EOL || lend - start == AppendBuffer.CHUNK_SIZE)
+            var lend = i + 1 + chunkStart;
+            if (tokens[i].Type == TokenType.EOL || lend - lineStart == AppendBuffer.CHUNK_SIZE)
             {
               var end = tokens[i].Type == TokenType.EOL ? lend - 1 : lend;
-              if (end - start > 0 || lastLen > 0) // skip multiple blank lines
-                slines.Add(new(start, end - start));
-              lastLen = end - start;
-              start = lend;
+              if (end - lineStart > 0 || lastLen > 0) // skip multiple blank lines
+                slines.Add(new(lineStart, end - lineStart));
+              lastLen = end - lineStart;
+              lineStart = lend;
             }
           }
-          current = cend;
+          chunkStart = cend;
         }
-        slines.Add(new(start, range.End - start));
+        slines.Add(new(lineStart, range.End - lineStart));
       }
       else
       {

@@ -40,7 +40,7 @@ namespace KSASM
             var rmin = ImGui.GetCursorScreenPos();
             var avail = ImGui.GetContentRegionAvail();
             var rmax = rmin + new float2(avail.X, ImGui.GetTextLineHeight());
-            ImGui.GetWindowDrawList().AddRectFilled(rmin, rmax, new(128, 16, 16));
+            ImGui.GetWindowDrawList().AddRectFilled(rmin, rmax, PCHighlight);
           }
           line.Clear();
           var inst = Instruction.Decode(mem.Read(addr, DataType.U64).Unsigned);

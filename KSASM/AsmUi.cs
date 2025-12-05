@@ -97,6 +97,10 @@ namespace KSASM
     private static GaugeCanvas terminalCanvas;
     private static readonly List<TerminalLabel> terminalLabels = [];
 
+    private static ImColor8 PCHighlight => new(128, 16, 16);
+    private static ImColor8 TokenHighlight => new(64, 64, 64);
+    private static ImColor8 TokenHoverHilight => new(128, 128, 128);
+
     public static bool DrawUi(Vehicle vehicle, Viewport inViewport)
     {
       if (vehicle != KSA.Program.ControlledVehicle)
@@ -112,8 +116,9 @@ namespace KSASM
       line.Add("KSASM##");
       line.Add(vehicle.Id);
 
+      var initPos = ScreenReference.UvToPixels(new(0.17f, 0.08f)) + ImGui.GetMainViewport().Pos;
       ImGui.SetNextWindowSizeConstraints(new(600, 400), new(1e10f, 1e10f));
-      ImGui.SetNextWindowPos(ScreenReference.UvToPixels(new(0.15f, 0.1f)), ImGuiCond.Appearing);
+      ImGui.SetNextWindowPos(initPos, ImGuiCond.Appearing);
       if (!ImGui.Begin(line.Line, ref enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed())
       {
         ImGui.End();

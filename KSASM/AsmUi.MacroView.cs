@@ -70,7 +70,6 @@ namespace KSASM
       }
 
       var line = new LineBuilder(stackalloc char[256]);
-      var hovering = ImGui.IsWindowHovered();
       var mouse = ImGui.GetMousePos();
       var maxWidth = ImGui.GetContentRegionAvail().X;
       int maxChars = 0;
@@ -128,11 +127,27 @@ namespace KSASM
         ImGui.EndChild();
         return;
       }
+      var hovering = ImGui.IsWindowHovered();
+      maxWidth = ImGui.GetContentRegionAvail().X;
 
       var curMacro = macroStack[^1];
       var curProducer = curMacro.Source.Index > 0
         ? pbuf.Source(curMacro.Source).Producer
         : TokenIndex.Invalid;
+
+      var hasInst = debug.InstToken(Current.Processor.PC, out var inst);
+      if (hasInst && curMacro.Source.Index >= 0)
+      {
+        while (inst != TokenIndex.Invalid)
+        {
+          var itoken = pbuf[inst];
+          if (itoken.Source.Index == curMacro.Source.Index)
+            break;
+          inst = debug.GetProducer(itoken);
+        }
+        hasInst = inst != TokenIndex.Invalid;
+      }
+
       var iter = debug.SourceLineIter(curMacro.Source);
       while (iter.Next(out var lnum))
       {
@@ -145,13 +160,17 @@ namespace KSASM
             ImGui.SetScrollHereY();
             doMacroScroll = false;
           }
+
           var rect = ImGuiX.TextRect(lstart, range);
-          if (mouse.X < rect.X.X || mouse.X >= rect.Y.X || mouse.Y < rect.X.Y || mouse.Y >= rect.Y.Y)
+          if (hasInst && (inst == token.Index || inst == token.Previous))
+            ImGui.GetWindowDrawList().AddRectFilled(lstart, new(lstart.X + maxWidth, rect.Y.Y), PCHighlight);
+
+          if (!hovering || mouse.X < rect.X.X || mouse.X >= rect.Y.X || mouse.Y < rect.X.Y || mouse.Y >= rect.Y.Y)
           {
             if (token.Index == curMacro.Producer)
-              ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, new(64, 64, 64));
+              ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, TokenHighlight);
             else if (!macroFromEnd && token.Index.Index >= 0 && macroProducts[token.Index.Index] != default)
-              ImGui.GetWindowDrawList().AddRectFilled(new(rect.X.X, rect.Y.Y - 2), rect.Y, new(64, 64, 64));
+              ImGui.GetWindowDrawList().AddRectFilled(new(rect.X.X, rect.Y.Y - 2), rect.Y, TokenHighlight);
             continue;
           }
 
@@ -174,7 +193,7 @@ namespace KSASM
 
           if (validTarget)
           {
-            ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, new(128, 128, 128));
+            ImGui.GetWindowDrawList().AddRectFilled(rect.X, rect.Y, TokenHoverHilight);
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             {
               macroStack.Add(new(target.Source, target.Index));
@@ -184,18 +203,18 @@ namespace KSASM
           ImGui.BeginTooltip();
           if (macroFromEnd)
           {
-            var otok = curMacro.Source.Index < 0 ? pbuf[token.Previous] : token;
+            var otok = token;
             while (true)
             {
-              var src = pbuf.Source(otok.Source);
               line.Clear();
-              line.Add(src.Name);
+              line.Add(otok.Source.Index < 0 ? "final" : pbuf.SourceName(otok.Source));
               line.Add(": ");
               line.Add(debug.SourceLine(otok.Index, out _, out _));
               ImGui.Text(line.Line);
-              if (src.Producer == TokenIndex.Invalid)
+              var prod = debug.GetProducer(otok);
+              if (prod == TokenIndex.Invalid)
                 break;
-              otok = pbuf[src.Producer];
+              otok = pbuf[prod];
             }
           }
           else
