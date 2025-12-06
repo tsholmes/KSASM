@@ -26,6 +26,8 @@
   lvlh2cce: .types.doublequat(lvlh2cce.)
   enu2cce: .types.doublequat(enu2cce.)
   inputs: .ns inputs.
+    :u8 engine_on: 0
+    :f64 engine_throttle: 0
     :u64 thrust_command: 0
   .endns
   patches: .types.listview(patches.)

@@ -1,4 +1,5 @@
 
+using System;
 using Brutal.Numerics;
 using KSA;
 
@@ -15,13 +16,21 @@ namespace KSASM
       .DoubleQuat((ref v, _) => v.Body2Cce)
       .DoubleQuat((ref v, _) => v.GetLvlh2Cce() ?? doubleQuat.Identity)
       .DoubleQuat((ref v, _) => v.GetEnu2Cce() ?? doubleQuat.Identity)
-      .ValueComposite((ref v, _) => InputField.Get(v), (ref v, i) => InputField.Set(v, i), b => b
+      .ValueComposite((ref v, _) => InputField.Get(v), SetManualControlInputs, b => b
+        .Bool((ref v) => v.EngineOn, (ref v, on) => v.EngineOn = on)
+        .Double((ref v) => v.EngineThrottle, (ref v, t) => v.EngineThrottle = (float)t)
         .Leaf(DataType.U64, ThrustCommandConverter.Instance,
-        (ref v) => v.ThrusterCommandFlags, (ref v, cmd) => v.ThrusterCommandFlags = cmd))
+          (ref v) => v.ThrusterCommandFlags, (ref v, cmd) => v.ThrusterCommandFlags = cmd))
       .FlightPlan((ref v, _) => v.FlightPlan)
       .List((ref v) => v.Parts.Parts, (b, get) => b.Part(get));
+    
+    private static void SetManualControlInputs(ref Vehicle vehicle, ManualControlInputs inputs)
+    {
+      inputs.EngineThrottle = Math.Clamp(inputs.EngineThrottle, vehicle.GetMinThrottle(), 1f);
+      InputField.Set(vehicle, inputs);
+    }
 
-    public readonly FieldWrapper<Vehicle, ManualControlInputs> InputField = new("_manualControlInputs");
+    public static readonly FieldWrapper<Vehicle, ManualControlInputs> InputField = new("_manualControlInputs");
 
     public class ThrustCommandConverter : UnsignedValueConverter<ThrustCommandConverter, ThrusterMapFlags>
     {
