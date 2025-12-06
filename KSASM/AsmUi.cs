@@ -41,18 +41,33 @@ namespace KSASM
         enabled = !enabled;
     }
 
+    private static object _nextWindowClass = null;
+    [HarmonyPatch(typeof(ImGui), nameof(ImGui.SetNextWindowClass)), HarmonyPostfix]
+    public static void ImGui_SetNextWindowClass_Postfix(ImGuiWindowClassPtr windowClass)
+    {
+      _nextWindowClass = windowClass;
+    }
+
     [HarmonyPatch(typeof(ImGui), nameof(ImGui.Begin))]
     [HarmonyPatch(
       [typeof(ImString), typeof(bool), typeof(ImGuiWindowFlags)],
       [ArgumentType.Normal, ArgumentType.Ref, ArgumentType.Normal])]
     [HarmonyPrefix]
-    public static void ImGui_Begin_Prefix(ImString name, ref bool pOpen, ref ImGuiWindowFlags flags) =>
-      flags = ImGuiX.DockableFlags(flags);
+    public static void ImGui_Begin_Prefix(ImString name, ref bool pOpen, ref ImGuiWindowFlags flags)
+    {
+      if (_nextWindowClass is not ImGuiWindowClassPtr wclass || wclass.DockingAllowUnclassed)
+        flags |= ImGuiWindowFlags.NoDocking;
+      _nextWindowClass = null;
+    }
 
     [HarmonyPatch(typeof(ImGui), nameof(ImGui.Begin), typeof(ImString), typeof(ImGuiWindowFlags))]
     [HarmonyPrefix]
-    public static void ImGui_Begin_Prefix(ImString name, ref ImGuiWindowFlags flags) =>
-      flags = ImGuiX.DockableFlags(flags);
+    public static void ImGui_Begin_Prefix(ImString name, ref ImGuiWindowFlags flags)
+    {
+      if (_nextWindowClass is not ImGuiWindowClassPtr wclass || wclass.DockingAllowUnclassed)
+        flags |= ImGuiWindowFlags.NoDocking;
+      _nextWindowClass = null;
+    }
 
     [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
     public static void ModLibrary_LoadAll_Suffix()
@@ -157,20 +172,27 @@ namespace KSASM
         IImGui.DockBuilderFinish(dockID);
       }
 
-      ImGui.DockSpace(dockID);
+      var windowClass = new ImGuiWindowClass
+      {
+        ClassId = dockID,
+        DockingAllowUnclassed = false,
+      };
+
+      ImGuiX.DockSpace(dockID, windowClass: windowClass);
 
       ImGui.End();
 
       void drawWindow(string title, Action draw)
       {
-        ImGuiX.DBegin($"{title}##{vehicle.Id}");
+        ImGuiX.SetNextWindowClass(windowClass);
+        ImGui.Begin($"{title}##{vehicle.Id}");
 
         if (IImGui.GetWindowDockNode().RootNode() != dockID &&
           !(ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && ImGui.IsMouseDragging(ImGuiMouseButton.Left) && ImGui.IsItemActive()))
         {
           ImGui.End();
           ImGui.SetNextWindowDockID(dockID);
-          ImGuiX.DBegin($"{title}##{vehicle.Id}");
+          ImGui.Begin($"{title}##{vehicle.Id}");
         }
         draw();
         ImGui.End();

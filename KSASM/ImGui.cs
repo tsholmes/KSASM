@@ -233,26 +233,19 @@ namespace KSASM
       return sizes;
     }
 
-    private static bool NextDockable = false;
-
-    public static ImGuiWindowFlags DockableFlags(ImGuiWindowFlags flags)
+    public static unsafe ImGuiID DockSpace(
+      ImGuiID dockspaceId,
+      in float2? size = null,
+      ImGuiDockNodeFlags flags = ImGuiDockNodeFlags.None,
+      ImGuiWindowClass? windowClass = default)
     {
-      if (!NextDockable)
-        flags |= ImGuiWindowFlags.NoDocking;
-      NextDockable = false;
-      return flags;
-    }
-
-    public static bool DBegin(ImString name, ref bool open, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
-    {
-      NextDockable = true;
-      return ImGui.Begin(name, ref open, flags);
-    }
-
-    public static bool DBegin(ImString name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
-    {
-      NextDockable = true;
-      return ImGui.Begin(name, flags);
+      ImGuiWindowClassPtr windowClassPtr = default;
+      if (windowClass != null)
+      {
+        var cls = windowClass.Value;
+        windowClassPtr = &cls;
+      }
+      return ImGui.DockSpace(dockspaceId, size, flags, windowClassPtr);
     }
 
     public static unsafe void SetNextWindowClass(ImGuiWindowClass cls)
