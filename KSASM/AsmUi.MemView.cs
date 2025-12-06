@@ -30,7 +30,7 @@ namespace KSASM
       var dhovered = debugPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
 
       ImGui.SameLine();
-      ImGui.SetNextItemWidth(ImGui.GetFontSize() * 16f);
+      ImGui.SetNextItemWidth(-float.Epsilon);
       if (ImGui.BeginCombo("##debugLabel", "Goto Label", ImGuiComboFlags.HeightLargest))
       {
         if (ImGui.IsWindowAppearing())

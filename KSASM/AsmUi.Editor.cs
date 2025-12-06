@@ -25,6 +25,10 @@ namespace KSASM
     private static void DrawEditor()
     {
       editorInput ??= new(65536, DEFAULT_SCRIPT);
+      if (ImGui.Button("Assemble##asm"))
+        Assemble();
+      ImGui.SameLine();
+      ImGui.SetNextItemWidth(-float.Epsilon);
       if (ImGui.BeginCombo("##Library", "Load Library Script"))
       {
         for (var i = 0; i < Library.Index.Count; i++)
@@ -41,12 +45,9 @@ namespace KSASM
       ImGui.InputTextMultiline(
         "###source",
         editorInput.Input,
-        new float2(600, 400),
+        new float2(-float.Epsilon, -float.Epsilon),
         ImGuiInputTextFlags.None
       );
-
-      if (ImGui.Button("Assemble##asm"))
-        Assemble();
     }
 
     private static void Assemble()

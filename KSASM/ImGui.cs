@@ -233,6 +233,41 @@ namespace KSASM
       return sizes;
     }
 
+    private static bool NextDockable = false;
+
+    public static ImGuiWindowFlags DockableFlags(ImGuiWindowFlags flags)
+    {
+      if (!NextDockable)
+        flags |= ImGuiWindowFlags.NoDocking;
+      NextDockable = false;
+      return flags;
+    }
+
+    public static bool DBegin(ImString name, ref bool open, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
+    {
+      NextDockable = true;
+      return ImGui.Begin(name, ref open, flags);
+    }
+
+    public static bool DBegin(ImString name, ImGuiWindowFlags flags = ImGuiWindowFlags.None)
+    {
+      NextDockable = true;
+      return ImGui.Begin(name, flags);
+    }
+
+    public static unsafe void SetNextWindowClass(ImGuiWindowClass cls)
+    {
+      ImGui.SetNextWindowClass(&cls);
+    }
+
+    public static ImGuiID GetID(params Span<string> parts)
+    {
+      var line = new LineBuilder(stackalloc char[128]);
+      for (var i = 0; i < parts.Length; i++)
+        line.Add(parts[i]);
+      return ImGui.GetID(line.Line);
+    }
+
     public static float4 TextRect(FixedRange text, float2? cursor = null)
     {
       var cpos = cursor ?? ImGui.GetCursorScreenPos();

@@ -9,6 +9,9 @@ using Brutal.ImGuiApi.Abstractions;
 using System.Linq;
 using System.Text;
 
+using Internal = Brutal.ImGuiApi.Internal;
+using IImGui = Brutal.ImGuiApi.Internal.ImGui;
+
 namespace KSASM
 {
   [HarmonyPatch]
@@ -37,6 +40,19 @@ namespace KSASM
       if (ImGui.MenuItem("KSASM", default, enabled))
         enabled = !enabled;
     }
+
+    [HarmonyPatch(typeof(ImGui), nameof(ImGui.Begin))]
+    [HarmonyPatch(
+      [typeof(ImString), typeof(bool), typeof(ImGuiWindowFlags)],
+      [ArgumentType.Normal, ArgumentType.Ref, ArgumentType.Normal])]
+    [HarmonyPrefix]
+    public static void ImGui_Begin_Prefix(ImString name, ref bool pOpen, ref ImGuiWindowFlags flags) =>
+      flags = ImGuiX.DockableFlags(flags);
+
+    [HarmonyPatch(typeof(ImGui), nameof(ImGui.Begin), typeof(ImString), typeof(ImGuiWindowFlags))]
+    [HarmonyPrefix]
+    public static void ImGui_Begin_Prefix(ImString name, ref ImGuiWindowFlags flags) =>
+      flags = ImGuiX.DockableFlags(flags);
 
     [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
     public static void ModLibrary_LoadAll_Suffix()
@@ -78,9 +94,7 @@ namespace KSASM
     }
 
     private const ImGuiWindowFlags WINDOW_FLAGS =
-      ImGuiWindowFlags.NoResize |
       ImGuiWindowFlags.NoScrollbar |
-      ImGuiWindowFlags.AlwaysAutoResize |
       ImGuiWindowFlags.NoSavedSettings;
 
     private static bool enabled = true;
@@ -109,64 +123,73 @@ namespace KSASM
       isTyping = false;
       Step(vehicle);
 
+      ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+
       if (!enabled)
         return false;
 
-      var line = new LineBuilder(stackalloc char[128]);
-      line.Add("KSASM##");
-      line.Add(vehicle.Id);
-
       var initPos = ScreenReference.UvToPixels(new(0.17f, 0.08f)) + ImGui.GetMainViewport().Pos;
-      ImGui.SetNextWindowSizeConstraints(new(600, 400), new(1e10f, 1e10f));
+      ImGui.SetNextWindowSizeConstraints(new(300, 300), new(1e10f, 1e10f));
+      ImGui.SetNextWindowSize(new(525, 800), ImGuiCond.Appearing);
       ImGui.SetNextWindowPos(initPos, ImGuiCond.Appearing);
-      if (!ImGui.Begin(line.Line, ref enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed())
+      ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new float2(0, 0));
+      var hidden = !ImGui.Begin($"KSAMM##{vehicle.Id}", ref enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed();
+      ImGui.PopStyleVar();
+      if (hidden)
       {
         ImGui.End();
         return false;
       }
 
-      if (ImGui.BeginTabBar("##tabs"))
+      var dockID = ImGuiX.GetID("KSASM##", vehicle.Id, "-dock");
+
+      if (IImGui.DockBuilderGetNode(dockID).IsNull())
       {
-        if (ImGui.BeginTabItem("Editor"))
-        {
-          DrawEditor();
-          ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("MacroView"))
-        {
-          DrawMacroView();
-          ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("InstView"))
-        {
-          DrawInstView();
-          ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("MemView"))
-        {
-          DrawMemView();
-          ImGui.EndTabItem();
-        }
-        if (ImGui.BeginTabItem("MemWatch"))
-        {
-          DrawMemWatch();
-          ImGui.EndTabItem();
-        }
-        ImGui.EndTabBar();
+        IImGui.DockBuilderAddNode(dockID);
+        IImGui.DockBuilderSplitNode(dockID, ImGuiDir.Down, 0.3f, out var downID, out var upID);
+        IImGui.DockBuilderGetNode(downID).LocalFlags |= ImGuiDockNodeFlags.AutoHideTabBar;
+        IImGui.DockBuilderDockWindow($"Editor##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"MacroView##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"InstView##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"MemView##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"MemWatch##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"Controls##{vehicle.Id}", downID);
+        IImGui.DockBuilderFinish(dockID);
       }
 
-      DrawControls();
-
-      isTyping = ImGui.GetIO().WantTextInput;
+      ImGui.DockSpace(dockID);
 
       ImGui.End();
+
+      void drawWindow(string title, Action draw)
+      {
+        ImGuiX.DBegin($"{title}##{vehicle.Id}");
+
+        if (IImGui.GetWindowDockNode().RootNode() != dockID &&
+          !(ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && ImGui.IsMouseDragging(ImGuiMouseButton.Left) && ImGui.IsItemActive()))
+        {
+          ImGui.End();
+          ImGui.SetNextWindowDockID(dockID);
+          ImGuiX.DBegin($"{title}##{vehicle.Id}");
+        }
+        draw();
+        ImGui.End();
+      }
+
+      drawWindow("Editor", DrawEditor);
+      drawWindow("MacroView", DrawMacroView);
+      drawWindow("InstView", DrawInstView);
+      drawWindow("MemView", DrawMemView);
+      drawWindow("MemWatch", DrawMemWatch);
+      drawWindow("Controls", DrawControls);
+
+      isTyping = ImGui.GetIO().WantTextInput;
       return false;
     }
 
     private static void DrawControls()
     {
-      if (ImGui.GetCursorPosY() < 400)
-        ImGui.SetCursorPosY(400);
+      ImGui.PushStyleVarX(ImGuiStyleVar.ItemSpacing, 1);
       if (ImGui.Button("Run")) Restart();
       ImGui.SameLine();
       if (ImGui.Button("Resume")) Resume();
@@ -174,10 +197,18 @@ namespace KSASM
       doStep = ImGui.Button("Step");
       ImGui.SameLine();
       if (ImGui.Button("Stop")) Stop();
-
+      ImGui.SameLine();
+      if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear"))
+      {
+        stats = "";
+        output.Clear();
+      }
+      ImGui.PopStyleVar();
+      ImGui.SameLine();
       ImGui.Text(stats);
 
-      ImGui.BeginChild("##logs", new(-float.Epsilon, 200), windowFlags: ImGuiWindowFlags.HorizontalScrollbar);
+      ImGui.Separator();
+      ImGui.BeginChild("##logs", new(-float.Epsilon, -float.Epsilon), windowFlags: ImGuiWindowFlags.HorizontalScrollbar);
       foreach (var line in output)
         ImGui.Text(line);
 
@@ -186,12 +217,6 @@ namespace KSASM
       logged = false;
 
       ImGui.EndChild();
-
-      if ((output.Count > 0 || stats.Length > 0) && ImGui.Button("Clear"))
-      {
-        stats = "";
-        output.Clear();
-      }
     }
 
     private static void Step(Vehicle vehicle)
@@ -220,22 +245,6 @@ namespace KSASM
 
       var sb = new StringBuilder();
       var pc = Current.Processor.PC;
-      if (Current.Symbols != null && Current.Symbols.InstToken(pc, out var itoken))
-      {
-        itoken = Current.Symbols.RootToken(itoken);
-        var sname = Current.Symbols.SourceName(itoken);
-        var loc = Current.Symbols.SourceLine(itoken, out var lnum, out var loff);
-        var id = Current.Symbols.ID(pc);
-
-        sb.Append('@').Append(pc).Append(": ");
-        sb.Append(sname).Append(':').Append(lnum + 1).Append(':').Append(loff).Append(' ');
-        sb.Append(id.Label).Append('+').Append(id.Offset).AppendLine();
-        sb.Append(loc).AppendLine();
-      }
-      else
-      {
-        sb.Append('@').Append(pc).AppendLine();
-      }
       sb.Append(Current.LastSteps).Append(" steps in ");
       sb.AppendFormat("{0:0.##}", Current.LastMs).Append("ms");
       stats = sb.ToString();
@@ -282,5 +291,14 @@ namespace KSASM
   {
     public static bool Contains(this in floatRect r, float2 p) =>
       p.X >= r.Min.X && p.X < r.Max.X && p.Y >= r.Min.Y && p.Y < r.Max.Y;
+
+    public static ImGuiID RootNode(this Internal.ImGuiDockNodePtr node)
+    {
+      if (node.IsNull())
+        return 0;
+      if (node.ParentNode.IsNull())
+        return node.ID;
+      return node.ParentNode.RootNode();
+    }
   }
 }

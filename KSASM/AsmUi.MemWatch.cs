@@ -18,13 +18,17 @@ namespace KSASM
       var line = new LineBuilder(stackalloc char[128]);
       bool active;
 
+      var fontSize = ImGui.GetFontSize();
+      var spacing = ImGui.GetStyle().ItemSpacing.X;
+
       watchInput ??= new(1024);
       var input = watchInput.Input;
+      ImGui.SetNextItemWidth(-fontSize * 4 - spacing * 2);
       ImGui.InputTextWithHint("##watchAddr", "label or address", input);
       if (active = ImGui.IsItemActive())
         DrawMemWatchFilterTooltip();
       ImGui.SameLine();
-      ImGui.SetNextItemWidth(ImGui.GetFontSize() * 3);
+      ImGui.SetNextItemWidth(fontSize * 3);
       ImGuiX.InputEnum("##watchType", ref watchType);
 
       var addr = -1;
@@ -36,6 +40,7 @@ namespace KSASM
 
       ImGui.SameLine();
       ImGui.BeginDisabled(addr == -1);
+      ImGui.SetNextItemWidth(fontSize * 1);
       if (ImGui.Button("+##watchAdd"))
         watches.Add((addr, watchType));
       ImGui.EndDisabled();
@@ -50,6 +55,8 @@ namespace KSASM
           watchType = itype.Value;
       }
 
+      ImGui.BeginChild("##watches", new(-float.Epsilon, -float.Epsilon));
+
       var toRemove = -1;
       for (var i = 0; i < watches.Count; i++)
       {
@@ -61,16 +68,24 @@ namespace KSASM
         ImGui.SameLine();
         line.Clear();
         line.AddAddr(waddr, Current.Symbols);
-        line.PadLeft(32);
         line.Add(": ");
+        var centerWidth = ImGuiX.TextWidths[line.Length];
         if (waddr + wtype.SizeBytes() < Processor.MAIN_MEM_SIZE)
           line.Add(mem.Read(waddr, wtype), wtype);
+
+        var maxWidth = ImGui.GetContentRegionAvail().X - ImGui.GetStyle().WindowPadding.X;
+        var width = ImGuiX.TextWidths[line.Length];
+        if (centerWidth < maxWidth / 2 && width < maxWidth)
+          ImGui.SetCursorPosX(ImGui.GetCursorPosX() + maxWidth / 2 - centerWidth);
+
         ImGui.Text(line.Line);
 
         ImGui.PopID();
       }
       if (toRemove != -1)
         watches.RemoveAt(toRemove);
+
+      ImGui.EndChild();
     }
 
     private static void DrawMemWatchFilterTooltip()

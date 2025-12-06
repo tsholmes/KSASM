@@ -25,17 +25,20 @@ namespace KSASM
       {
         ImGui.Text("Assemble source to view macro expansions");
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 400);
+        ImGui.Dummy(new());
         return;
       }
 
+      var maxWidth = ImGui.GetContentRegionAvail().X - ImGui.GetStyle().WindowPadding.X;
+
       ImGui.PushStyleVar(ImGuiStyleVar.SelectableTextAlign, new float2(0.5f, 0.5f));
-      if (ImGui.Selectable("From Source", !macroFromEnd, size: new(300f, 0f)))
+      if (ImGui.Selectable("From Source", !macroFromEnd, size: new(maxWidth / 2, 0f)))
       {
         macroFromEnd = false;
         macroStack.Clear();
       }
       ImGui.SameLine();
-      if (ImGui.Selectable("From End", macroFromEnd, size: new(300f, 0f)))
+      if (ImGui.Selectable("From End", macroFromEnd, size: new(maxWidth / 2, 0f)))
       {
         macroFromEnd = true;
         macroStack.Clear();
@@ -71,17 +74,14 @@ namespace KSASM
 
       var line = new LineBuilder(stackalloc char[256]);
       var mouse = ImGui.GetMousePos();
-      var maxWidth = ImGui.GetContentRegionAvail().X;
       int maxChars = 0;
       for (var i = 1; i <= 256; i++)
       {
         if (ImGuiX.TextWidths[i] <= maxWidth)
-          maxChars = i - 1;
+          maxChars = i;
         else
           break;
       }
-
-      var linesBottom = ImGui.GetCursorScreenPos().Y + ImGui.GetTextLineHeightWithSpacing() + 400f;
 
       var trimTo = -1;
       for (var i = 0; i < macroStack.Count; i++)
@@ -118,11 +118,7 @@ namespace KSASM
       while (trimTo > 0 && macroStack.Count > trimTo)
         macroStack.RemoveAt(macroStack.Count - 1);
 
-      var linesHeight = linesBottom - ImGui.GetCursorScreenPos().Y;
-      if (linesHeight < 200)
-        linesHeight = 200;
-
-      if (!ImGui.BeginChild("##srcLines", new(-float.Epsilon, linesHeight), windowFlags: ImGuiWindowFlags.HorizontalScrollbar))
+      if (!ImGui.BeginChild("##srcLines", new(-float.Epsilon, -float.Epsilon), windowFlags: ImGuiWindowFlags.HorizontalScrollbar))
       {
         ImGui.EndChild();
         return;
