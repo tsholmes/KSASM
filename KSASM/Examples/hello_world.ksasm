@@ -1,0 +1,25 @@
+# define CONST region to store inline constant values
+.region CONST 65536
+
+# import a library script, which inserts that entire script here
+.import libstring
+
+# define region for our main data
+.region maindata 1024
+
+# define string with beginning and end labels
+:u8 hello.value: "hello" hello.end:
+# add value containing address of hello.value
+:p24 hello: hello.value
+# compute the length in a constant expression
+:p24 hello.len: $(hello.end - hello.value)
+
+# use a macro from libstring to do all of the above
+.str(world, "world")
+
+# execution always starts from address 0
+@0 main:
+  debugstr:p24 hello, hello.len
+  debugstr:p24 world, world.len
+  sleep:u64 _, $(-1)
+  jump:p24 _, main

@@ -29,14 +29,14 @@ namespace KSASM
         Assemble();
       ImGui.SameLine();
       ImGui.SetNextItemWidth(-float.Epsilon);
-      if (ImGui.BeginCombo("##Library", "Load Library Script"))
+      if (ImGui.BeginCombo("##Examples", "Load Example Script"))
       {
-        for (var i = 0; i < Library.Index.Count; i++)
+        for (var i = 0; i < Library.Examples.Count; i++)
         {
-          var name = Library.Index[i];
+          var name = Library.Examples[i];
           ImGui.PushID(i);
           if (ImGui.Selectable(name))
-            LoadLibrary(name);
+            LoadExample(name);
           ImGui.PopID();
         }
         ImGui.EndCombo();
@@ -68,9 +68,9 @@ namespace KSASM
       }
     }
 
-    public static void LoadLibrary(string name)
+    public static void LoadExample(string name)
     {
-      var source = Library.LoadImport(name);
+      var source = Library.LoadExample(name);
       editorInput = new(65536, source.Source);
     }
   }

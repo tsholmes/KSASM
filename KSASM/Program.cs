@@ -33,18 +33,16 @@ namespace KSASM
         mod.ImmediateLoad(null);
 
         if (pargs.Positional(0, out var name))
-          AsmUi.LoadLibrary(name);
+          AsmUi.LoadExample(name);
         return RunGame(args);
       }
 
-      Library.LibraryDir = Path.Join(KSASMMod.CWD, "Library");
+      Library.Init(KSASMMod.CWD);
       Library.RefreshIndex();
 
-      Library.CacheAll();
+      var scriptName = pargs.Positional(0, out var sname) ? sname : "hello_world";
 
-      var scriptName = pargs.Positional(0, out var sname) ? sname : "test";
-
-      var source = Library.LoadImport(scriptName);
+      var source = Library.LoadExample(scriptName);
 
       var proc = new Processor
       {

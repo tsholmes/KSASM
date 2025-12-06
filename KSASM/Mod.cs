@@ -19,20 +19,7 @@ namespace KSASM
     {
       DefaultCategory.Log.Debug("Loading KSASM");
 
-      var asmDir = Directory.GetParent(typeof(KSASMMod).Assembly.Location).FullName;
-      var libCandidates = new string[] {
-        Path.Join(asmDir, "Library"), Path.Join(CWD ?? Directory.GetCurrentDirectory(), "Library")
-      };
-      foreach (var p in libCandidates)
-      {
-        if (Directory.Exists(p))
-        {
-          Library.LibraryDir = p;
-          break;
-        }
-      }
-
-      Library.LibraryDir ??= Directory.GetCurrentDirectory();
+      Library.Init(CWD);
       Library.RefreshIndex();
 
       harmony = new("KSASM");

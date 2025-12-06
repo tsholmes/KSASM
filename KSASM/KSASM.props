@@ -11,6 +11,7 @@
     <ModFile Include="$(OutputPath)\$(ModName).dll" />
     <ModFile Include="..\Content\*.*" />
     <ModFile Include="Library\lib*.ksasm" DestDir="Library\" />
+    <ModFile Include="Examples\*.ksasm" DestDir="Examples\" />
 
     <_KsaAssemblies Include="$(KSADir)Brutal*.dll" Path="%(FullPath)" />
     <_KsaAssemblies Include="$(KSADir)KSA.dll" Path="%(FullPath)" />

@@ -1,0 +1,47 @@
+.region CONST 65536
+
+.import libsystem
+.import libvehicle
+.import libstring
+.import libterm
+
+.region maindata 1024
+
+:u64 last_inputs: 0
+:u64 temp: 0
+
+.str(s_roll_right, "Roll Right")
+.str(s_roll_left, "Roll Left")
+.str(s_pitch_up, "Pitch Up")
+.str(s_pitch_down, "Pitch Down")
+.str(s_yaw_right, "Yaw Right")
+.str(s_yaw_left, "Yaw Left")
+
+.str(s_intro, "Logging Rotation Inputs...")
+
+.macro loginput(flag, string) {
+  copy:u64 temp, last_inputs
+  not:u64 temp, _
+  and:u64 temp, vehicle.inputs.thrust_command
+  and:u64 temp, $(flag)
+  bzero:u64 temp, .concat(string _skip)
+  .term.nl()
+  .term.print(string)
+  .label(.concat(string _skip))
+}
+
+@0
+.system.init
+.vehicle.init
+.term.clear
+.term.print(s_intro)
+main:
+  .loginput(.vehicle.thrust.roll_right, s_roll_right)
+  .loginput(.vehicle.thrust.roll_left, s_roll_left)
+  .loginput(.vehicle.thrust.pitch_up, s_pitch_up)
+  .loginput(.vehicle.thrust.pitch_down, s_pitch_down)
+  .loginput(.vehicle.thrust.yaw_right, s_yaw_right)
+  .loginput(.vehicle.thrust.yaw_left, s_yaw_left)
+  copy:u64 last_inputs, vehicle.inputs.thrust_command
+  sleep:u8 _, $(1)
+  jump:p24 _, main
