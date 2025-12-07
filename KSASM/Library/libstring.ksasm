@@ -175,4 +175,36 @@ str.ftoa_unit.endprefix:
 str.ftoa_unit.end:
   jump _, .str.ftoa_unit.fnret
 
+
+:f64 str.ftoa_n3.temp: 0
+:p24 str.ftoa_n3.work: 0*2
+:u8 str.ftoa_n3.dot_base: ".000"
+:u8 str.ftoa_n3.dot: 0*4
+.fn(str.ftoa_n3, {:p24, to, *2, out}, {:f64, val})
+  .str.itoa(str.ftoa_n3.to:p24, str.ftoa_n3.val:f64)
+  abs:f64 str.ftoa_n3.val, _
+  copy:u8*4 str.ftoa_n3.dot, str.ftoa_n3.dot_base
+# add eps to handle fp error
+  add:f64 str.ftoa_n3.val, $(1e-5)
+# 0.1
+  mul:f64 str.ftoa_n3.val, $(10)
+  mod:f64 str.ftoa_n3.val, $(10)
+  add $[str.ftoa_n3.dot+1]:u8, str.ftoa_n3.val:f64
+# 0.01
+  mul:f64 str.ftoa_n3.val, $(10)
+  mod:f64 str.ftoa_n3.val, $(10)
+  add $[str.ftoa_n3.dot+2]:u8, str.ftoa_n3.val:f64
+# 0.001
+  mul:f64 str.ftoa_n3.val, $(10)
+  mod:f64 str.ftoa_n3.val, $(10)
+  add $[str.ftoa_n3.dot+3]:u8, str.ftoa_n3.val:f64
+# copy decimal digits over
+  add:p24 $[str.ftoa_n3.to+3], str.ftoa_n3.to # use length as append ptr
+  copy:u8*4 [$[str.ftoa_n3.to+3]], str.ftoa_n3.dot
+# calc final length
+  add:p24 $[str.ftoa_n3.to+3], $(4)
+  sub:p24 $[str.ftoa_n3.to+3], str.ftoa_n3.to
+str.ftoa_n3.end:
+  jump _, .str.ftoa_n3.fnret
+
 }

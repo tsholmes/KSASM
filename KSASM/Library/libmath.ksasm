@@ -88,10 +88,11 @@
 .macro d3dq.transform(v, r) {
   copy:f64*3 v.tempv3, v
   copy:f64 $[v.tempv3+8*3], $(1)
-  copy:f64*4 v, $(-1,-1,-1,1)
-  mul:f64*4 v, r
-  .dq.concat(v, v.tempv3)
-  .dq.concat(v, r)
+  copy:f64*4 $[v.tempv3+8*4], $(-1,-1,-1,1)
+  mul:f64*4 $[v.tempv3+8*4], r
+  .dq.concat($[v.tempv3+8*4], v.tempv3)
+  .dq.concat($[v.tempv3+8*4], r)
+  copy:f64*3 v, $[v.tempv3+8*4]
 }
 
 }

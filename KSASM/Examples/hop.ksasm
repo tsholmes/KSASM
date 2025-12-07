@@ -1,0 +1,216 @@
+.region CONST 65536
+
+.import libtypes
+.import libmath
+.import libstring
+.import libterm
+.import libvehicle
+.import libsystem
+
+.region maindata 65536
+
+# utility macros
+.str(fbuf, 0*64) # buffer for formatting values
+.str.ptr(line, 0, 0) # ptr+len var for building line
+.macro printd3(label, d3, unit) {
+  .term.print(label)
+  .term.nl
+  copy:u64*8 fbuf, $(0) # clear fbuf
+  copy:p24*2 line, $(fbuf, 0)
+  .str.ftoa_n3(line:p24, ..concat(d3 .x))
+  copy:p24*2 line, $(fbuf+11, 0)
+  .str.ftoa_n3(line:p24, ..concat(d3 .y))
+  copy:p24*2 line, $(fbuf+22, 0)
+  .str.ftoa_n3(line:p24, ..concat(d3 .z))
+  copy:p24*2 line, $(fbuf, 32)
+  .term.print(line)
+}
+
+:f64 dtemp: 0
+.macro deadband(val, minv) {
+  copy:f64 dtemp, val
+  abs:f64 dtemp, _
+  sub:f64 dtemp, $(minv)
+  bpos:f64 dtemp, .concat(val _deadband_skip)
+  copy:f64 val, $(0)
+  .label(.concat(val _deadband_skip))
+}
+.macro deadband3(val, minv) {
+  .deadband(..concat(val .x), minv)
+  .deadband(..concat(val .y), minv)
+  .deadband(..concat(val .z), minv)
+}
+
+.macro pi 3.14159265358979
+.macro rad2deg 180/.pi
+.macro deg2rad .pi/180
+
+# strings
+.str(s_velsurf, "VEL SURF M/S")
+.str(s_velbody, "VEL BODY M/S")
+.str(s_roterr,  "ROT ERR DEG")
+.str(s_avel, "AVEL DEG/S")
+.str(s_aveltgt, "AVEL TGT DEG/S")
+.str(s_avelerr, "AVEL ERR DEG/S")
+
+# temp vars
+tempq: .types.doublequat(tempq.)
+tempv: .types.double3(tempv.)
+
+# frame conversion quaternions
+:f64 qroll90: 0.70710678119 0 0 0.70710678119
+cci2enu: .types.doublequat(cci2enu.)
+enu2body: .types.doublequat(enu2body.)
+
+# state values
+:f64 planet_avel: 0
+surf_vel: .types.double3(surf_vel.)
+body_vel: .types.double3(body_vel.)
+
+# control constants
+.macro lat_speed_scale $(20) # lateral speed to reach max tilt
+.macro lat_tilt_z $(3) # z value of tilt vector when |(x,y)| <= 1
+.macro rot_speed_scale $(10*.deg2rad) # rot error to reach max rot speed
+.macro rot_speed_max $(5*.deg2rad) # max rot speed at max err
+.macro max_vspeed $(50) # above this speed engines will shut off
+.macro min_vspeed $(-40) # below this speed engines will turn on
+.macro rot_deadband 0.2*.deg2rad
+.macro avel_deadband 0.02*.deg2rad
+
+# control values
+rot_err: .types.double3(rot_err.)
+avel_tgt: .types.double3(avel_tgt.)
+avel_err: .types.double3(avel_err.)
+:f64 vsign: 0
+
+@0
+.vehicle.init
+.system.init
+main:
+  copy:u64 system.hash_param, vehicle.patch.orbit.parent
+  copy:f64 planet_avel, system.angular_velocity
+
+  # compute frame transforms
+  copy:f64*4 cci2enu, system.cci2cce
+  copy:f64*4 tempq, vehicle.enu2cce
+  .dq.invert(tempq) # cce -> enu
+  .dq.concat(cci2enu, tempq)
+
+  copy:f64*4 enu2body, vehicle.enu2cce
+  copy:f64*4 tempq, vehicle.body2cce
+  .dq.invert(tempq) # cce -> body
+  .dq.concat(enu2body, tempq)
+  # concatenating enu2cce and cce2body still left it rolled -90deg
+  .dq.concat(enu2body, qroll90)
+
+  copy:u64 system.hash_param, vehicle.hash
+
+  # compute enu surface velocity
+  copy:f64*2 surf_vel, $(0)
+  copy:f64 surf_vel.z, planet_avel
+  .d3.cross(surf_vel, system.cci.pos)
+  mul:f64*3 surf_vel, $(-1)
+  add:f64*3 surf_vel, system.cci.vel
+  .d3dq.transform(surf_vel, cci2enu)
+
+  # calc velocity dir relative to body
+  copy:f64*3 body_vel, surf_vel
+  .d3dq.transform(body_vel, enu2body)
+  
+  # calc wether we are pointing up or down
+  copy:f64*3 tempv, $(0,0,1)
+  .d3dq.transform(tempv, enu2body)
+  sign:f64 vsign, tempv.x
+
+  # calc rotation error relative to body
+  copy:f64*3 rot_err, surf_vel
+  mul:f64*3 rot_err, $(-1,-1,0)
+  copy:f64*3 tempv, rot_err
+  .d3.mag(tempv)
+  copy:f64 tempv.y, tempv.x
+  div:f64 tempv.x, .lat_speed_scale
+  min:f64 tempv.x, $(1)
+  div:f64 tempv.x, tempv.y
+  swz:f64*3 tempv, $(0,0,0)
+  mul:f64*3 rot_err, tempv
+  copy:f64 rot_err.z, .lat_tilt_z
+  .d3.norm(rot_err)
+  .d3dq.transform(rot_err, enu2body)
+  mul:f64*3 rot_err, $(-1)
+  asin:f64*3 rot_err, _
+  copy:f64 rot_err.x, $(0)
+  .deadband3(rot_err, .rot_deadband)
+
+  bpos:f64 vsign, skip_rot_err_adjust
+  sign:f64*3 tempv, rot_err
+  mul:f64*3 tempv, $(.pi/2)
+  add:f64*3 rot_err, tempv
+  skip_rot_err_adjust:
+
+  # calc target angular velocity
+  copy:f64*3 avel_tgt, rot_err
+  mul:f64*3 avel_tgt, $(-1)
+  copy:f64*3 tempv, avel_tgt
+  .d3.mag(tempv)
+  copy:f64 tempv.y, tempv.x
+  div:f64 tempv.x, .rot_speed_scale
+  min:f64 tempv.x, $(1)
+  mul:f64 tempv.x, .rot_speed_max
+  div:f64 tempv.x, tempv.y
+  swz:f64*3 tempv, $(0,0,0)
+  mul:f64*3 avel_tgt, tempv
+  .deadband3(avel_tgt, .avel_deadband)
+
+  # calculate avel error
+  copy:f64*3 avel_err, avel_tgt
+  sub:f64*3 avel_err, vehicle.avel
+  .deadband3(avel_err, .avel_deadband)
+
+  copy:u64 vehicle.inputs.thrust_command, $(0)
+
+  .macro do_axis(x, pflag, nflag) {
+    bzero:f64 .concat(avel_err. x), .concat(do_axis_ x _end)
+    bpos:f64 .concat(avel_err. x), .concat(do_axis_ x _pos)
+    or:u64 vehicle.inputs.thrust_command, $(pflag)
+    jump:p24 .concat(do_axis_ x _end), _
+    .label(.concat(do_axis_ x _pos))
+    or:u64 vehicle.inputs.thrust_command, $(nflag)
+    .label(.concat(do_axis_ x _end))
+  }
+
+  .do_axis(x, .vehicle.thrust.roll_left, .vehicle.thrust.roll_right)
+  .do_axis(y, .vehicle.thrust.pitch_down, .vehicle.thrust.pitch_up)
+  .do_axis(z, .vehicle.thrust.yaw_left, .vehicle.thrust.yaw_right)
+
+  # TODO: fire thrusters when z vel > 0 and pointing up
+  bneg:f64 vsign, engine_off # always turn off when pointing down
+
+  copy:f64 tempv, surf_vel.z
+  sub:f64 tempv, .min_vspeed
+  bpos:f64 tempv, skip_engine_on
+  copy:u8 vehicle.inputs.engine_on, $(1)
+  skip_engine_on:
+
+  copy:f64 tempv, surf_vel.z
+  sub:f64 tempv, .max_vspeed
+  bneg:f64 tempv, skip_engine_off
+  engine_off:
+  copy:u8 vehicle.inputs.engine_on, $(0)
+  skip_engine_off:
+
+main_end:
+  .term.clear
+  .printd3(s_velsurf, surf_vel)
+  .printd3(s_velbody, body_vel)
+  mul:f64*3 rot_err, $(.rad2deg)
+  .printd3(s_roterr, rot_err)
+  copy:f64*3 tempv, vehicle.avel
+  mul:f64*3 tempv, $(.rad2deg)
+  .printd3(s_avel, tempv)
+  mul:f64*3 avel_tgt, $(.rad2deg)
+  .printd3(s_aveltgt, avel_tgt)
+  mul:f64*3 avel_err, $(.rad2deg)
+  .printd3(s_avelerr, avel_err)
+
+  sleep:u64 _, $(1)
+  jump:p24 _, main
