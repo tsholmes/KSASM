@@ -182,7 +182,6 @@ main:
   .do_axis(y, .vehicle.thrust.pitch_down, .vehicle.thrust.pitch_up)
   .do_axis(z, .vehicle.thrust.yaw_left, .vehicle.thrust.yaw_right)
 
-  # TODO: fire thrusters when z vel > 0 and pointing up
   bneg:f64 vsign, engine_off # always turn off when pointing down
 
   copy:f64 tempv, surf_vel.z
