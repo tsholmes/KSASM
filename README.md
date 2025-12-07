@@ -6,6 +6,10 @@ A programmable autopilot computer for KSA using a fictional assembly language.
 
 [Assembler Spec](Assembler.md)
 
+[Example scripts](KSASM/Examples) (load them in-game from the examples dropdown on the editor tab)
+
+[Library scripts](KSASM/Library) (reference in your scripts by name e.g. `.import libterm`)
+
 While there is a significant amount working with the current design, it is still all subject to change depending on how well it works and fits the vision.
 
 ## Installation
