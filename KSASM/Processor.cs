@@ -23,6 +23,8 @@ namespace KSASM
     public Action<ValArray, ValArray> OnDebug;
     public Action<string> OnDebugStr;
 
+    public readonly IDevice[] Devices;
+
     private readonly Dictionary<ulong, IDevice> deviceMap = [];
     private readonly IDevice defaultDevice = new NullDevice();
 
@@ -34,6 +36,7 @@ namespace KSASM
 
       MappedMemory.MapRange(0, MainMemory, 0, MAIN_MEM_SIZE);
 
+      Devices = devices;
       foreach (var device in devices)
         deviceMap.Add(device.Id, device);
     }

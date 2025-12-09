@@ -10,19 +10,19 @@ namespace KSASM
     public override ulong GetId(Vehicle device) => 2;
 
     public override IDeviceFieldBuilder<Vehicle> Build(RootDeviceFieldBuilder<Vehicle> b) => b
-      .Uint((ref v) => v.Hash)
-      .Double3((ref v, _) => v.BodyRates)
-      .DoubleQuat((ref v, _) => v.GetBody2Cci())
-      .DoubleQuat((ref v, _) => v.Body2Cce)
-      .DoubleQuat((ref v, _) => v.GetLvlh2Cce() ?? doubleQuat.Identity)
-      .DoubleQuat((ref v, _) => v.GetEnu2Cce() ?? doubleQuat.Identity)
-      .ValueComposite((ref v, _) => InputField.Get(v), SetManualControlInputs, b => b
-        .Bool((ref v) => v.EngineOn, (ref v, on) => v.EngineOn = on)
-        .Double((ref v) => v.EngineThrottle, (ref v, t) => v.EngineThrottle = (float)t)
-        .Leaf(DataType.U64, ThrustCommandConverter.Instance,
+      .Uint("hash", (ref v) => v.Hash)
+      .Double3("avel", (ref v, _) => v.BodyRates)
+      .DoubleQuat("body2cci", (ref v, _) => v.GetBody2Cci())
+      .DoubleQuat("body2cce", (ref v, _) => v.Body2Cce)
+      .DoubleQuat("lvlh2cce", (ref v, _) => v.GetLvlh2Cce() ?? doubleQuat.Identity)
+      .DoubleQuat("enu2cce", (ref v, _) => v.GetEnu2Cce() ?? doubleQuat.Identity)
+      .ValueComposite("inputs", (ref v, _) => InputField.Get(v), SetManualControlInputs, b => b
+        .Bool("engine_on", (ref v) => v.EngineOn, (ref v, on) => v.EngineOn = on)
+        .Double("engine_throttle", (ref v) => v.EngineThrottle, (ref v, t) => v.EngineThrottle = (float)t)
+        .Leaf("thrust_command", DataType.U64, ThrustCommandConverter.Instance,
           (ref v) => v.ThrusterCommandFlags, (ref v, cmd) => v.ThrusterCommandFlags = cmd))
-      .FlightPlan((ref v, _) => v.FlightPlan)
-      .List((ref v) => v.Parts.Parts, (b, get) => b.Part(get));
+      .FlightPlan(null, (ref v, _) => v.FlightPlan)
+      .List("parts", (ref v) => v.Parts.Parts, (b, get) => b.Part("part", get));
     
     private static void SetManualControlInputs(ref Vehicle vehicle, ManualControlInputs inputs)
     {
@@ -41,10 +41,10 @@ namespace KSASM
 
   public partial class DeviceFieldBuilder<B, T, V>
   {
-    public B Part(DeviceFieldBufGetter<V, Part> getter) => NonNull(getter, b => b
-      .Ulong((ref p) => p.Id)
-      .Ulong((ref p) => p.Parent?.Id ?? 0)
-      .String(64, (ref p, _) => p.Name)
+    public B Part(string name, DeviceFieldBufGetter<V, Part> getter) => NonNull(name, getter, b => b
+      .Ulong("id", (ref p) => p.Id)
+      .Ulong("parent", (ref p) => p.Parent?.Id ?? 0)
+      .String("name", 64, (ref p, _) => p.Name)
     );
   }
 }

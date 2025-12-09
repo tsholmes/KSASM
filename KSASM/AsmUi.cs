@@ -168,6 +168,7 @@ namespace KSASM
         IImGui.DockBuilderDockWindow($"InstView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"MemView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"MemWatch##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"DevView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"Controls##{vehicle.Id}", downID);
         IImGui.DockBuilderFinish(dockID);
       }
@@ -203,6 +204,7 @@ namespace KSASM
       drawWindow("InstView", DrawInstView);
       drawWindow("MemView", DrawMemView);
       drawWindow("MemWatch", DrawMemWatch);
+      drawWindow("DevView", DrawDevView);
       drawWindow("Controls", DrawControls);
 
       isTyping = ImGui.GetIO().WantTextInput;

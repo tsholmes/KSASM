@@ -1,60 +1,65 @@
 
 using System;
+using Brutal.ImGuiApi;
 using Brutal.Numerics;
 
 namespace KSASM
 {
   public partial class DeviceFieldBuilder<B, T, V>
   {
-    public B Bool(DeviceFieldGetter<V, bool> getter, DeviceFieldSetter<V, bool> setter = null) =>
-      Leaf(DataType.U8, BoolValueConverter.Instance, getter, setter);
+    public B Bool(string name, DeviceFieldGetter<V, bool> getter, DeviceFieldSetter<V, bool> setter = null) =>
+      Leaf(name, DataType.U8, BoolValueConverter.Instance, getter, setter);
 
-    public B Byte(DeviceFieldGetter<V, byte> getter, DeviceFieldSetter<V, byte> setter = null) =>
-      Leaf(DataType.U8, ByteValueConverter.Instance, getter, setter);
+    public B Byte(string name, DeviceFieldGetter<V, byte> getter, DeviceFieldSetter<V, byte> setter = null) =>
+      Leaf(name, DataType.U8, ByteValueConverter.Instance, getter, setter);
 
-    public B Uint(DeviceFieldGetter<V, uint> getter, DeviceFieldSetter<V, uint> setter = null) =>
-      Leaf(DataType.U64, UintValueConverter.Instance, getter, setter);
+    public B Uint(string name, DeviceFieldGetter<V, uint> getter, DeviceFieldSetter<V, uint> setter = null) =>
+      Leaf(name, DataType.U64, UintValueConverter.Instance, getter, setter);
 
-    public B UintParameter(out ParamDeviceField<V, uint> field) =>
-      Parameter(DataType.U64, UintValueConverter.Instance, out field);
+    public B UintParameter(string name, out ParamDeviceField<V, uint> field) =>
+      Parameter(name, DataType.U64, UintValueConverter.Instance, out field);
 
-    public B Ulong(DeviceFieldGetter<V, ulong> getter, DeviceFieldSetter<V, ulong> setter = null) =>
-      Leaf(DataType.U64, UlongValueConverter.Instance, getter, setter);
+    public B Ulong(string name, DeviceFieldGetter<V, ulong> getter, DeviceFieldSetter<V, ulong> setter = null) =>
+      Leaf(name, DataType.U64, UlongValueConverter.Instance, getter, setter);
 
-    public B UlongParameter(out ParamDeviceField<V, ulong> field, DeviceFieldSetter<T, V> onSet = null) =>
-      Parameter(DataType.U64, UlongValueConverter.Instance, out field);
+    public B UlongParameter(string name, out ParamDeviceField<V, ulong> field, DeviceFieldSetter<T, V> onSet = null) =>
+      Parameter(name, DataType.U64, UlongValueConverter.Instance, out field);
 
-    public B Double(DeviceFieldGetter<V, double> getter, DeviceFieldSetter<V, double> setter = null) =>
-      Leaf(DataType.F64, DoubleValueConverter.Instance, getter, setter);
+    public B Double(string name, DeviceFieldGetter<V, double> getter, DeviceFieldSetter<V, double> setter = null) =>
+      Leaf(name, DataType.F64, DoubleValueConverter.Instance, getter, setter);
 
-    public B Double3(DeviceFieldBufGetter<V, double3> getter, DeviceFieldSetter<V, double3> setter = null) =>
-      ValueComposite(getter, setter, b => b
-        .Double((ref d3) => d3[0], (ref d3, v) => d3[0] = v)
-        .Double((ref d3) => d3[1], (ref d3, v) => d3[1] = v)
-        .Double((ref d3) => d3[2], (ref d3, v) => d3[2] = v)
+    public B Double3(string name, DeviceFieldBufGetter<V, double3> getter, DeviceFieldSetter<V, double3> setter = null) =>
+      ValueComposite(name, getter, setter, b => b
+        .Double("x", (ref d3) => d3[0], (ref d3, v) => d3[0] = v)
+        .Double("y", (ref d3) => d3[1], (ref d3, v) => d3[1] = v)
+        .Double("z", (ref d3) => d3[2], (ref d3, v) => d3[2] = v)
       );
 
     public B DoubleQuat(
+        string name,
         DeviceFieldBufGetter<V, doubleQuat> getter, DeviceFieldSetter<V, doubleQuat> setter = null) =>
-      ValueComposite(getter, setter, b => b
-        .Double((ref dq) => dq[0], (ref dq, v) => dq[0] = v)
-        .Double((ref dq) => dq[1], (ref dq, v) => dq[1] = v)
-        .Double((ref dq) => dq[2], (ref dq, v) => dq[2] = v)
-        .Double((ref dq) => dq[3], (ref dq, v) => dq[3] = v)
+      ValueComposite(name, getter, setter, b => b
+        .Double("x", (ref dq) => dq[0], (ref dq, v) => dq[0] = v)
+        .Double("y", (ref dq) => dq[1], (ref dq, v) => dq[1] = v)
+        .Double("z", (ref dq) => dq[2], (ref dq, v) => dq[2] = v)
+        .Double("w", (ref dq) => dq[3], (ref dq, v) => dq[3] = v)
       );
 
-    public B String(int maxLen, DeviceFieldBufGetter<V, string> getter) => Composite<string>(getter, b => b
-      .Byte((ref s) => (byte)s.Length)
-      .Field(new StringDeviceField<string>(maxLen, (ref s) => s))
-    );
+    public B String(string name, int maxLen, DeviceFieldBufGetter<V, string> getter) =>
+      Composite<string>(null, getter, b => b
+        .Byte($"{name}.len", (ref s) => (byte)s.Length)
+        .Field(new StringDeviceField<string>(name, maxLen, (ref s) => s))
+      );
   }
 
-  public class StringDeviceField<T>(int maxLen, DeviceFieldGetter<T, string> getter) : IDeviceField<T>
+  public class StringDeviceField<T>(
+    string name, int maxLen, DeviceFieldGetter<T, string> getter
+  ) : BaseDeviceField<T, string>(name)
   {
-    private static System.Text.Encoding Encoding = System.Text.Encoding.ASCII;
-    public int Length => maxLen;
+    private static readonly System.Text.Encoding Encoding = System.Text.Encoding.ASCII;
+    public override int Length => maxLen;
 
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    public override void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
       var str = getter(ref parent);
       var trimmed = Trim(str);
@@ -64,9 +69,15 @@ namespace KSASM
       deviceBuf.Slice(offset, readBuf.Length).CopyTo(readBuf);
     }
 
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       // read only
+    }
+
+    public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      var val = Trim(getter(ref parent));
+      IDevice.DrawTreeLeaf($"{Name}@{offset}x{Length}: \"{val}\"");
     }
 
     private ReadOnlySpan<char> Trim(ReadOnlySpan<char> str)

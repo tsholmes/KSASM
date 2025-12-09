@@ -74,6 +74,34 @@ namespace KSASM
       ValueMode.Float => Float,
       _ => "Invalid",
     };
+
+    public TypedValue Typed(DataType type) => new() { Value = this, Type = type };
+  }
+
+  public struct TypedValue : ISpanFormattable
+  {
+    public Value Value;
+    public DataType Type;
+
+    public string ToString(string format, IFormatProvider formatProvider) => Type.VMode() switch
+    {
+      _ when Type == DataType.P24 => $"{Value.Unsigned:X6}",
+      ValueMode.Unsigned => $"{Value.Unsigned}",
+      ValueMode.Signed => $"{Value.Signed}",
+      ValueMode.Float => $"{Value.Float}",
+      _ => throw new InvalidOperationException($"{Type.VMode()}"),
+    };
+
+    public bool TryFormat(
+      Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider provider
+    ) => Type.VMode() switch
+    {
+      _ when Type == DataType.P24 => Value.Unsigned.TryFormat(destination, out charsWritten, "X6", provider),
+      ValueMode.Unsigned => Value.Unsigned.TryFormat(destination, out charsWritten, default, default),
+      ValueMode.Signed => Value.Signed.TryFormat(destination, out charsWritten, default, default),
+      ValueMode.Float => Value.Float.TryFormat(destination, out charsWritten, default, default),
+      _ => throw new InvalidOperationException($"{Type.VMode()}"),
+    };
   }
 
   // length 8 value type for use as map key

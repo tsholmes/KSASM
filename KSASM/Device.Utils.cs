@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using Brutal.ImGuiApi;
 using KSA;
 
 namespace KSASM
@@ -14,13 +15,14 @@ namespace KSASM
     public B Null(int length) => Field(new NullDeviceField<V>(length));
 
     public B SearchView(
-      CompositeBuildFunc<V, SearchView<V>> build)
+      string name, string keyName, CompositeBuildFunc<V, SearchView<V>> build)
     {
       ParamDeviceField<SearchView<V>, uint> keyParam = null;
       return Composite(
+        name,
         (ref v, buf) => new SearchView<V> { Parent = v, Key = keyParam.GetValue(buf) },
         b => b
-          .UintParameter(out keyParam)
+          .UintParameter(keyName, out keyParam)
           .Chain(new(build))
       );
     }
@@ -28,41 +30,49 @@ namespace KSASM
     public B Switch(SwitchBuildFunc<V> build) => Field(build(new()));
 
     public B ListView(
+      string name,
       Func<V, int> getLength,
       CompositeBuildFunc<ListView<V>, ListView<V>> build)
     {
       ParamDeviceField<ListView<V>, uint> indexParam = null;
       return Composite(
+        null,
         (ref v, buf) => new ListView<V>
         {
           Parent = v,
           Length = (uint)getLength(v),
           Index = indexParam.GetValue(buf[DataType.U64.SizeBytes()..]), // after Length field
         }, b => b
-          .Uint((ref v) => (uint)getLength(v.Parent))
-          .UintParameter(out indexParam)
+          .Uint($"{name}.count", (ref v) => (uint)getLength(v.Parent))
+          .UintParameter($"{name}.index", out indexParam)
           .Switch(sb => sb.Case(v => v.Index < v.Length, (ref v, _) => v, build))
       );
     }
 
     public B List<V2>(
+      string name,
       DeviceFieldGetter<V, List<V2>> getter,
       CompositeChildBuildFunc<ListView<V>, ListView<V>, V2> build
     ) => ListView(
+      name,
       v => getter(ref v).Count,
       b => build(b, (ref v, _) => { var p = v.Parent; return getter(ref p)[(int)v.Index]; })
     );
 
     public B NonNull<V2>(
+      string name,
       DeviceFieldBufGetter<V, V2> getter,
       CompositeBuildFunc<V2, V2> build
-    ) => Composite(getter, b => b.Switch(sb => sb.Case(v => v != null, (ref v, _) => v, build)));
+    ) => Composite(name, getter, b => b.Switch(sb => sb.Case(v => v != null, (ref v, _) => v, build)));
 
-    public B Hash(DeviceFieldGetter<V, IKeyed> getter) => Uint((ref v) => getter(ref v)?.Hash ?? 0);
-    public B ChildHash(DeviceFieldBufGetter<V, IKeyed> getter) => NonNull(getter, b => b.Uint((ref v) => v.Hash));
+    public B Hash(string name, DeviceFieldGetter<V, IKeyed> getter) =>
+      Uint(name, (ref v) => getter(ref v)?.Hash ?? 0);
+    public B ChildHash(string name, DeviceFieldBufGetter<V, IKeyed> getter) =>
+      NonNull(null, getter, b => b.Uint(name, (ref v) => v.Hash));
 
-    public B Raw(int length, DeviceFieldGetter<V, Span<byte>> getter, DeviceFieldSetter<V, Span<byte>> setter) =>
-      Field(new RawDeviceField<V>(length, getter, setter));
+    public B Raw(
+      string name, int length, DeviceFieldGetter<V, Span<byte>> getter, DeviceFieldSetter<V, Span<byte>> setter
+    ) => Field(new RawDeviceField<V>(name, length, getter, setter));
   }
 
   public class NullDeviceField<T>(int length) : IDeviceField<T>
@@ -70,6 +80,10 @@ namespace KSASM
     public int Length => length;
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) => readBuf.Clear();
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) { }
+    public void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      IDevice.DrawTreeLeaf($"<null>@{offset}x{length}");
+    }
   }
 
   public delegate SwitchDeviceFieldBuilder<T> SwitchBuildFunc<T>(SwitchDeviceFieldBuilder<T> builder);
@@ -83,7 +97,8 @@ namespace KSASM
       DeviceFieldBufGetter<T, V> getValue,
       CompositeBuildFunc<T, V> build)
     {
-      cases.Add((filter, build(new(getValue)).Build()));
+      // TODO: name
+      cases.Add((filter, build(new(null, getValue)).Build()));
       return this;
     }
 
@@ -91,9 +106,10 @@ namespace KSASM
       DeviceFieldBufGetter<T, V> getValue,
       CompositeBuildFunc<T, V> build)
     {
+      // TODO: name
       if (defaultCase != null)
         throw new InvalidOperationException("Duplicate default case");
-      defaultCase = build(new(getValue)).Build();
+      defaultCase = build(new(null, getValue)).Build();
       return this;
     }
 
@@ -110,6 +126,7 @@ namespace KSASM
 
     public SwitchDeviceField(IDeviceField<T> defaultCase, params List<(FilterFunc<T>, IDeviceField<T>)> cases)
     {
+      // TODO: name
       var maxLen = defaultCase?.Length ?? 0;
       foreach (var (_, field) in cases)
         maxLen = Math.Max(maxLen, field.Length);
@@ -126,7 +143,11 @@ namespace KSASM
         return new NullDeviceField<T>(Length);
       if (field.Length == Length)
         return field;
-      return new CompositeDeviceField<T, T>((ref v, _) => v, field, new NullDeviceField<T>(Length - field.Length));
+      return new CompositeDeviceField<T, T>(
+        null,
+        (ref v, _) => v,
+        field,
+        new NullDeviceField<T>(Length - field.Length));
     }
 
     private IDeviceField<T> Pick(T val)
@@ -143,23 +164,37 @@ namespace KSASM
       Pick(parent).Read(ref parent, deviceBuf, readBuf, offset);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) =>
       Pick(parent).Write(ref parent, deviceBuf, writeBuf, offset);
+
+    public void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      // TODO: name
+      Pick(parent).OnDrawUi(ref parent, deviceBuf, offset);
+    }
   }
 
-  public class RawDeviceField<T>(int length, DeviceFieldGetter<T, Span<byte>> getter, DeviceFieldSetter<T, Span<byte>> setter) : IDeviceField<T>
+  public class RawDeviceField<T>(
+    string name, int length, DeviceFieldGetter<T, Span<byte>> getter, DeviceFieldSetter<T, Span<byte>> setter
+  ) : BaseDeviceField<T, byte[]>(name)
   {
-    public int Length => length;
+    public override int Length => length;
 
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    public override void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
       var data = getter(ref parent);
       data.Slice(offset, readBuf.Length).CopyTo(readBuf);
     }
 
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       var data = getter(ref parent);
       writeBuf.CopyTo(data[offset..]);
       setter(ref parent, data);
+    }
+
+    public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      // TODO: display value
+      IDevice.DrawTreeLeaf($"{Name}@{offset}x{length}: <{length} bytes>");
     }
   }
 

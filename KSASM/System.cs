@@ -35,9 +35,9 @@ namespace KSASM
     public void Reset()
     {
       this.Processor = new(
-        SystemDeviceDefinition.Make(Vehicle.System),
-        VehicleDeviceDefinition.Make(Vehicle),
-        FlightComputerDeviceDefinition.Make(Vehicle))
+        SystemDeviceDefinition.Make("system", Vehicle.System),
+        VehicleDeviceDefinition.Make("vehicle", Vehicle),
+        FlightComputerDeviceDefinition.Make("fc", Vehicle))
       {
         OnDebug = OnDebug,
         OnDebugStr = OnDebugStr,

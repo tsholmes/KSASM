@@ -1,12 +1,23 @@
 
 using System;
 using System.Collections.Generic;
+using Brutal.ImGuiApi;
 
 namespace KSASM
 {
   public interface IDevice : IMemory
   {
+    public const ImGuiTreeNodeFlags TREE_FLAGS =
+      ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.DrawLinesToNodes;
     public ulong Id { get; }
+    public void OnDrawUi();
+
+    public static void DrawTreeLeaf(ImString text)
+    {
+      ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
+      ImGui.Text(text);
+      ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
+    }
   }
 
   public interface IDeviceField<T>
@@ -15,6 +26,7 @@ namespace KSASM
 
     public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset);
     public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset);
+    public void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset);
   }
 
   public interface IDeviceFieldBuilder<T>
@@ -36,55 +48,61 @@ namespace KSASM
     public B Field(IDeviceFieldBuilder<V> field) => Field(field.Build());
 
     public B Composite<V2>(
+      string name,
       DeviceFieldBufGetter<V, V2> getValue,
       CompositeBuildFunc<V, V2> build
-    ) => Field(build(new(getValue)));
+    ) => Field(build(new(name, getValue)));
 
     public B ValueComposite<V2>(
+      string name,
       DeviceFieldBufGetter<V, V2> getValue,
       DeviceFieldSetter<V, V2> setValue,
       ChildBuilder<ValueCompositeDeviceFieldBuilder<V, V2>> build
-    ) => Field(build(new(getValue, setValue)));
+    ) => Field(build(new(name, getValue, setValue)));
 
     public B Leaf<V2>(
+      string name,
       DataType type,
       IValueConverter<V2> converter,
       DeviceFieldGetter<V, V2> getter,
       DeviceFieldSetter<V, V2> setter = null
-    ) => Field(new LeafDeviceField<V, V2>(type, converter, getter, setter));
+    ) => Field(new LeafDeviceField<V, V2>(name, type, converter, getter, setter));
 
     public B Parameter<V2>(
+      string name,
       DataType type,
       IValueConverter<V2> converter,
       out ParamDeviceField<V, V2> param
-    ) => Field(param = new ParamDeviceField<V, V2>(type, converter));
+    ) => Field(param = new ParamDeviceField<V, V2>(name, type, converter));
 
     public B Chain(ChildBuilder<B> build) => build(Self);
   }
 
   public delegate CompositeDeviceFieldBuilder<T, V> CompositeBuildFunc<T, V>(
     CompositeDeviceFieldBuilder<T, V> builder);
-  public class CompositeDeviceFieldBuilder<T, V>(DeviceFieldBufGetter<T, V> getValue)
+  public class CompositeDeviceFieldBuilder<T, V>(string name, DeviceFieldBufGetter<T, V> getValue)
   : DeviceFieldBuilder<CompositeDeviceFieldBuilder<T, V>, T, V>
   {
     protected readonly List<IDeviceField<V>> fields = [];
 
-    public override IDeviceField<T> Build() => new CompositeDeviceField<T, V>(getValue, fields);
+    public override IDeviceField<T> Build() => new CompositeDeviceField<T, V>(name, getValue, fields);
     protected override void Add(IDeviceField<V> field) => fields.Add(field);
   }
 
   public class ValueCompositeDeviceFieldBuilder<T, V>(
+    string name,
     DeviceFieldBufGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue = null
   ) : DeviceFieldBuilder<ValueCompositeDeviceFieldBuilder<T, V>, T, V>
   {
     private readonly List<IDeviceField<V>> fields = [];
 
-    public override IDeviceField<T> Build() => new ValueCompositeDeviceField<T, V>(getValue, setValue, fields);
+    public override IDeviceField<T> Build() =>
+      new ValueCompositeDeviceField<T, V>(name, getValue, setValue, fields);
     protected override void Add(IDeviceField<V> field) => fields.Add(field);
   }
 
-  public class RootDeviceFieldBuilder<T>() : CompositeDeviceFieldBuilder<T, T>((ref t, _) => t)
+  public class RootDeviceFieldBuilder<T>() : CompositeDeviceFieldBuilder<T, T>(null, (ref t, _) => t)
   {
     public override IDeviceField<T> Build() => new RootDeviceField<T>(fields);
   }
@@ -93,54 +111,82 @@ namespace KSASM
   public delegate V DeviceFieldBufGetter<T, V>(ref T parent, Span<byte> deviceBuffer) where V : allows ref struct;
   public delegate void DeviceFieldSetter<T, V>(ref T parent, V value) where V : allows ref struct;
 
+  public abstract class BaseDeviceField<T, V>(string name) : IDeviceField<T>
+  {
+    public readonly string Name = name;
+
+    public abstract int Length { get; }
+    public abstract void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset);
+    public abstract void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset);
+    public abstract void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset);
+  }
+
   public class LeafDeviceField<T, V>(
+    string name,
     DataType type,
     IValueConverter<V> converter,
     DeviceFieldGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue = null
-  ) : IDeviceField<T>
+  ) : BaseDeviceField<T, V>(name)
   {
-    public int Length => type.SizeBytes();
+    public override int Length => type.SizeBytes();
 
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    public override void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
       Encoding.Encode(deviceBuf, type, converter.ToValue(getValue(ref parent)));
       deviceBuf[offset..(offset + readBuf.Length)].CopyTo(readBuf);
     }
 
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       Encoding.Encode(deviceBuf, type, converter.ToValue(getValue(ref parent)));
       writeBuf.CopyTo(deviceBuf[offset..]);
       setValue?.Invoke(ref parent, converter.FromValue(Encoding.Decode(deviceBuf, type)));
     }
+
+    public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      var rawVal = getValue(ref parent);
+      var val = converter.ToValue(rawVal);
+      IDevice.DrawTreeLeaf($"{Name ?? "<no name>"}@{offset}x{Length}: {rawVal} ({type} {val.Typed(type)})");
+    }
   }
 
-  public class ParamDeviceField<T, V>(DataType type, IValueConverter<V> converter) : IDeviceField<T>
+  public class ParamDeviceField<T, V>(
+    string name, DataType type, IValueConverter<V> converter
+  ) : BaseDeviceField<T, V>(name)
   {
-    public int Length => type.SizeBytes();
+    public override int Length => type.SizeBytes();
 
-    public void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) =>
+    public override void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset) =>
       deviceBuf[offset..(offset + readBuf.Length)].CopyTo(readBuf);
-    public void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) =>
+    public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset) =>
       writeBuf.CopyTo(deviceBuf[offset..]);
 
     public V GetValue(Span<byte> deviceBuf) =>
       converter.FromValue(Encoding.Decode(deviceBuf, type));
     public void SetValue(Span<byte> deviceBuf, V value) =>
       Encoding.Encode(deviceBuf, type, converter.ToValue(value));
+
+    public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      var val = Encoding.Decode(deviceBuf, type);
+      var rawVal = converter.FromValue(val);
+      IDevice.DrawTreeLeaf($"{Name ?? "<no name>"}@{offset}x{Length}: {rawVal} ({type} {val.Typed(type)})");
+    }
   }
 
-  public class CompositeDeviceField<T, V> : IDeviceField<T>
+  public class CompositeDeviceField<T, V> : BaseDeviceField<T, V>
   {
-    public int Length { get; }
+    public override int Length { get; }
 
     protected readonly DeviceFieldBufGetter<T, V> getValue;
     private readonly RangeList<DeviceFieldRange> fieldRanges = new();
 
     public CompositeDeviceField(
+      string name,
       DeviceFieldBufGetter<T, V> getValue,
-      params List<IDeviceField<V>> children)
+      params List<IDeviceField<V>> children) : base(name)
     {
       this.getValue = getValue;
       var len = 0;
@@ -158,7 +204,7 @@ namespace KSASM
       Length = len;
     }
 
-    public virtual void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
+    public override void Read(ref T parent, Span<byte> deviceBuf, Span<byte> readBuf, int offset)
     {
       var self = getValue(ref parent, deviceBuf);
       var iter = fieldRanges.Overlap(new SpanRange<byte>
@@ -175,7 +221,7 @@ namespace KSASM
       }
     }
 
-    public virtual void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
+    public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
       var self = getValue(ref parent, deviceBuf);
       WriteSelf(ref self, deviceBuf, writeBuf, offset);
@@ -194,6 +240,29 @@ namespace KSASM
         var field = frange.Field;
         var fbuf = deviceBuf[frange.StartOffset..][..field.Length];
         field.Write(ref self, fbuf, brange.Span, frange.Offset - frange.StartOffset);
+      }
+    }
+
+    public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
+    {
+      var self = getValue(ref parent, deviceBuf);
+      if (Name == null)
+      {
+        for (var i = 0; i < fieldRanges.Count; i++)
+        {
+          var range = fieldRanges[i];
+          range.Field.OnDrawUi(ref self, deviceBuf[range.Offset..][..range.Length], offset + range.Offset);
+        }
+        return;
+      }
+      if (ImGui.TreeNodeEx($"{Name}###{offset}", IDevice.TREE_FLAGS))
+      {
+        for (var i = 0; i < fieldRanges.Count; i++)
+        {
+          var range = fieldRanges[i];
+          range.Field.OnDrawUi(ref self, deviceBuf[range.Offset..][..range.Length], offset + range.Offset);
+        }
+        ImGui.TreePop();
       }
     }
 
@@ -219,10 +288,11 @@ namespace KSASM
   }
 
   public class ValueCompositeDeviceField<T, V>(
+    string name,
     DeviceFieldBufGetter<T, V> getValue,
     DeviceFieldSetter<T, V> setValue,
     params List<IDeviceField<V>> children)
-  : CompositeDeviceField<T, V>(getValue, children)
+  : CompositeDeviceField<T, V>(name, getValue, children)
   {
     public override void Write(ref T parent, Span<byte> deviceBuf, Span<byte> writeBuf, int offset)
     {
@@ -233,7 +303,7 @@ namespace KSASM
   }
 
   public class RootDeviceField<T>(params List<IDeviceField<T>> children)
-  : CompositeDeviceField<T, T>((ref v, _) => v, children)
+  : CompositeDeviceField<T, T>(null, (ref v, _) => v, children)
   { }
 
   public abstract class DeviceDefinition<T, Def> where Def : DeviceDefinition<T, Def>, new()
@@ -247,10 +317,10 @@ namespace KSASM
 
     public abstract IDeviceFieldBuilder<T> Build(RootDeviceFieldBuilder<T> b);
 
-    public static Device<T> Make(T device) => new(Instance.GetId(device), device, Instance.RootField);
+    public static Device<T> Make(string name, T device) => new(name, Instance.GetId(device), device, Instance.RootField);
   }
 
-  public class Device<T>(ulong id, T instance, IDeviceField<T> root) : IDevice
+  public class Device<T>(string name, ulong id, T instance, IDeviceField<T> root) : IDevice
   {
     public ulong Id { get; } = id;
 
@@ -261,6 +331,15 @@ namespace KSASM
 
     public void Write(Span<byte> data, int address) =>
       root.Write(ref instance, devBuffer, data, address);
+
+    public void OnDrawUi()
+    {
+      if (ImGui.TreeNodeEx($"{name} (#{Id})###{Id}", IDevice.TREE_FLAGS))
+      {
+        root.OnDrawUi(ref instance, devBuffer, 0);
+        ImGui.TreePop();
+      }
+    }
   }
 
   public class NullDevice : IDevice
@@ -268,5 +347,6 @@ namespace KSASM
     public ulong Id => 0;
     public void Read(Span<byte> buffer, int address) => buffer.Clear();
     public void Write(Span<byte> data, int address) { }
+    public void OnDrawUi() => IDevice.DrawTreeLeaf("<null>");
   }
 }
