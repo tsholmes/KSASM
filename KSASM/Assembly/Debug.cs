@@ -265,7 +265,7 @@ namespace KSASM.Assembly
             if (data[i] == '\n' || lend - start == AppendBuffer.CHUNK_SIZE)
             {
               var end = lend;
-              while (end > start && data[end - 1 - current] is '\n' or '\r') end--;
+              while (end > current && end > start && data[end - 1 - current] is '\n' or '\r') end--;
               slines.Add(new(start, end - start));
               start = lend;
             }

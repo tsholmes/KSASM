@@ -14,11 +14,11 @@
   copy:u64 str.itoa.work, str.itoa.val
   shr:u64 str.itoa.work, $(63)
   copy:p24 $[str.itoa.to+3], str.itoa.work
-  bzero:u64 str.itoa.work, str.itoa.nonneg2
+  bzero:u64 str.itoa.work, str.itoa.nonneg
   copy:u8 [str.itoa.toptr], char.neg
   add:p24 str.itoa.toptr, $(1)
+str.itoa.nonneg:
   abs:i64 str.itoa.work, str.itoa.val
-str.itoa.nonneg2:
   # handle 32-bit ints differently
   bzero:i32 $[str.itoa.work+4], str.itoa32
   # digit count
