@@ -1,0 +1,90 @@
+# not intended for direct import from script
+# libutils must already be imported
+
+.ifndef libstring_itoa { .macro libstring_itoa
+
+:i64 str.itoa.work: 0*6
+:u8 str.itoa.buf: 0*19 str.itoa.bufend:
+:p24 str.itoa.buflen: 0 str.itoa.bufptr: 0 str.itoa.toptr: 0
+.fn(str.itoa, {:p24, to, *2, out}, {:i64, val})
+  # special case zero
+  bzero:i64 str.itoa.val, str.itoa0
+  # setup toptr and add neg sign if needed
+  copy:p24 str.itoa.toptr, str.itoa.to
+  copy:u64 str.itoa.work, str.itoa.val
+  shr:u64 str.itoa.work, $(63)
+  copy:p24 $[str.itoa.to+3], str.itoa.work
+  bzero:u64 str.itoa.work, str.itoa.nonneg2
+  copy:u8 [str.itoa.toptr], char.neg
+  add:p24 str.itoa.toptr, $(1)
+  abs:i64 str.itoa.work, str.itoa.val
+str.itoa.nonneg2:
+  # handle 32-bit ints differently
+  bzero:i32 $[str.itoa.work+4], str.itoa32
+  # digit count
+  div:i64 str.itoa.work, $(1e9)
+  log10:i64 str.itoa.work, _
+  copy:p24 str.itoa.bufptr, $(str.itoa.bufend-10)
+  sub:p24 str.itoa.bufptr, str.itoa.work
+  # top 8 digits
+  abs:i64 str.itoa.work, str.itoa.val
+  swz:u64*8 str.itoa.work, $(0)
+  div:u64*8 str.itoa.work, $(1e17,1e16,1e15,1e14,1e13,1e12,1e11,1e10)
+  mod:u64*8 str.itoa.work, $(10)
+  copy*8 $[str.itoa.bufend-18]:u8, str.itoa.work:u64
+str.itoa.low:
+  # bottom 10 digits
+  abs:i64 str.itoa.work, str.itoa.val
+  swz:u64*5 str.itoa.work, $(0)
+  div:u64*5 str.itoa.work, $(1e8,1e6,1e4,1e2,1e0)
+  mod:u64*5 str.itoa.work, $(100)
+  mul:u64*5 str.itoa.work, $(0x00040067)
+  shr:u64*5 str.itoa.work, $(10)
+  mod:u64*5 str.itoa.work, $(0xA00)
+  copy*5 $[str.itoa.bufend-10]:i16, str.itoa.work:u64
+  # add '0' character to each digit
+  add:p24*6 $[str.itoa.buf+1], $(0x303030)
+  # subtract start from buf end to get length
+  copy:p24 str.itoa.buflen, $(str.itoa.bufend)
+  sub:p24 str.itoa.buflen, str.itoa.bufptr
+  add:p24 $[str.itoa.to+3], str.itoa.buflen
+  # use optimized copy for up to 18 chars
+  copy:p24 str.itoa.work, str.itoa.buflen
+  div:p24 str.itoa.work, $(3)
+  switch:p24*7 str.itoa.work, $(str.itoa.sc, str.itoa.c3, str.itoa.c6, str.itoa.c9, \
+    str.itoa.c12, str.itoa.c15, str.itoa.c18)
+  .macro str.itoa.bcopy(w) { .label(.concat(str.itoa.c ..add(w,w,w)))
+    copy:p24 .add(*0,w) [str.itoa.toptr], [str.itoa.bufptr]
+    add:p24*2 str.itoa.bufptr, $(.add(w,w,w))
+    jump:p24 _, str.itoa.sc
+  }
+  .str.itoa.bcopy(6)
+  .str.itoa.bcopy(5)
+  .str.itoa.bcopy(4)
+  .str.itoa.bcopy(3)
+  .str.itoa.bcopy(2)
+  .str.itoa.bcopy(1)
+str.itoa.sc:
+  copy:p24 str.itoa.work, str.itoa.buflen
+  mod:p24 str.itoa.work, $(3)
+  switch:p24*3 str.itoa.work, $(str.itoa.cend, str.itoa.c1, str.itoa.c2)
+str.itoa.c2:
+  copy:i16 [str.itoa.toptr], [str.itoa.bufptr]
+  jump _, .str.itoa.fnret
+str.itoa.c1:
+  copy:u8 [str.itoa.toptr], [str.itoa.bufptr]
+str.itoa.cend:
+  jump _, .str.itoa.fnret
+
+str.itoa32:
+  log10:i64 str.itoa.work, _
+  copy:p24 str.itoa.bufptr, $(str.itoa.bufend-1)
+  sub:p24 str.itoa.bufptr, str.itoa.work
+  jump:p24 _, str.itoa.low
+
+str.itoa0:
+  copy:u8 [str.itoa.to], $(0x30)
+  copy:p24 $[str.itoa.to+3], $(1)
+  jump _, .str.itoa.fnret
+
+}

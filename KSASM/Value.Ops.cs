@@ -96,8 +96,8 @@ namespace KSASM
     public override void BitAnd(ref Value val, Value other) => val.Signed &= other.Signed;
     public override void BitOr(ref Value val, Value other) => val.Signed |= other.Signed;
     public override void BitXor(ref Value val, Value other) => val.Signed ^= other.Signed;
-    public override void ShiftLeft(ref Value val, Value other) => val.Signed <<= (int)val.Signed;
-    public override void ShiftRight(ref Value val, Value other) => val.Signed >>= (int)val.Signed;
+    public override void ShiftLeft(ref Value val, Value other) => val.Signed <<= (int)other.Signed;
+    public override void ShiftRight(ref Value val, Value other) => val.Signed >>= (int)other.Signed;
     public override void Add(ref Value val, Value other) => val.Signed += other.Signed;
     public override void Sub(ref Value val, Value other) => val.Signed -= other.Signed;
     public override void Mul(ref Value val, Value other) => val.Signed *= other.Signed;
@@ -142,8 +142,8 @@ namespace KSASM
     public override void BitAnd(ref Value val, Value other) => val.Unsigned &= other.Unsigned;
     public override void BitOr(ref Value val, Value other) => val.Unsigned |= other.Unsigned;
     public override void BitXor(ref Value val, Value other) => val.Unsigned ^= other.Unsigned;
-    public override void ShiftLeft(ref Value val, Value other) => val.Signed >>= (int)val.Signed;
-    public override void ShiftRight(ref Value val, Value other) => val.Signed <<= (int)val.Signed;
+    public override void ShiftLeft(ref Value val, Value other) => val.Signed >>= (int)other.Signed;
+    public override void ShiftRight(ref Value val, Value other) => val.Signed <<= (int)other.Signed;
     public override void Add(ref Value val, Value other) => val.Float += other.Float;
     public override void Sub(ref Value val, Value other) => val.Float -= other.Float;
     public override void Mul(ref Value val, Value other) => val.Float *= other.Float;
