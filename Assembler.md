@@ -3,6 +3,7 @@
 This describes the textual language the assembler parses to generate the instruction binary
 
 ## Tokens
+TODO: bitwise/mod/rem/pow? for const expressions
 
 | Name | Pattern | Notes |
 | --- | --- | --- |
@@ -12,8 +13,7 @@ This describes the textual language the assembler parses to generate the instruc
 | `Label` | `<Word>:` | must be followed by whitespace |
 | `Position` | `@[0-9]+` | |
 | `Width` | `*[0-9]+` | |
-| `IOpen` | `[` | |
-| `IClose` | `]` | |
+| `Result` | `->` | |
 | `Comma` | `,` | |
 | `Type` | `:<type>` | where `<type>` is one of `u8` `i16` `i32` `i64` `u64` `f64` `p24` `c128` |
 | `Offset` | `[+-]` | |
@@ -21,7 +21,6 @@ This describes the textual language the assembler parses to generate the instruc
 |          | `0[bB][01]+` | binary number |
 |          | `[0-9]+(.[0-9]+)([eE][+-]?[0-9]+)` | decimal integer, float, or scientific notation |
 | `COpen` | `$(` | |
-| `CIOpen` | `$[` | |
 | `POpen` | `(` | |
 | `PClose` | `)` | |
 | `Macro` | `.[_A-Za-z0-9.]+` | |
@@ -46,36 +45,25 @@ data-line = (Type (Label | Position | String | data-number | data-const)+)+
 
 data-number = (Number | Word) Width?
 
-data-const = COpen const-expr PClose Width?
+data-const = const-list Width?
   $(a*(b+123))
 
-instruction = Word Type? Width? operands
+instruction = Word operands
   add*3 a+0:u8, +64:i64
 
-operands = base-offab-operands | a-b-operands | placeholder-operands
+operands = a-operand
+  | (Result a-operand)
+  | (a-operand Result bc-operand?)
+  | (a-operand bc-operand Result bc-operand?)
+  | (a-operand bc-operand bc-operand Result?)
 
-base-offab-operands = simple-operand offset-operand Type? Comma offset-operand Type?
-  a+4, -3:u64
-  [a][+4]:u64, [-3]
+a-operand = a-value? Type? Width?
 
-a-b-operands = value-operand Type? Comma (value-operand | offset-operand) Type?
-  a, b
-  $[a+4], +10
-  [a], $(1,2,3*x,4)
+b-operand = (PlaceHolder Type?) | Type
 
-placeholder-operands = (value-operand Type? Comma Placeholder) | (Placeholder Comma value-operand Type?)
+a-value = (Offset? Number) | Word | String | const-list
 
-value-operand = simple-operand | const-operand | iconst-operand
-
-simple-operand = simple-operand-val | (IOpen simple-operand-val IClose)
-
-offset-operand = (Offset simple-operand-val) | (IOpen Offset simple-operand-val IClose)
-
-simple-operand-val = Word | Number
-
-const-operand = COpen const-expr (Comma const-expr)* PClose
-
-iconst-operand = CIOpen const-expr IClose
+const-list = COpen const-expr (Comma const-expr*) PClose
 
 const-expr = addsub-expr
 
