@@ -8,82 +8,63 @@
 - 24 bit addresses
 
 ## Instruction Encoding
-| Opcode | Data Width | B Data Type | A Data Type | Operand Mode | Operands |
+| DataType C | DataType B | DataType A | ImmFlag | Width | OpCode |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| 63-57 | 56-54 | 53-51 | 50-48 | 47-45 | 44-0 |
+| 23-20 | 19-16 | 15-12 | 11 | 10-8 | 7-0 |
 
-### Opcode (7 bits)
+Some Instructions have fixed values for Width and DataTypes, where the encoded values will be ignored.
+
+### Opcode (8 bits)
 Specifies which operation to perform
 
-### Data Width (3 bits)
+### Width (3 bits)
 Specifies the number of adjacent values to operate on, offset by 1.
 * `000` data width 1
 * `001` data width 2
 * ...
 * `111` data width 8
 
-### Data Type (3 bits)
+### ImmFlag (1 bit)
+If 1, input A is read at the PC instead of popped from the stack
+
+### Data Type (4 bits)
 Specifies the data type of an input or output
 
-* `000` u8 : unsigned byte
-* `001` i16: signed int16
-* `010` i32: signed int32
-* `011` i64: signed int64
-* `100` u64: unsigned int64
-* `101` f64: double-precision floating point
-* `110` p24: 3-byte pointer. unsigned for math operations
-* `111` c128: 128-bit complex. real part as f64 in lower bits, imaginary part as f64 in higher bits
-
-### Operand Mode (3 Bits)
-Specifies how to interpret the operands
-* `0xx` addrAOffB: full address of A, wide offset address of B from A
-* `1xx` addrBaseOffAB: full base address, narrow offsets of A,B from base
-* `xx0` directA: first operand address points to the value
-* `xx1` indirectA: first operand address points to a `p24` address of the value
-* `x0x` directB: second operand address points to the value
-* `x1x` indirectB: second operand address points to a `p24` address of the value
-
-### addrAOffB Operands (45 bits)
-* bits 0-23 `addrA`: full 24-bit address of operand A
-* bits 24-44 `offB`: signed 21-bit offset of operand B from operand A
-  * offset is calculated from literal addrA value, prior to indirection
-
-### addrBaseOffAB Operands (45 bits)
-* bits 0-23 `addrBase`
-* bits 24-33 `offA`: signed 10-bit offset of operand A from base
-* bits 34-43 `offB`: signed 10-bit offset of operand B from base
-* bit 44 baseIndirect flag
-  * `0` directBase: operands A,B are offset from `baseAddress`
-  * `1` indirectBase: operands A,B are offset from `p24` value in memory at `baseAddress`
+| Bits | Name | Description | |
+| ---: | :--- | :--- | :--- |
+| `0000` | u8 | unsigned 8-bit int | |
+| `0001` | u16 | unsigned 16-bit int | |
+| `0010` | u32 | unsigned 32-bit int | |
+| `0011` | u64 | unsigned 64-bit int | |
+| `0100` | i8 | signed 8-bit int | |
+| `0101` | i16 | signed 16-bit int | |
+| `0110` | i32 | signed 32-bit int | |
+| `0111` | i64 | signed 64-bit int | |
+| `1000` | f64 | 64-bit floating point | |
+| `1001` | c128 | 128-bit complex | pair of f64, real part in low bits, imaginary part in high bits |
+| `1010` | p24 | unsigned 24-bit address | |
+| `1011` | s48 | 48-bit string address | pair of p24, address in low bits, length in high bits |
+| `1100-1111` | reserved | | |
 
 ## Instruction Execution
 
-### Operands
-Operands are resolved to full addresses prior to instruction execution.
-`[x]` is the `p24` value at memory address `x`
-
-|               |              | A                 |                     | B                 |                     |
-| ------------- | ------------ | ----------------- | ------------------- | ----------------- | ------------------- |
-|               |              | directA           | indirectA           | directB           | indirectB           |
-| addrAOffB     |              | `addrA`           | `[addrA]`           | `addrB`           | `[addrB]`           |
-| addrBaseOffAB | directBase   | `addrBase+offA`   | `[addrBase+offA]`   | `addrBase+offB`   | `[addrBase+offB]`   |
-|               | indirectBase | `[addrBase]+offA` | `[[addrBase]+offA]` | `[addrBase]+offB` | `[[addrBase]+offB]` |
+### Sequence
+* PC is advanced +3 to end of instruction
+* If ImmFlag is 1
+  * A is read from PC
+  * PC is advanced by size of A (sizeof(A DataType) * Width)
+* Input operands are popped off the stack in reverse order C,B,A
+* Computation is performed
+* Result operands are pushed onto the stack in order A,B,C
 
 ### Value Modes
 When executing, operand values are read as the data type specified in the instruction and expanded into the largest similar type:
-- u8, u64, p24: Unsigned (64-bit unsigned integer)
-- i16, i32, i64: Signed (64-bit signed integer)
+- u8, u16, u32, u64, p24, p48: Unsigned (64-bit unsigned integer)
+- i8, i16, i32, i64: Signed (64-bit signed integer)
 - f64: Float (64-bit double precision floating point)
 - c128: Complex (128-bit pair of double precision floating points)
 
-The operands are then converted between value modes depending on the form of instruction
-- `A = op(B)` convert B to A's value mode prior to execution
-- `A = op(A, B)` convert B to A's value mode prior to execution
-- `An = op(A_Bn)` convert B to Unsigned prior to execution
-- `An = reduce(Ai where Bi=n)` convert B to Unsigned prior to execution
-- `if (condition(A)) PC = B` convert B to Unsigned prior to execution
-
-Some operations noted below always convert to `Float` before execution, converting back to A's value mode before storing the result.
+The operands are then converted between value modes before execution according to the OpMode column in the table below (`A` means value is converted to mode of operand A, `Mode` means its converted to a specific mode, `-` means no conversion is done before operation).
 
 ## Opcodes
 
@@ -93,67 +74,99 @@ Some operations noted below always convert to `Float` before execution, converti
 * TODO: interrupts if they end up being necessary
 * TODO: assign static opcode numbers once instruction list is finalized
 
-| Hex | Name         | Alias | Description                             | Notes |
-| --- | ------------ | ----- | --------------------------------------- | ----- |
-|     | copy         |       | An = Bn                                 | . |
-|     | reorder      | swz   | An = A_Bn                               | B -> Unsigned mod n |
-|     | bitnot       | not   | An = ~Bn                                | 0-padded when sizeof(AType) > sizeof(Btype) |
-|     | negate       | neg   | An = -Bn                                | Unsigned B -> Signed |
-|     | conjugate    | conj  | An = conj(Bn)                           | `x + y i` to `x - y i` |
-|     | sign         |       | An = sign(Bn)                           | complex takes sign of real part |
-|     | abs          |       | An =\|Bn\|                              | . |
-|     | bitand       | and   | An = An & Bn                            | . |
-|     | bitor        | or    | An = An \| Bn                           | . |
-|     | bitxor       | xor   | An = An ^ Bn                            | . |
-|     | shiftleft    | shl   | An = An << Bn                           | . |
-|     | shiftright   | shr   | An = An >> Bn                           | . |
-|     | add          |       | An = An + Bn                            | . |
-|     | subtract     | sub   | An = An - Bn                            | . |
-|     | multiply     | mul   | An = An * Bn                            | . |
-|     | divide       | div   | An = An / Bn                            | . |
-|     | remainder    | rem   | An = remainder(An / Bn)                 | `\|An\|` in `[0, \|Bn\|)` with sign `An` |
-|     | modulus      | mod   | An = An % Bn                            | `[0, \|Bn\|)` |
-|     | power        | pow   | An = An ** Bn                           | . |
-|     | max          |       | An = max(An, Bn)                        | . |
-|     | min          |       | An = min(An, Bn)                        | . |
-|     | floor        |       | An = floor(Bn)                          | B -> Float |
-|     | ceil         |       | An = ceil(x)                            | B -> Float |
-|     | round        |       | An = round(Bn)                          | B -> Float |
-|     | trunc        |       | An = trunc(Bn)                          | B -> Float |
-|     | sqrt         |       | An = sqrt(Bn)                           | B -> Float |
-|     | exp          |       | An = e^Bn                               | B -> Float |
-|     | pow2         |       | An = 2^Bn                               | B -> Float |
-|     | pow10        |       | An = 10^Bn                              | B -> Float |
-|     | log          |       | An = log(Bn)                            | B -> Float |
-|     | log2         |       | An = log2(Bn)                           | B -> Float |
-|     | log10        |       | An = log10(Bn)                          | B -> Float |
-|     | sin          |       | An = sin(Bn)                            | B -> Float |
-|     | cos          |       | An = cos(Bn)                            | B -> Float |
-|     | tan          |       | An = tan(Bn)                            | B -> Float |
-|     | sinh         |       | An = sinh(Bn)                           | B -> Float |
-|     | cosh         |       | An = cosh(Bn)                           | B -> Float |
-|     | tanh         |       | An = tanh(Bn)                           | B -> Float |
-|     | asin         |       | An = asin(Bn)                           | B -> Float |
-|     | acos         |       | An = acos(Bn)                           | B -> Float |
-|     | atan         |       | An = atan(Bn)                           | B -> Float |
-|     | asinh        |       | An = asinh(Bn)                          | B -> Float |
-|     | acosh        |       | An = acosh(Bn)                          | B -> Float |
-|     | atanh        |       | An = atanh(Bn)                          | B -> Float |
-|     | rand         |       | An = rand(Bn)                           | - `[0, x)` when `x>0`, `(x, \|x\|)` when `x<0` |
-|     | all          | andr  | An = reduce(bitand Ai where Bi=n)       | . |
-|     | any          | orr   | An = reduce(bitor Ai where Bi=n)        | . |
-|     | parity       | xorr  | An = reduce(bitxor Ai where Bi=n)       | . |
-|     | sum          | addr  | An = reduce(add Ai where Bi=n)          | . |
-|     | product      | mulr  | An = reduce(multiply Ai where Bi=n)     | . |
-|     | minall       | minr  | An = reduce(min Ai where Bi=n)          | . |
-|     | maxall       | maxr  | An = reduce(max Ai where Bi=n)          | . |
-|     | jump         |       | PC = B0                                 | . |
-|     | call         |       | A0 = PC + 8, PC = B0                    | . |
-|     | branchifzero | bzero | if(A0 == 0) PC = B0                     | . |
-|     | branchifpos  | bpos  | if (A0 > 0) PC = B0                     | . |
-|     | branchifneg  | bneg  | if (A0 < 0) PC = B0                     | . |
-|     | switch       |       | if (0 <= A0 < n) PC = B_A0              | . |
-|     | sleep        |       | pause for B0 cycles (min 1 frame)       | . |
-|     | devmap       |       | mem[A0..A0+A1] => devices[B0].mem[B1..] | set B0=0 to unmap range (B1 ignored) |
-| 7E  | debug        |       | debug output An, Bn                     | . |
-| 7F  | debugstr     |       | output string mem[An..An+Bn]            | . |
+Stack effects are listed in the form `Op:Type*Width ... -> Op:Type*Width`. Operands to the left of `->` are inputs, operands to the right are results. If `Type` and/or `Width` are specified for an operand, those values are fixed for this instruction, otherwise they follow the DataType field for that operand and the Width field of the instruction.
+
+| Hex | Name | Stack | OpMode | Description |
+| - | - | - | - | - |
+| <td colspan=3 align=center>**Stack Manipulation**</td> |
+| | push | `A -> ` | - | `push A` |
+| | pop | `A ->` | - | - |
+| | dup | `A*1 -> B` | - | `A -> B[i]` (duplicates `A` `Width` times) |
+| | swz | `A:u8 B -> C` | - | `B[A[i]%Width] -> C[i]` |
+| <td colspan=3 align=center>**Memory Load/Store**</td> |
+| | ld | `A:p24*1 -> B` | - | `Mem[A] -> B`|
+| | st | `A:p24*1 B ->` | - | `B -> Mem[A]` |
+| <td colspan=3 align=center>**Offset Load/Store**</td> |
+| | ldf | `A:p24*1 -> B` | - | `Mem[FP+A] -> B` |
+| | lds | `A:p24*1 -> B` | - | `Mem[SP+A] -> B` |
+| | stf | `A:p24*1 B ->` | - | `B -> Mem[FP+A]` |
+| | sts | `A:p24*1 B ->` | - | `B -> Mem[FP+A]` |
+| <td colspan=3 align=center>**Register Manipulation**</td> |
+| | ldfp | `-> A:p24*1` | - | `FP -> A` |
+| | stfp | `A:p24*1 ->` | - | `A -> FP` |
+| | modfp | `A:p24*1 ->` | - | `FP+A -> FP` |
+| | ldsp | `-> A:p24*1` | - | `SP -> A` |
+| | stsp | `A:p24*1 ->` | - | `A -> SP` |
+| | modsp | `A:p24*1 ->` | - | `SP+A -> SP` |
+| <td colspan=3 align=center>**Bitwise**</td> |
+| | not | `A -> B` | - | `~A[i] -> B[i]` |
+| | and | `A B -> C` | - | `A[i] & B[i] -> C[i]` |
+| | or | `A B -> C` | - | `A[i] \| B[i] -> C[i]` |
+| | xor | `A B -> C` | - | `A[i] ^ B[i] -> C[i]` |
+| | shl | `A B -> C` | Unsigned, - | `B[i] << A[i] -> C[i]` |
+| | shr | `A B -> C` | Unsigned, - | `B[i] >> A[i] -> C[i]` |
+| <td colspan=3 align=center>**Math**</td> |
+| | neg | `A -> B` | - | `-A[i] -> B[i]` |
+| | sign | `A -> B` | - | `sign(A[i]) -> B[i]` ({0,1} for Unsigned, {-1,0,1} for rest) |
+| | abs | `A -> B` | - | `\|A[i]\| -> B[i]` |
+| | add |  `A B -> C` | B, - | `A[i] + B[i] -> C[i]` |
+| | sub | `A B -> C` | B, - | `B[i] - A[i] -> C[i]` |
+| | mul | `A B -> C` | B, - | `A[i] * B[i] -> C[i]` |
+| | div | `A B -> C` | B, - | `B[i] / A[i] -> C[i]` |
+| | rem | `A B -> C` | B, - | `rem(B[i] / A[i]) -> C[i]` (`(-\|A[i]\|, \|A[i]\|)` with sign of `B[i]`) |
+| | mod | `A B -> C` | B, - | `B[i] % A[i] -> C[i]` (`[0, \|A[i]\|)`) |
+| | pow | `A B -> C` | B, - | `B[i]**A[i] -> C[i]` |
+| | max | `A B -> C` | B, - | `max(A[i], B[i]) -> C[i]` |
+| | min | `A B -> C` | B, - | `min(A[i], B[i]) -> C[i]` |
+| <td colspan=3 align=center>**Float Math**</td> |
+| | floor | `A -> B` | Float | `floor(A[i]) -> B[i]` |
+| | ceil | `A -> B` | Float | `ceil(A[i]) -> B[i]` |
+| | round | `A -> B` | Float | `round(A[i]) -> B[i]` |
+| | trunc | `A -> B` | Float | `trunc(A[i]) -> B[i]` |
+| | sqrt | `A -> B` | Float | `sqrt(A[i]) -> B[i]` |
+| | exp | `A -> B` | Float | `e**A[i] -> B[i]` |
+| | log | `A -> B` | Float | `log(A[i]) -> B[i]` |
+| | log2 | `A -> B` | Float | `log2(A[i]) -> B[i]` |
+| | log10 | `A -> B` | Float | `log10(A[i]) -> B[i]` |
+| | sin | `A -> B` | Float | `sin(A[i]) -> B[i]` |
+| | cos | `A -> B` | Float | `cos(A[i]) -> B[i]` |
+| | tan | `A -> B` | Float | `tan(A[i]) -> B[i]` |
+| | sinh | `A -> B` | Float | `sinh(A[i]) -> B[i]` |
+| | cosh | `A -> B` | Float | `cosh(A[i]) -> B[i]` |
+| | tanh | `A -> B` | Float | `tanh(A[i]) -> B[i]` |
+| | asin | `A -> B` | Float | `asin(A[i]) -> B[i]` |
+| | acos | `A -> B` | Float | `acos(A[i]) -> B[i]` |
+| | atan | `A -> B` | Float | `atan(A[i]) -> B[i]` |
+| | asinh | `A -> B` | Float | `asinh(A[i]) -> B[i]` |
+| | acosh | `A -> B` | Float | `acosh(A[i]) -> B[i]` |
+| | atanh | `A -> B` | Float | `atanh(A[i]) -> B[i]` |
+| <td colspan=3 align=center>**Complex Math**</td> |
+| | conj | `A -> B` | Complex | `conj(A[i]) -> B[i]` (`x + yi -> x - yi`) |
+| <td colspan=3 align=center>**Reduce**</td> |
+| | andr | `A -> B*1` | - | `reduce(and A[i]) -> B` |
+| | orr | `A -> B*1` | - | `reduce(or A[i]) -> B` |
+| | xorr | `A -> B*1` | - | `reduce(xor A[i]) -> B` |
+| | addr | `A -> B*1` | - | `reduce(add A[i]) -> B` |
+| | mulr | `A -> B*1` | - | `reduce(mul A[i]) -> B` |
+| | minr | `A -> B*1` | - | `reduce(min A[i]) -> B` |
+| | maxr | `A -> B*1` | - | `reduce(max A[i]) -> B` |
+| <td colspan=3 align=center>**Branching**</td> |
+| | jump | `A:p24*1 ->` | - | `A -> PC` |
+| | bzero | `A:p24*1 B*1 ->` | - | `if (B = 0) A -> PC` |
+| | bpos | `A:p24*1 B*1 ->` | - | `if (B > 0) A -> PC` |
+| | bneg | `A:p24*1 B*1 ->` | - | `if (B < 0) A -> PC` |
+| | blt | `A:p24*1 B*1 C*1 ->` | - | `if (B < C) A -> PC` |
+| | ble | `A:p24*1 B*1 C*1 ->` | - | `if (B <= C) A -> PC` |
+| | beq | `A:p24*1 B*1 C*1 ->` | - | `if (B = C) A -> PC` |
+| | bne | `A:p24*1 B*1 C*1 ->` | - | `if (B != C) A -> PC` |
+| | bge | `A:p24*1 B*1 C*1 ->` | - | `if (B >= C) A -> PC` |
+| | bgt | `A:p24*1 B*1 C*1 ->` | - | `if (B > C) A -> PC` |
+| | sw | `A:p24 B*1 ->` | -, Unsigned | `if (B < Width) A[B] -> PC` |
+| <td colspan=3 align=center>**Function**</td> |
+| | call | `A:p24*1 -> PC FP` | - | `SP -> temp; push PC; push FP; temp -> FP; A -> PC` |
+| | ret | `PC FP ->` | - | `pop FP; pop PC` |
+| <td colspan=3 align=center>**Misc**</td> |
+| | rand | `A -> B` | - | `rand(A[i]) -> B[i]` (`[0, x)` when `x>0`, `(x, \|x\|)` when `x<0`) |
+| | sleep | `A*1 ->` | Unsigned | `sleep(A)` (pause A ticks, minimum 1) |
+| | devmap | `A:p24*4 ->` | - | `map mem[A[0]..A[0]+A[1]] -> device[A[2]].mem[A[3]..]` |
+| FF | debug | `A ->` | - | `print(A)` |
