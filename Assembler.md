@@ -19,7 +19,6 @@ TODO: escapable double quote in string
 | `Number` | `0[xX][0-9a-fA-F]+` | hex number |
 |          | `0[bB][01]+` | binary number |
 |          | `[0-9]+(.[0-9]+)([eE][+-]?[0-9]+)` | decimal integer, float, or scientific notation |
-| `COpen` | `$(` | |
 | `POpen` | `(` | |
 | `PClose` | `)` | |
 | `Macro` | `.[_A-Za-z0-9.]+` | |
@@ -41,10 +40,11 @@ line-prefix = Label | Position
 
 statement = data-line | instruction
 
-data-line = (Type (Label | Position | String | data-number | data-const)+)+
-  :u8 0*10 label: "string" @300 :u64 $(const * val + 3)
+data-line = data-group+
 
-data-number = (Number | Word) width?
+data-group = Type (line-prefix?  data-value)+ line-prefix?
+
+data-value = (String | Number | Word | const-list) width?
 
 data-const = const-list width?
   $(a*(b+123))*8
@@ -63,15 +63,13 @@ operands =
 
 imm-operand = imm-value Type?
 
-stack-operand = (PlaceHolder Type?) | Type
+stack-operand = PlaceHolder Type?
 
-imm-value = signed-number | Word | String | const-list
-
-signed-number = Minus? Number
+imm-value = Number | Word | String | const-list
 
 width = Mult Number
 
-const-list = COpen const-expr (Comma const-expr*) PClose
+const-list = POpen const-expr (Comma const-expr*) PClose
 
 const-expr = addsub-expr
 
@@ -158,10 +156,12 @@ tokens = (any-non-eol* EOL) | (BOpen any-with-matched-brackets* BClose)
 - defines a new macro identified by `Word` which expands to the supplied token sequence
 - any `Word` tokens defined in the args list will be replaced by the tokens sequence passed as that argument position when the macro is called
 - the final argument may have a `...` prefix, which will cause it to include all tokens after the previous argument values, including `Comma` tokens
+- if the macro tokens start with `(`, you must wrap it in brackets so it isn't interpreted as arguments
+  `.macro test { (1+2) }`
 
 `.unmacro Word`
 - removes the definition of a macro defined by `Word` prefixed with the current namespace
-= errors if macro is not defined
+- errors if macro is not defined
   ```
   .macro mymacro(a, b) a + b
   .unmacro mymacro

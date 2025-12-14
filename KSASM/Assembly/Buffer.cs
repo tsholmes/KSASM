@@ -166,7 +166,7 @@ namespace KSASM.Assembly
     }
   }
 
-  public readonly struct Token(
+  public readonly partial struct Token(
     SourceIndex source, TokenIndex index, TokenType type, FixedRange data, TokenIndex previous)
   {
     public readonly SourceIndex Source = source;

@@ -292,23 +292,10 @@ namespace KSASM.Assembly
       if (!Reader.TakeType(TokenType.POpen, out _))
         Invalid();
 
-      if (!Reader.Take(out var first))
-        Invalid();
+      if (!Reader.TakeType(TokenType.Number, out var first))
+        throw Invalid();
 
-      Value val;
-      ValueMode mode;
-
-      if (first.Type == TokenType.Width)
-      {
-        if (!Values.TryParseValue(buffer[first][1..], out val, out mode))
-          Invalid(first);
-      }
-      else if (first.Type == TokenType.Number)
-      {
-        if (!Values.TryParseValue(buffer[first], out val, out mode))
-          Invalid(first);
-      }
-      else
+      if (!Values.TryParseValue(buffer[first], out var val, out var mode))
         throw Invalid(first);
 
       while (Reader.TakeType(TokenType.Comma, out _))
@@ -325,17 +312,14 @@ namespace KSASM.Assembly
         Invalid();
 
       using var s = PushSynthSource(".add", macro.Index);
-      if (first.Type == TokenType.Width)
-        s.MakeWidth(val, mode, first.Index);
-      else
-        s.MakeNumber(val, mode, first.Index);
+      s.MakeNumber(val, mode, first.Index);
     }
 
     private void MacroRegion(Token macro)
     {
       var ntoken = NextInnerTyped(TokenType.Word);
 
-      var endLabel = Reader.TakeType(TokenType.Offset, out var otoken) && buffer[otoken][0] == '-';
+      var endLabel = Reader.TakeType(TokenType.Minus, out _);
 
       if (!Reader.TakeType(TokenType.Number, out var sztoken))
         Invalid();
@@ -607,17 +591,6 @@ namespace KSASM.Assembly
         return S.LastToken;
       }
 
-      public TokenIndex MakeWidth(Value val, ValueMode mode, TokenIndex from)
-      {
-        using (var t = S.MakeToken(TokenType.Width, from))
-        {
-          val.Convert(mode, ValueMode.Unsigned);
-          t.AddData('*');
-          t.AddValue(val, ValueMode.Unsigned);
-        }
-        return S.LastToken;
-      }
-
       public TokenIndex MakePosition(int address, TokenIndex from)
       {
         using (var t = S.MakeToken(TokenType.Position, from))
@@ -673,7 +646,7 @@ namespace KSASM.Assembly
 
         if (TrackP)
         {
-          if (token.Type is TokenType.POpen or TokenType.COpen)
+          if (token.Type is TokenType.POpen)
             PDepth++;
           else if (token.Type is TokenType.PClose && --PDepth < 0)
             throw P.Invalid(token);

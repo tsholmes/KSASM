@@ -16,7 +16,6 @@ namespace KSASM.Assembly
     Comma, // ,
     Type, // :typename
     Number, // decimal, hex with 0x prefix, binary with 0b prefix
-    COpen, // $(
     POpen, // (
     PClose, // )
     Macro, // .macroname
@@ -28,6 +27,19 @@ namespace KSASM.Assembly
     Mult, // *
     Div, // /
     Not, // ~
+  }
+
+  public partial struct Token
+  {
+    public static bool TryParseType(ReadOnlySpan<char> data, out DataType type)
+    {
+      if (data.Length < 2 || char.IsAsciiDigit(data[0]))
+      {
+        type = default;
+        return false;
+      }
+      return Enum.TryParse(data[1..], true, out type);
+    }
   }
 
   public static class Values

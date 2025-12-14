@@ -50,7 +50,6 @@ namespace KSASM.Assembly
         ',' => Add(TokenType.Comma, 1),
         ':' => TakeType(),
         _ when IsDigit(c) => TakeNumber(),
-        '$' when At(index + 1) == '(' => Add(TokenType.COpen, 2),
         '(' => Add(TokenType.POpen, 1),
         ')' => Add(TokenType.PClose, 1),
         '.' => TakeMacro(),
@@ -239,14 +238,16 @@ namespace KSASM.Assembly
     public static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
     public static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
 
+    // TODO: switch this to just take in firstEnd and secondStart
+    // TODO: move Is* character methods to extension properties
     public static bool NeedsSpace(TokenType firstType, char firstEnd, TokenType secondType, char secondStart) =>
       (firstType, firstEnd, secondType, secondStart) switch
       {
         (TokenType.Label or TokenType.Comma, _, _, _) => true,
         _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
-        (_, '(', TokenType.POpen or TokenType.COpen, _) => false,
+        (_, '(', TokenType.POpen, _) => false,
         (_, _, TokenType.POpen, _) when IsWordChar(firstEnd) => false,
-        (_, _, TokenType.POpen or TokenType.COpen, _) => true,
+        (_, _, TokenType.POpen, _) => true,
         (TokenType.PClose, _, _, ')') => false,
         (TokenType.PClose, _, _, _) => true,
         _ => false,
