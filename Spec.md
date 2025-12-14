@@ -1,20 +1,21 @@
 # KSASM
 
-- no registers (other than PC)
-- all instructions take memory addrs/offsets
-- all instructions encode data types of arguments
-- all (applicable) instructions can operate on up to 8 sequential values
-- 64 bit wide instructions
+- PC (Program Counter), SP (Stack Pointer), FP (Frame Pointer) registers
+- instructions pop inputs from stack (after immediate values) and push results onto tstack
+- instructions encode data type of inputs/outputs
+- applicable instructions can operate on up to 8 sequential values
+- 24 bit wide instructions
 - 24 bit addresses
+- stack grows downwards from end of memory
 
 ## Instruction Encoding
-| DataType C | DataType B | DataType A | ImmFlag | Width | OpCode |
+| DataType C | DataType B | DataType A | ImmCount | Width | OpCode |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| 23-20 | 19-16 | 15-12 | 11 | 10-8 | 7-0 |
+| 23-20 | 19-16 | 15-12 | 11-10 | 9-7 | 6-0 |
 
 Some Instructions have fixed values for Width and DataTypes, where the encoded values will be ignored.
 
-### Opcode (8 bits)
+### Opcode (7 bits)
 Specifies which operation to perform
 
 ### Width (3 bits)
@@ -24,8 +25,8 @@ Specifies the number of adjacent values to operate on, offset by 1.
 * ...
 * `111` data width 8
 
-### ImmFlag (1 bit)
-If 1, input A is read at the PC instead of popped from the stack
+### ImmCount (2 bit)
+Specifies number of operands which are read at the PC instead of popped from the stack (in order A,B,C).
 
 ### Data Type (4 bits)
 Specifies the data type of an input or output
@@ -50,10 +51,10 @@ Specifies the data type of an input or output
 
 ### Sequence
 * PC is advanced +3 to end of instruction
-* If ImmFlag is 1
-  * A is read from PC
-  * PC is advanced by size of A (sizeof(A DataType) * Width)
-* Input operands are popped off the stack in reverse order C,B,A
+* For each operand up to ImmCount
+  * Operand is read from PC
+  * PC is advanced by size of Operand (sizeof(DataType) * Width)
+* Non-immediate input operands are popped off the stack in reverse order C,B,A
 * Computation is performed
 * Result operands are pushed onto the stack in order A,B,C
 
