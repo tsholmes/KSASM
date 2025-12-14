@@ -42,25 +42,27 @@ namespace KSASM.Assembly
       return c switch
       {
         '\n' => Add(TokenType.EOL, 1),
-        '[' => Add(TokenType.IOpen, 1),
-        ']' => Add(TokenType.IClose, 1),
-        '+' or '-' => Add(TokenType.Offset, 1),
+        // Placeholder handled in WordLike
+        // Word handled in WordLine
+        // Label handled in WordLike
+        '@' => TakePosition(),
+        '-' when At(index + 1) == '>' => Add(TokenType.Result, 2),
         ',' => Add(TokenType.Comma, 1),
+        ':' => TakeType(),
+        _ when IsDigit(c) => TakeNumber(),
         '$' when At(index + 1) == '(' => Add(TokenType.COpen, 2),
-        '$' when At(index + 1) == '[' => Add(TokenType.CIOpen, 2),
         '(' => Add(TokenType.POpen, 1),
         ')' => Add(TokenType.PClose, 1),
+        '.' => TakeMacro(),
+        '"' => TakeString(),
         '{' => Add(TokenType.BOpen, 1),
         '}' => Add(TokenType.BClose, 1),
+        '+' => Add(TokenType.Plus, 1),
+        '-' => Add(TokenType.Minus, 1),
+        '*' => Add(TokenType.Mult, 1),
         '/' => Add(TokenType.Div, 1),
         '~' => Add(TokenType.Not, 1),
         _ when IsWordStart(c) => TakeWordLike(),
-        '@' => TakePosition(),
-        '*' => TakeWidth(),
-        ':' => TakeType(),
-        _ when IsDigit(c) => TakeNumber(),
-        '.' => TakeMacro(),
-        '"' => TakeString(),
         _ => Add(TokenType.Invalid, 1),
       };
     }
@@ -148,18 +150,6 @@ namespace KSASM.Assembly
         return Add(TokenType.Invalid, 1);
       else
         return Add(TokenType.Position, len);
-    }
-
-    private bool TakeWidth()
-    {
-      var len = 1;
-      while (IsDigit(At(index + len)))
-        len++;
-
-      if (len == 1)
-        return Add(TokenType.Mult, 1);
-      else
-        return Add(TokenType.Width, len);
     }
 
     private bool TakeType()
@@ -253,12 +243,11 @@ namespace KSASM.Assembly
       (firstType, firstEnd, secondType, secondStart) switch
       {
         (TokenType.Label or TokenType.Comma, _, _, _) => true,
-        (_, _, TokenType.Mult, _) => true,
         _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
-        (_, '(' or '[', TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => false,
+        (_, '(', TokenType.POpen or TokenType.COpen, _) => false,
         (_, _, TokenType.POpen, _) when IsWordChar(firstEnd) => false,
-        (_, _, TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => true,
-        (TokenType.PClose, _, _, ')' or ']') => false,
+        (_, _, TokenType.POpen or TokenType.COpen, _) => true,
+        (TokenType.PClose, _, _, ')') => false,
         (TokenType.PClose, _, _, _) => true,
         _ => false,
       };

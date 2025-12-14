@@ -170,4 +170,4 @@ Stack effects are listed in the form `Op:Type*Width ... -> Op:Type*Width`. Opera
 | | rand | `A -> B` | - | `rand(A[i]) -> B[i]` (`[0, x)` when `x>0`, `(x, \|x\|)` when `x<0`) |
 | | sleep | `A*1 ->` | Unsigned | `sleep(A)` (pause A ticks, minimum 1) |
 | | devmap | `A:p24*4 ->` | - | `map mem[A[0]..A[0]+A[1]] -> device[A[2]].mem[A[3]..]` |
-| FF | debug | `A ->` | - | `print(A)` |
+| 7F | debug | `A ->` | - | `print(A)` |

@@ -12,22 +12,20 @@ namespace KSASM.Assembly
     Word, // [\w][\w\d]*
     Label, // word:\b
     Position, // @integer
-    Width, // *integer
-    IOpen, // [
-    IClose, // ]
+    Result, // ->
     Comma, // ,
     Type, // :typename
-    Offset, // + or -
     Number, // decimal, hex with 0x prefix, binary with 0b prefix
     COpen, // $(
-    CIOpen, // $[
     POpen, // (
     PClose, // )
     Macro, // .macroname
     String, // "string"
     BOpen, // {
     BClose, // }
-    Mult, // * when not part of width
+    Plus, // +
+    Minus, // -
+    Mult, // *
     Div, // /
     Not, // ~
   }
