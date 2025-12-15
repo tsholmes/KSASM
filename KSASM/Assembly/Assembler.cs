@@ -18,9 +18,10 @@ namespace KSASM.Assembly
       while (mp.Next(out var token))
         tokens.Add(token);
 
-      var ctx = new Context(buffer, tokens);
       var parser = new Parser(buffer, tokens);
       parser.Parse();
+
+      var ctx = new Context(buffer, tokens, parser.ConstNodes, parser.ConstRanges);
 
       foreach (var stmt in parser.Statements)
         stmt.FirstPass(ctx);
@@ -115,16 +116,26 @@ namespace KSASM.Assembly
     protected string StackPos(Token token, int frameLimit = 20) => StackPos(buffer, token, frameLimit);
   }
 
-  public class Context(ParseBuffer buffer, AppendBuffer<Token> tokens) : TokenProcessor(buffer)
+  public class Context(
+    ParseBuffer buffer,
+    AppendBuffer<Token> tokens,
+    AppendBuffer<ExprNode> constNodes,
+    AppendBuffer<FixedRange> constRanges
+  ) : TokenProcessor(buffer)
   {
     public readonly DebugSymbols Symbols = new(buffer, tokens);
     public readonly ParseBuffer Buffer = buffer;
 
-    public readonly Dictionary<string, int> Labels = [];
-    public readonly List<(int, DataType, List<Value>)> Values = [];
+    public readonly AppendBuffer<ExprNode> ConstNodes = constNodes;
+    public readonly AppendBuffer<FixedRange> ConstRanges = constRanges;
 
-    public readonly List<(DataType, ConstExprList, int)> ConstExprs = [];
-    public readonly Dictionary<(DataType, ConstExprList), int> ConstExprAddrs = [];
+    public readonly Dictionary<string, int> Labels = [];
+
+    public readonly AppendBuffer<Value> RawValues = new();
+    public readonly AppendBuffer<(int, DataType, FixedRange)> Values = new();
+
+    // public readonly List<(DataType, ConstExprList, int)> ConstExprs = [];
+    // public readonly Dictionary<(DataType, ConstExprList), int> ConstExprAddrs = [];
 
     public int Addr = 0;
 
@@ -137,23 +148,12 @@ namespace KSASM.Assembly
     public void EmitInst(Token token, ulong encoded)
     {
       Symbols.AddInst(Addr, token.Index);
-      Values.Add((Addr, DataType.U64, [new Value() { Unsigned = encoded }]));
-      Addr += DataType.U64.SizeBytes();
+      // TODO
+      using var emitter = Emitter(DataType.P24);
+      emitter.Emit(new() { Unsigned = encoded });
     }
 
-    public void Emit(DataType type, List<Value> values)
-    {
-      Values.Add((Addr, type, values));
-      Symbols.AddData(Addr, type, values.Count);
-      Addr += type.SizeBytes() * values.Count;
-    }
-
-    public void Emit(DataType type, params ReadOnlySpan<Value> values)
-    {
-      Values.Add((Addr, type, [.. values]));
-      Symbols.AddData(Addr, type, values.Length);
-      Addr += type.SizeBytes() * values.Length;
-    }
+    public ValueEmitter Emitter(DataType type) => new(this, type);
 
     public void RegisterConst(DataType type, ConstExprList consts, int width)
     {
@@ -223,28 +223,35 @@ namespace KSASM.Assembly
       }
     }
 
-    public Value EvalExpr(ConstExpr expr, ValueMode mode)
+    public Value EvalExpr(int index, ValueMode mode)
     {
+      // TODO: reuse stack
       var vals = new Stack<Value>();
       Value left = default, right = default;
       var ops = mode.Ops();
-      foreach (var node in expr)
+      var range = ConstRanges[index];
+      for (var i = range.Start; i < range.End; i++)
       {
+        var node = ConstNodes[i];
+        var token = Buffer[node.Token];
         switch (node.Op)
         {
           case ConstOp.Leaf:
-            if (node.Val.StringVal != null)
+            if (token.Type == TokenType.Number)
             {
-              if (!Labels.TryGetValue(node.Val.StringVal, out var lpos))
-                throw Invalid(buffer[node.Token]);
+              if (!Token.TryParseValue(Buffer[token], out left, out var lmode))
+                throw Invalid(token);
+              left.Convert(lmode, mode);
+            }
+            else if (token.Type == TokenType.Word)
+            {
+              if (!Labels.TryGetValue(new(Buffer[token]), out var lpos))
+                throw Invalid(token);
               left.Unsigned = (ulong)lpos;
               left.Convert(ValueMode.Unsigned, mode);
             }
             else
-            {
-              left = node.Val.Value;
-              left.Convert(node.Val.Mode, mode);
-            }
+              throw Invalid(token);
             vals.Push(left);
             break;
           case ConstOp.Neg:
@@ -289,5 +296,29 @@ namespace KSASM.Assembly
     }
 
     protected override bool Peek(out Token token) => throw new NotImplementedException();
+
+    public readonly struct ValueEmitter(Context ctx, DataType type) : IDisposable
+    {
+      private readonly Context ctx = ctx;
+      private readonly int addr = ctx.Addr;
+      private readonly DataType type = type;
+      private readonly int valSize = type.SizeBytes();
+      private readonly int start = ctx.RawValues.Length;
+
+      public readonly void Emit(Value val)
+      {
+        ctx.RawValues.Add(val);
+        ctx.Addr += valSize;
+      }
+
+      public readonly void EmitRange(Span<Value> vals)
+      {
+        ctx.RawValues.AddRange(vals);
+        ctx.Addr += valSize * vals.Length;
+      }
+
+      readonly void IDisposable.Dispose() =>
+        ctx.Values.Add((addr, type, new(start, ctx.RawValues.Length - start)));
+    }
   }
 }

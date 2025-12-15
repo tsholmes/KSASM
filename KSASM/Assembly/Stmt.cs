@@ -40,16 +40,119 @@ namespace KSASM.Assembly
   public class DataStatement(ParsedData parsedData) : Statement
   {
     public readonly ParsedData Data = parsedData;
+    private int width = 1;
+    private int typeSize;
 
     public override void FirstPass(Context ctx)
     {
-      throw new NotImplementedException();
+      typeSize = Data.Type.SizeBytes();
+      if (Data.Width is Token wtoken)
+      {
+        if (!Token.TryParseValue(ctx.Buffer[wtoken], out var wval, out var wmode))
+          throw Invalid(wtoken);
+        wval.Convert(wmode, ValueMode.Unsigned);
+        if (wval.Unsigned > 1024)
+          throw Invalid(wtoken);
+        width = (int)wval.Unsigned;
+      }
+
+      ctx.Addr += CalcSize(ctx);
     }
 
     public override void SecondPass(Context ctx)
     {
+      var mode = Data.Type.VMode();
+      switch (Data)
+      {
+        case { ExprVal: FixedRange expr }:
+          {
+            Span<Value> vals = stackalloc Value[expr.Length];
+            for (var i = 0; i < expr.Length; i++)
+              vals[i] = ctx.EvalExpr(expr.Start + i, mode);
+            using var emitter = ctx.Emitter(Data.Type);
+            for (var w = 0; w < width; w++)
+              emitter.EmitRange(vals);
+          }
+          break;
+        case { Value: Token { Type: TokenType.String } tok, Type: DataType.U8 }:
+          {
+            Span<Value> vals = stackalloc Value[StringLength(ctx, tok)];
+            if (!Token.TryParseString(ctx.Buffer[tok], vals))
+              throw Invalid(tok);
+            using var emitter = ctx.Emitter(Data.Type);
+            for (var w = 0; w < width; w++)
+              emitter.EmitRange(vals);
+          }
+          break;
+        case { Value: Token { Type: TokenType.String } tok, Type: DataType.S48 }:
+          {
+            Span<Value> strVals = stackalloc Value[StringLength(ctx, tok)];
+            if (!Token.TryParseString(ctx.Buffer[tok], strVals))
+              throw Invalid(tok);
+
+            var strStart = (ulong)(ctx.Addr + typeSize * width);
+            var strLen = (ulong)strVals.Length;
+            Span<Value> ptrVals = stackalloc Value[width];
+            for (var w = 0; w < width; w++)
+            {
+              ptrVals[w].Unsigned = strStart | (strLen << 24);
+              strStart += strLen;
+            }
+
+            using (var emitter = ctx.Emitter(Data.Type))
+              emitter.EmitRange(ptrVals);
+
+            using (var emitter = ctx.Emitter(DataType.U8))
+              for (var w = 0; w < width; w++)
+                emitter.EmitRange(strVals);
+          }
+          break;
+        case { Value: Token { Type: TokenType.Word } tok }:
+          {
+            if (!ctx.Labels.TryGetValue(new(ctx.Buffer[tok]), out var addr))
+              throw Invalid(tok);
+
+            var val = new Value { Unsigned = (ulong)addr };
+            val.Convert(ValueMode.Unsigned, mode);
+
+            using var emitter = ctx.Emitter(Data.Type);
+            for (var w = 0; w < width; w++)
+              emitter.Emit(val);
+          }
+          break;
+        case { Value: Token { Type: TokenType.Number } tok }:
+          {
+            if (!Token.TryParseValue(ctx.Buffer[tok], out var val, out var vmode))
+              throw Invalid(tok);
+            val.Convert(vmode, mode);
+
+            using var emitter = ctx.Emitter(Data.Type);
+            for (var w = 0; w < width; w++)
+              emitter.Emit(val);
+          }
+          break;
+        default:
+          throw Invalid(Data.Value);
+      }
       throw new NotImplementedException();
     }
+
+    private int StringLength(Context ctx, Token token) =>
+      Token.TryCalcStringLength(ctx.Buffer[token], out var length) ? length : throw Invalid(token);
+
+    private int CalcSize(Context ctx) => Data switch
+    {
+      { ExprVal: FixedRange expr } => typeSize * expr.Length,
+      { Value: Token { Type: TokenType.String } tok, Type: DataType.U8 } =>
+        StringLength(ctx, tok) * typeSize,
+      { Value: Token { Type: TokenType.String } tok, Type: DataType.S48 } =>
+        (StringLength(ctx, tok) * DataType.U8.SizeBytes()) + typeSize, // N S48 pointers + N copies of string
+      { Value: Token { Type: TokenType.String } tok } => throw Invalid(tok),
+      _ => typeSize,
+    } * width;
+
+    // TODO
+    private Exception Invalid(Token tok) => throw new InvalidOperationException($"Invalid token {tok.Type}");
   }
 
   public class InstructionStatement(ParsedInstruction parsedInst) : Statement
@@ -66,68 +169,6 @@ namespace KSASM.Assembly
       throw new NotImplementedException();
     }
   }
-
-  // public class ValueStatement : Statement
-  // {
-  //   public Token Token;
-  //   public DataType Type;
-  //   public string StrValue;
-  //   public Value Value;
-  //   public int Width = 1;
-
-  //   public override void FirstPass(Context ctx) =>
-  //     ctx.Addr += Type.SizeBytes() * Width;
-
-  //   public override void SecondPass(Context ctx)
-  //   {
-  //     if (StrValue != null)
-  //     {
-  //       if (!ctx.Labels.TryGetValue(StrValue, out var addr))
-  //         throw new InvalidOperationException($"Unknown name {StrValue}");
-  //       Value.Unsigned = (ulong)addr;
-  //       Value.Convert(ValueMode.Unsigned, Type.VMode());
-  //     }
-  //     Span<Value> vals = Width <= 256 ? stackalloc Value[Width] : new Value[Width];
-  //     for (var i = 0; i < Width; i++)
-  //       vals[i] = Value;
-  //     ctx.Emit(Type, vals);
-  //   }
-  // }
-
-  // public class ExprValueStatement : Statement
-  // {
-  //   public DataType Type;
-  //   public int Width = 1;
-  //   public ConstExprList Exprs;
-
-  //   public override void FirstPass(Context ctx) =>
-  //     ctx.Addr += Type.SizeBytes() * Width;
-
-  //   public override void SecondPass(Context ctx)
-  //   {
-  //     var totalCount = Exprs.Count * Width;
-  //     Span<Value> evals = totalCount <= 256 ? stackalloc Value[totalCount] : new Value[totalCount];
-  //     for (var i = 0; i < Exprs.Count; i++)
-  //       evals[i] = ctx.EvalExpr(Exprs[i], Type.VMode());
-  //     for (var i = Exprs.Count; i < totalCount; i++)
-  //       evals[i] = evals[i % Exprs.Count];
-
-  //     ctx.Emit(Type, evals);
-  //   }
-  // }
-
-  // public class ValueListStatement : Statement
-  // {
-  //   public Token Token;
-  //   public DataType Type;
-  //   public List<Value> Values;
-
-  //   public override void FirstPass(Context ctx) =>
-  //     ctx.Addr += Type.SizeBytes() * Values.Count;
-
-  //   public override void SecondPass(Context ctx) =>
-  //     ctx.Emit(Type, Values);
-  // }
 
   // public class InstructionStatement : Statement
   // {
