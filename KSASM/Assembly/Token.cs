@@ -41,6 +41,16 @@ namespace KSASM.Assembly
       return Enum.TryParse(data[1..], true, out type);
     }
 
+    public static bool TryParseOpCode(ReadOnlySpan<char> data, out OpCode op)
+    {
+      if (data.Length == 0 || char.IsAsciiDigit(data[0]))
+      {
+        op = default;
+        return false;
+      }
+      return Enum.TryParse(data, true, out op);
+    }
+
     public static bool TryCalcStringLength(ReadOnlySpan<char> data, out int length)
     {
       length = 0;

@@ -1,6 +1,5 @@
 
 using System;
-using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
@@ -134,7 +133,6 @@ namespace KSASM.Assembly
         default:
           throw Invalid(Data.Value);
       }
-      throw new NotImplementedException();
     }
 
     private int StringLength(Context ctx, Token token) =>
@@ -158,15 +156,124 @@ namespace KSASM.Assembly
   public class InstructionStatement(ParsedInstruction parsedInst) : Statement
   {
     public readonly ParsedInstruction Inst = parsedInst;
+    private OpCode opCode;
+    private OpCodeInfo info;
+
+    private ResolvedOperand A;
+    private ResolvedOperand B;
+    private ResolvedOperand C;
+    private int immCount = 0;
 
     public override void FirstPass(Context ctx)
     {
-      throw new NotImplementedException();
+      if (!Token.TryParseOpCode(ctx.Buffer[Inst.OpCode], out opCode))
+        throw Invalid(Inst.OpCode);
+      info = OpCodeInfo.For(opCode);
+
+      DataType? defType = null;
+      if (Inst.DefaultType is Token dttoken)
+      {
+        if (!Token.TryParseType(ctx.Buffer[dttoken], out var type))
+          throw Invalid(dttoken);
+        defType = type;
+      }
+      var width = 0;
+      if (Inst.Width is Token wtoken)
+      {
+        if (!Token.TryParseValue(ctx.Buffer[wtoken], out var val, out var mode))
+          throw Invalid(wtoken);
+        val.Convert(mode, ValueMode.Unsigned);
+        width = (int)val.Unsigned;
+        if (width < 1 || width > 8)
+          throw Invalid(wtoken);
+      }
+
+      var pin = Inst.ResultIndex != -1 ? Inst.ResultIndex : Inst.OperandCount;
+      var pout = Inst.OperandCount - pin;
+
+      if (pin > info.InOps)
+        throw InvalidInst($"invalid input count");
+      if (pout > info.OutOps)
+        throw InvalidInst($"invalid output count");
+
+      for (var idx = 0; idx < info.TotalOps; idx++)
+      {
+        ref var rop = ref Op(idx);
+        var opInfo = info[idx];
+
+        var pindex = -1;
+        if (idx < info.InOps && idx < pin)
+          pindex = idx;
+        else if (idx >= info.InOps && (idx - pin) < pout)
+          pindex = idx - info.InOps;
+
+        DataType? ptype = null;
+        if (pindex != -1)
+        {
+          ref var pop = ref Inst.Op(idx);
+          rop.Value = pop.Val;
+          rop.ExprVal = pop.ExprVal;
+          if (pop.Type is Token ttoken)
+          {
+            if (opInfo.Type != null || !Token.TryParseType(ctx.Buffer[ttoken], out var type))
+              throw Invalid(ttoken);
+            ptype = type;
+          }
+        }
+        rop.Type = opInfo.Type ?? ptype ?? defType ?? throw InvalidInst($"missing type for operand {idx}");
+
+        // if no width is specified and this is not a fixed-width operand, use const width as the instruction width
+        if (width == 0 && opInfo.Width == null && rop.ExprVal is FixedRange range)
+          width = Math.Clamp(range.Length, 0, 8);
+      }
+
+      if (width == 0)
+        width = 1;
+
+      // advance by instruction count
+      ctx.Addr += DataType.P24.SizeBytes();
+      // advance by immediate sizes
+      for (var idx = 0; idx < info.TotalOps; idx++)
+      {
+        ref var rop = ref Op(idx);
+        var opInfo = info[idx];
+
+        rop.Width = opInfo.Width ?? width;
+        if (rop.Value?.Type is not (null or TokenType.Placeholder))
+        {
+          immCount++;
+          ctx.Addr += rop.Type.SizeBytes() * rop.Width;
+        }
+      }
     }
 
     public override void SecondPass(Context ctx)
     {
       throw new NotImplementedException();
+    }
+
+    private ref ResolvedOperand Op(int idx)
+    {
+      switch (idx)
+      {
+        case 0: return ref A;
+        case 1: return ref B;
+        case 2: return ref C;
+        default: throw new IndexOutOfRangeException($"{idx}");
+      }
+    }
+
+    // TODO
+    private Exception Invalid(Token tok) => throw new InvalidOperationException($"Invalid token {tok.Type}");
+    private Exception InvalidInst(string msg) => throw new InvalidOperationException(msg);
+
+    private struct ResolvedOperand
+    {
+      public int Width;
+      public bool FixedWidth;
+      public DataType Type;
+      public Token? Value;
+      public FixedRange? ExprVal;
     }
   }
 

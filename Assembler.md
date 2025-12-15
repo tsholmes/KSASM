@@ -55,9 +55,7 @@ instruction = Word Type? operands
 operands =
   | width? # width only
   | width? imm-operand* stack-operand* (Result stack-operand?)? # width before operands
-  | width? imm-operand* Result imm-operand
   | imm-operand width imm-operand* stack-operand* (Result stack-operand?)? # width on first immediate
-  | Result imm-operand width
   | stack-operand width stack-operand* (Result stack-operand?)? # width on first stack
   | Result stack-operand width
 

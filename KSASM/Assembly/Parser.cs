@@ -165,7 +165,12 @@ namespace KSASM.Assembly
       while (inst.OperandCount < 3 && !PeekType(TokenType.EOL))
       {
         if (inst.ResultIndex == -1 && TakeType(TokenType.Result))
+        {
           inst.ResultIndex = inst.OperandCount;
+          allowImm = false;
+          continue;
+        }
+
         ParseOperand(ref inst.Op(inst.OperandCount++), ref allowImm);
 
         if (inst.OperandCount == 1 && inst.Width == null && TakeType(TokenType.Mult))
