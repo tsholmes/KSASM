@@ -328,10 +328,49 @@ namespace KSASM
 
     public struct Enumerator(AppendBuffer<T> buf)
     {
+      private readonly AppendBuffer<T> buf = buf;
       private int index = -1;
       public T Current => buf[index];
       public bool MoveNext() => ++index < buf.Length;
       public Enumerator GetEnumerator() => this;
+    }
+
+    public ChunkEnumerator Chunks() => new(this, new(0, length));
+    public ChunkEnumerator Chunks(FixedRange range)
+    {
+      if (range.Start < 0) throw new IndexOutOfRangeException($"{range.Start}");
+      if (range.End > length) throw new IndexOutOfRangeException($"{range.End}");
+      return new(this, range);
+    }
+
+    public ref struct ChunkEnumerator(AppendBuffer<T> buf, FixedRange range)
+    {
+      private readonly AppendBuffer<T> buf = buf;
+      private readonly FixedRange range = range;
+      private int index = -1;
+      public ReadOnlySpan<T> Current
+      {
+        get
+        {
+          var cstart = index << CHUNK_SHIFT;
+          var start = cstart;
+          var end = cstart + CHUNK_SIZE;
+          if (start < range.Start)
+            start = range.Start;
+          if (end > range.End)
+            end = range.End;
+          return buf.chunks[index].AsSpan(start - cstart, end - start);
+        }
+      }
+      public bool MoveNext()
+      {
+        if (index == -1)
+          index = range.Start >> CHUNK_SHIFT;
+        else
+          index++;
+        return index << CHUNK_SHIFT < buf.Length;
+      }
+      public ChunkEnumerator GetEnumerator() => this;
     }
   }
 

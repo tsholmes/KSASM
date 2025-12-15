@@ -7,23 +7,6 @@ namespace KSASM
 {
   public static class Encoding
   {
-    public struct ShiftMask
-    {
-      public int Shift;
-      public int Bits;
-
-      public ulong Decode(ulong encoded) => (encoded >> Shift) & ((1u << Bits) - 1);
-      public ulong Encode(ulong decoded) => (decoded & ((1u << Bits) - 1)) << Shift;
-
-      public int DecodeSignExtend(ulong encoded)
-      {
-        var decoded = (int)Decode(encoded);
-        if ((decoded & (1 << (Bits - 1))) != 0)
-          decoded |= ~((1 << Bits) - 1);
-        return decoded;
-      }
-    }
-
     public static int SizeBytes(this DataType type) => type switch
     {
       DataType.U8 => 1,
@@ -117,4 +100,22 @@ namespace KSASM
       eval.BytesOf(type).CopyTo(buffer);
     }
   }
+
+  public struct ShiftMask
+  {
+    public int Shift;
+    public int Bits;
+
+    public ulong Decode(ulong encoded) => (encoded >> Shift) & ((1u << Bits) - 1);
+    public ulong Encode(ulong decoded) => (decoded & ((1u << Bits) - 1)) << Shift;
+
+    public int DecodeSignExtend(ulong encoded)
+    {
+      var decoded = (int)Decode(encoded);
+      if ((decoded & (1 << (Bits - 1))) != 0)
+        decoded |= ~((1 << Bits) - 1);
+      return decoded;
+    }
+  }
+
 }

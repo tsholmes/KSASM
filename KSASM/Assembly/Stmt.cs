@@ -41,6 +41,7 @@ namespace KSASM.Assembly
     public readonly ParsedData Data = parsedData;
     private int width = 1;
     private int typeSize;
+    private FixedRange stringRange;
 
     public override void FirstPass(Context ctx)
     {
@@ -55,12 +56,27 @@ namespace KSASM.Assembly
         width = (int)wval.Unsigned;
       }
 
-      ctx.Addr += CalcSize(ctx);
+      if (Data.Value is Token { Type: TokenType.String } strTok)
+      {
+        if (!ctx.TryAddString(strTok, out stringRange))
+          throw Invalid(strTok);
+      }
+
+      ctx.Addr += Data switch
+      {
+        { ExprVal: FixedRange expr } => typeSize * expr.Length,
+        { Value: Token { Type: TokenType.String }, Type: DataType.U8 } => stringRange.Length * typeSize,
+        { Value: Token { Type: TokenType.String }, Type: DataType.S48 } =>
+          (stringRange.Length * DataType.U8.SizeBytes()) + typeSize, // N S48 pointers + N copies of string
+        { Value: Token { Type: TokenType.String } tok } => throw Invalid(tok),
+        _ => typeSize,
+      } * width; ;
     }
 
     public override void SecondPass(Context ctx)
     {
       var mode = Data.Type.VMode();
+
       switch (Data)
       {
         case { ExprVal: FixedRange expr }:
@@ -75,22 +91,15 @@ namespace KSASM.Assembly
           break;
         case { Value: Token { Type: TokenType.String } tok, Type: DataType.U8 }:
           {
-            Span<Value> vals = stackalloc Value[StringLength(ctx, tok)];
-            if (!Token.TryParseString(ctx.Buffer[tok], vals))
-              throw Invalid(tok);
             using var emitter = ctx.Emitter(Data.Type);
             for (var w = 0; w < width; w++)
-              emitter.EmitRange(vals);
+              emitter.EmitString(stringRange);
           }
           break;
         case { Value: Token { Type: TokenType.String } tok, Type: DataType.S48 }:
           {
-            Span<Value> strVals = stackalloc Value[StringLength(ctx, tok)];
-            if (!Token.TryParseString(ctx.Buffer[tok], strVals))
-              throw Invalid(tok);
-
             var strStart = (ulong)(ctx.Addr + typeSize * width);
-            var strLen = (ulong)strVals.Length;
+            var strLen = (ulong)stringRange.Length;
             Span<Value> ptrVals = stackalloc Value[width];
             for (var w = 0; w < width; w++)
             {
@@ -103,7 +112,7 @@ namespace KSASM.Assembly
 
             using (var emitter = ctx.Emitter(DataType.U8))
               for (var w = 0; w < width; w++)
-                emitter.EmitRange(strVals);
+                emitter.EmitString(stringRange);
           }
           break;
         case { Value: Token { Type: TokenType.Word } tok }:
@@ -134,20 +143,6 @@ namespace KSASM.Assembly
           throw Invalid(Data.Value);
       }
     }
-
-    private int StringLength(Context ctx, Token token) =>
-      Token.TryCalcStringLength(ctx.Buffer[token], out var length) ? length : throw Invalid(token);
-
-    private int CalcSize(Context ctx) => Data switch
-    {
-      { ExprVal: FixedRange expr } => typeSize * expr.Length,
-      { Value: Token { Type: TokenType.String } tok, Type: DataType.U8 } =>
-        StringLength(ctx, tok) * typeSize,
-      { Value: Token { Type: TokenType.String } tok, Type: DataType.S48 } =>
-        (StringLength(ctx, tok) * DataType.U8.SizeBytes()) + typeSize, // N S48 pointers + N copies of string
-      { Value: Token { Type: TokenType.String } tok } => throw Invalid(tok),
-      _ => typeSize,
-    } * width;
 
     // TODO
     private Exception Invalid(Token tok) => throw new InvalidOperationException($"Invalid token {tok.Type}");
@@ -232,7 +227,7 @@ namespace KSASM.Assembly
 
       // advance by instruction count
       ctx.Addr += DataType.P24.SizeBytes();
-      // advance by immediate sizes
+      // advance by immediate sizes, and register strings
       for (var idx = 0; idx < info.TotalOps; idx++)
       {
         ref var rop = ref Op(idx);
@@ -243,6 +238,26 @@ namespace KSASM.Assembly
         {
           immCount++;
           ctx.Addr += rop.Type.SizeBytes() * rop.Width;
+        }
+        if (rop.Value is Token { Type: TokenType.String } stok)
+        {
+          if (rop.Type == DataType.U8)
+          {
+            // u8 strings are included inline
+            if (!ctx.TryAddString(stok, out rop.String))
+              throw Invalid(stok);
+            // truncate to width if its too wide
+            if (rop.String.Length > rop.Width)
+              rop.String = new(rop.String.Start, rop.Width);
+          }
+          else if (rop.Type == DataType.S48)
+          {
+            // s48 strings are allocated separately and a pointer is stored inline
+            if (!ctx.TryAddInlineString(stok, out rop.String))
+              throw Invalid(stok);
+          }
+          else
+            throw Invalid(stok);
         }
       }
     }
@@ -274,6 +289,7 @@ namespace KSASM.Assembly
       public DataType Type;
       public Token? Value;
       public FixedRange? ExprVal;
+      public FixedRange String;
     }
   }
 

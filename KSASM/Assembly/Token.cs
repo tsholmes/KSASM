@@ -51,59 +51,6 @@ namespace KSASM.Assembly
       return Enum.TryParse(data, true, out op);
     }
 
-    public static bool TryCalcStringLength(ReadOnlySpan<char> data, out int length)
-    {
-      length = 0;
-      data = data[1..^1];
-      while (data.Length > 0)
-      {
-        if (!TryStringNextChar(ref data, out _))
-          return false;
-        length++;
-      }
-      return true;
-    }
-
-    public static bool TryParseString(ReadOnlySpan<char> data, Span<Value> vals)
-    {
-      data = data[1..^1];
-      while (data.Length > 0 && vals.Length > 0)
-      {
-        if (!TryStringNextChar(ref data, out var c))
-          return false;
-        vals[0].Unsigned = c;
-        vals = vals[1..];
-      }
-      return vals.Length == 0;
-    }
-
-    private static bool TryStringNextChar(ref ReadOnlySpan<char> data, out char c)
-    {
-      if (data.Length == 0)
-      {
-        c = default;
-        return false;
-      }
-      c = data[0];
-      data = data[1..];
-      if (c == '\\')
-      {
-        if (data.Length == 0)
-          return false;
-        c = data[0];
-        data = data[1..];
-        c = c switch
-        {
-          'n' => '\n',
-          'r' => '\r',
-          '\\' => '\\',
-          't' => '\t',
-          _ => default,
-        };
-      }
-      return c != default;
-    }
-
     public static bool TryParseValue(ReadOnlySpan<char> str, out Value val, out ValueMode mode)
     {
       val = default;
@@ -145,6 +92,52 @@ namespace KSASM.Assembly
         return false;
       }
       return ulong.TryParse(str[1..], NumberStyles.BinaryNumber, null, out val);
+    }
+
+    public ref struct StringParser(ReadOnlySpan<char> data)
+    {
+      private ReadOnlySpan<char> data = data[1..1];
+
+      public bool Done => data.Length == 0;
+
+      public bool Next(out char c)
+      {
+        if (data.Length == 0)
+        {
+          c = default;
+          return false;
+        }
+        c = data[0];
+        data = data[1..];
+        if (c == '\\')
+        {
+          if (data.Length == 0)
+            return false;
+          c = data[0];
+          data = data[1..];
+          c = c switch
+          {
+            'n' => '\n',
+            'r' => '\r',
+            '\\' => '\\',
+            't' => '\t',
+            _ => default,
+          };
+        }
+        return c != default;
+      }
+
+      public bool NextChunk(scoped Span<Value> vals, out int count)
+      {
+        count = 0;
+        while (!Done && count < vals.Length)
+        {
+          if (!Next(out var c))
+            return false;
+          vals[count++].Unsigned = c;
+        }
+        return true;
+      }
     }
   }
 

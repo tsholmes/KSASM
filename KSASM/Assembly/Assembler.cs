@@ -25,7 +25,7 @@ namespace KSASM.Assembly
 
       foreach (var stmt in parser.Statements)
         stmt.FirstPass(ctx);
-      ctx.EmitConstants();
+      ctx.EmitInlineStrings();
       ctx.Addr = 0;
       foreach (var stmt in parser.Statements)
         stmt.SecondPass(ctx);
@@ -129,15 +129,18 @@ namespace KSASM.Assembly
     public readonly AppendBuffer<ExprNode> ConstNodes = constNodes;
     public readonly AppendBuffer<FixedRange> ConstRanges = constRanges;
 
+    public readonly AppendBuffer<Value> StringChars = new();
+    public readonly AppendBuffer<Value> InlineStringChars = new();
+
     public readonly Dictionary<string, int> Labels = [];
 
     public readonly AppendBuffer<Value> RawValues = new();
     public readonly AppendBuffer<(int, DataType, FixedRange)> Values = new();
 
-    // public readonly List<(DataType, ConstExprList, int)> ConstExprs = [];
-    // public readonly Dictionary<(DataType, ConstExprList), int> ConstExprAddrs = [];
-
     public int Addr = 0;
+
+    // Filled after first pass
+    public int InlineStringStart = 0;
 
     public void EmitLabel(string label)
     {
@@ -155,72 +158,38 @@ namespace KSASM.Assembly
 
     public ValueEmitter Emitter(DataType type) => new(this, type);
 
-    public void RegisterConst(DataType type, ConstExprList consts, int width)
+    public bool TryAddString(Token tok, out FixedRange range) =>
+      TryAppendString(StringChars, Buffer[tok], out range);
+
+    // add InlineStringStart to Start after first pass to get actual memory range
+    public bool TryAddInlineString(Token tok, out FixedRange range) =>
+      TryAppendString(InlineStringChars, Buffer[tok], out range);
+
+    private static bool TryAppendString(AppendBuffer<Value> buf, ReadOnlySpan<char> data, out FixedRange range)
     {
-      // if (Debug)
-      //   Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
-      ConstExprs.Add((type, consts, width));
+      var start = buf.Length;
+      Span<Value> chunk = stackalloc Value[256];
+
+      var parser = new Token.StringParser(data);
+      while (!parser.Done)
+      {
+        if (!parser.NextChunk(chunk, out var count))
+        {
+          buf.Length = start;
+          range = default;
+          return false;
+        }
+      }
+
+      range = new(start, buf.Length - start);
+      return true;
     }
 
-    public void EmitConstants()
+    public void EmitInlineStrings()
     {
-      var vals = new Dictionary<(DataType, ConstExprList), ValueX8>();
-      var maxWidths = new Dictionary<(DataType, ValueX8), int>();
-      var sb = new StringBuilder();
-      foreach (var (type, consts, wid) in ConstExprs)
-      {
-        if (consts.Addr)
-        {
-          var addr = EvalExpr(consts[0], type.VMode());
-          addr.Convert(type.VMode(), ValueMode.Unsigned);
-          if (Assembler.Debug)
-            Console.WriteLine($"CONST ADDR {addr}");
-          ConstExprAddrs[(type, consts)] = (int)addr.Unsigned;
-          continue;
-        }
-        ValueX8 vs = new();
-        for (var i = 0; i < consts.Count; i++)
-        {
-          vs[i] = EvalExpr(consts[i], type.VMode());
-        }
-        for (var i = consts.Count; i < 8; i++)
-        {
-          vs[i] = vs[i % consts.Count];
-        }
-        vals[(type, consts)] = vs;
-
-        if (Assembler.Debug)
-        {
-          sb.Clear();
-          sb.Append($"CONST {type}*{wid}");
-          for (var i = 0; i < 8; i++)
-            sb.Append($" {vs[i].As(type)}");
-          Console.WriteLine(sb.ToString());
-        }
-
-        maxWidths[(type, vs)] = Math.Max(maxWidths.GetValueOrDefault((type, vs)), wid);
-      }
-
-      if (maxWidths.Count == 0)
-        return;
-
-      if (!Labels.TryGetValue("CONST", out var caddr))
-        throw new InvalidOperationException("Cannot emit inlined constants without CONST label");
-
-      Addr = caddr;
-      var constAddrs = new Dictionary<(DataType, ValueX8), int>();
-      foreach (var ((type, vs), width) in maxWidths)
-      {
-        constAddrs[(type, vs)] = Addr;
-        Emit(type, vs[..width]);
-      }
-
-      foreach (var (type, expr, _) in ConstExprs)
-      {
-        if (expr.Addr) continue;
-        var val = vals[(type, expr)];
-        ConstExprAddrs[(type, expr)] = constAddrs[(type, val)];
-      }
+      // TODO: fill InlineStringStart with STRINGS label or default
+      // TODO: emit strings
+      throw new InvalidOperationException();
     }
 
     public Value EvalExpr(int index, ValueMode mode)
@@ -311,10 +280,16 @@ namespace KSASM.Assembly
         ctx.Addr += valSize;
       }
 
-      public readonly void EmitRange(Span<Value> vals)
+      public readonly void EmitRange(ReadOnlySpan<Value> vals)
       {
         ctx.RawValues.AddRange(vals);
         ctx.Addr += valSize * vals.Length;
+      }
+
+      public readonly void EmitString(FixedRange range)
+      {
+        foreach (var chunk in ctx.StringChars.Chunks(range))
+          EmitRange(chunk);
       }
 
       readonly void IDisposable.Dispose() =>
