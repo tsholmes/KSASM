@@ -14,7 +14,7 @@ namespace KSASM.Assembly
     private readonly AppendBuffer<char> nsbuf = new();
     private readonly Stack<int> nslens = new();
 
-    private int regionPos = 0x00100000;
+    private int regionPos = Assembler.DEFAULT_STRINGS_START;
     private int ifDepth = 0;
     private int eolCount = 0;
 

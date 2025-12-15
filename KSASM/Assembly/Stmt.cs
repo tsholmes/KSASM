@@ -158,6 +158,7 @@ namespace KSASM.Assembly
     private ResolvedOperand B;
     private ResolvedOperand C;
     private int immCount = 0;
+    private int width = 0;
 
     public override void FirstPass(Context ctx)
     {
@@ -172,7 +173,6 @@ namespace KSASM.Assembly
           throw Invalid(dttoken);
         defType = type;
       }
-      var width = 0;
       if (Inst.Width is Token wtoken)
       {
         if (!Token.TryParseValue(ctx.Buffer[wtoken], out var val, out var mode))
@@ -253,8 +253,12 @@ namespace KSASM.Assembly
           else if (rop.Type == DataType.S48)
           {
             // s48 strings are allocated separately and a pointer is stored inline
-            if (!ctx.TryAddInlineString(stok, out rop.String))
+            if (!ctx.TryAddString(stok, out var str))
               throw Invalid(stok);
+            rop.String = ctx.AddInlineString(str);
+            // duplicate the string by width so each s48 val points to a different copy
+            for (var i = 1; i < rop.Width; i++)
+              ctx.AddInlineString(str);
           }
           else
             throw Invalid(stok);
@@ -264,7 +268,77 @@ namespace KSASM.Assembly
 
     public override void SecondPass(Context ctx)
     {
-      throw new NotImplementedException();
+      var inst = new Instruction
+      {
+        OpCode = opCode,
+        Width = (byte)width,
+        ImmCount = (byte)immCount,
+        AType = A.Type,
+        BType = B.Type,
+        CType = C.Type,
+      };
+      ctx.EmitInst(Inst.OpCode, inst.Encode());
+
+
+      Span<Value> vals = stackalloc Value[8];
+      for (var idx = 0; idx < immCount; idx++)
+      {
+        ref var rop = ref Op(idx);
+        var mode = rop.Type.VMode();
+
+        using var emitter = ctx.Emitter(rop.Type);
+
+        if (rop.ExprVal is FixedRange expr)
+        {
+          for (var i = 0; i < rop.Width && i < expr.Length; i++)
+            vals[i] = ctx.EvalExpr(expr.Start + i, mode);
+          // duplicate values to fill width
+          for (var i = expr.Length; i < rop.Width; i++)
+            vals[i] = vals[i % expr.Length];
+        }
+        else if (rop.Value is Token { Type: TokenType.Number } ntok)
+        {
+          if (!Token.TryParseValue(ctx.Buffer[ntok], out vals[0], out var vmode))
+            throw Invalid(ntok);
+          vals[0].Convert(vmode, mode);
+          for (var i = 1; i < rop.Width; i++)
+            vals[i] = vals[0];
+        }
+        else if (rop.Value is Token { Type: TokenType.Word } ltok)
+        {
+          if (!ctx.Labels.TryGetValue(new(ctx.Buffer[ltok]), out var addr))
+            throw Invalid(ltok);
+
+          vals[0].Unsigned = (ulong)addr;
+          vals[0].Convert(ValueMode.Unsigned, mode);
+          for (var i = 1; i < rop.Width; i++)
+            vals[i] = vals[0];
+        }
+        else if (rop.Value is Token { Type: TokenType.String } stok)
+        {
+          if (rop.Type == DataType.U8)
+          {
+            var svals = ctx.StringChars[rop.String];
+            for (var i = 0; i < rop.Width; i++)
+              vals[i] = svals[i % svals.Length];
+          }
+          else if (rop.Type == DataType.S48)
+          {
+            for (var i = 0; i < rop.Width; i++)
+            {
+              var start = (ulong)(ctx.InlineStringStart + i * rop.String.Length);
+              var len = (ulong)rop.String.Length;
+              vals[i].Unsigned = start | (len << 24);
+            }
+          }
+          else
+            throw Invalid(stok);
+        }
+        else
+          throw Invalid(rop.Value ?? Inst.OpCode);
+
+        emitter.EmitRange(vals[..rop.Width]);
+      }
     }
 
     private ref ResolvedOperand Op(int idx)
@@ -285,191 +359,10 @@ namespace KSASM.Assembly
     private struct ResolvedOperand
     {
       public int Width;
-      public bool FixedWidth;
       public DataType Type;
       public Token? Value;
       public FixedRange? ExprVal;
       public FixedRange String;
     }
   }
-
-  // public class InstructionStatement : Statement
-  // {
-  //   public Context Context;
-  //   public Token OpToken;
-  //   public OpCode Op;
-  //   public int Width = 1;
-  //   public DataType? Type;
-  //   public ParsedOperand OperandA;
-  //   public ParsedOperand OperandB;
-
-  //   public override void FirstPass(Context ctx)
-  //   {
-  //     Context = ctx;
-  //     if (OperandA.Mode == ParsedOpMode.Const)
-  //       RegisterConst(ctx, OperandA.Consts, AType);
-  //     if (OperandB.Mode == ParsedOpMode.Const)
-  //       RegisterConst(ctx, OperandB.Consts, BType);
-  //     ctx.Addr += DataType.U64.SizeBytes();
-  //   }
-
-  //   private void RegisterConst(Context ctx, ConstExprList consts, DataType type)
-  //   {
-  //     if (consts.Indirect || consts.Addr) type = DataType.P24;
-  //     ctx.RegisterConst(type, consts, Width);
-  //   }
-
-  //   private Exception Invalid(string message) =>
-  //     throw new InvalidOperationException($"{message} at {TokenProcessor.StackPos(Context.Buffer, OpToken)}");
-
-  //   private DataType AType => OperandA.Mode != ParsedOpMode.Placeholder
-  //     ? Type ?? OperandA.Type ?? throw Invalid($"Missing A Type")
-  //     : Type ?? OperandB.Type ?? throw Invalid($"Missing A Type");
-  //   private DataType BType =>
-  //     Type ?? OperandB.Type ?? OperandA.Type ?? throw Invalid($"Missing B Type");
-
-  //   public override void SecondPass(Context ctx)
-  //   {
-  //     var inst = new Instruction { OpCode = Op, DataWidth = (byte)Width };
-
-  //     if (Type != null && (OperandA.Type ?? OperandB.Type) != null)
-  //       throw Invalid($"Cannot have instruction-level and operand-level types");
-
-  //     inst.AType = AType;
-  //     inst.BType = BType;
-
-  //     switch ((OperandA.Mode, OperandB.Mode))
-  //     {
-  //       case (ParsedOpMode.Placeholder, ParsedOpMode.Addr):
-  //         ParseBSimple(ctx, ref inst);
-  //         CopyBToA(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.Placeholder, ParsedOpMode.Const):
-  //         ParseBConst(ctx, ref inst);
-  //         CopyBToA(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.Addr, ParsedOpMode.Addr):
-  //         ParseASimple(ctx, ref inst);
-  //         ParseBSimple(ctx, ref inst);
-  //         inst.OffsetB -= inst.AddrBase;
-  //         break;
-  //       case (ParsedOpMode.Addr, ParsedOpMode.Offset):
-  //         ParseASimple(ctx, ref inst);
-  //         ParseBSimple(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.Addr, ParsedOpMode.Const):
-  //         ParseASimple(ctx, ref inst);
-  //         ParseBConst(ctx, ref inst);
-  //         inst.OffsetB -= inst.AddrBase;
-  //         break;
-  //       case (ParsedOpMode.Addr, ParsedOpMode.Placeholder):
-  //         ParseASimple(ctx, ref inst);
-  //         CopyAToB(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.BaseOffset, ParsedOpMode.Offset):
-  //         ParseABaseOffset(ctx, ref inst);
-  //         ParseBSimple(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.Const, ParsedOpMode.Placeholder):
-  //         ParseASimple(ctx, ref inst);
-  //         CopyAToB(ctx, ref inst);
-  //         break;
-  //       case (ParsedOpMode.Const, ParsedOpMode.Addr):
-  //         ParseAConst(ctx, ref inst);
-  //         ParseBSimple(ctx, ref inst);
-  //         inst.OffsetB -= inst.AddrBase;
-  //         break;
-  //       case (ParsedOpMode.Const, ParsedOpMode.Const):
-  //         ParseAConst(ctx, ref inst);
-  //         ParseBConst(ctx, ref inst);
-  //         inst.OffsetB -= inst.AddrBase;
-  //         break;
-  //       default:
-  //         throw Invalid($"Invalid operand modes ({OperandA.Mode},{OperandB.Mode})");
-  //     }
-
-  //     ctx.EmitInst(OpToken, inst.Encode());
-  //   }
-
-  //   private int LookupAddr(Context ctx, AddrRef addr)
-  //   {
-  //     var val = addr.IntAddr;
-  //     if (addr.StrAddr != null)
-  //     {
-  //       if (!ctx.Labels.TryGetValue(addr.StrAddr, out val))
-  //         throw Invalid($"Unknown name {addr.StrAddr}");
-  //     }
-  //     if (addr.Offset == "-")
-  //       val = -val;
-  //     return val;
-  //   }
-
-  //   private void CopyAToB(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.OffsetB = 0;
-  //     if (inst.OperandMode.HasFlag(OperandMode.IndirectA))
-  //       inst.OperandMode |= OperandMode.IndirectB;
-  //   }
-
-  //   private void CopyBToA(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.AddrBase = inst.OffsetB;
-  //     inst.OffsetB = 0;
-  //     if (inst.OperandMode.HasFlag(OperandMode.IndirectB))
-  //       inst.OperandMode |= OperandMode.IndirectA;
-  //   }
-
-  //   private void ParseASimple(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.AddrBase = LookupAddr(ctx, OperandA.Addr);
-  //     if (OperandA.Addr.Indirect)
-  //       inst.OperandMode |= OperandMode.IndirectA;
-  //   }
-
-  //   private void ParseBSimple(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.OffsetB = LookupAddr(ctx, OperandB.Addr);
-  //     if (OperandB.Addr.Indirect)
-  //       inst.OperandMode |= OperandMode.IndirectB;
-  //   }
-
-  //   private void ParseABaseOffset(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.OperandMode |= OperandMode.AddrBaseOffAB;
-
-  //     if (OperandA.Base.Offset != null)
-  //       throw Invalid($"Cannot have offset base");
-
-  //     inst.AddrBase = LookupAddr(ctx, OperandA.Base);
-  //     if (OperandA.Base.Indirect)
-  //       inst.BaseIndirect = true;
-
-  //     if (OperandA.Addr.Offset == null)
-  //       throw Invalid($"Offset addr must have offset direction");
-
-  //     inst.OffsetA = LookupAddr(ctx, OperandA.Addr);
-  //     if (OperandA.Addr.Indirect)
-  //       inst.OperandMode |= OperandMode.IndirectA;
-  //   }
-
-  //   private void ParseAConst(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.AddrBase = LookupConst(ctx, OperandA.Consts, inst.AType);
-  //     if (OperandA.Consts.Indirect)
-  //       inst.OperandMode |= OperandMode.IndirectA;
-  //   }
-
-  //   private void ParseBConst(Context ctx, ref Instruction inst)
-  //   {
-  //     inst.OffsetB = LookupConst(ctx, OperandB.Consts, inst.BType);
-  //     if (OperandB.Consts.Indirect)
-  //       inst.OperandMode |= OperandMode.IndirectB;
-  //   }
-
-  //   private static int LookupConst(Context ctx, ConstExprList consts, DataType type)
-  //   {
-  //     if (consts.Indirect || consts.Addr) type = DataType.P24;
-  //     return ctx.ConstExprAddrs[(type, consts)];
-  //   }
-  // }
 }

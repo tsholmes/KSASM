@@ -7,6 +7,7 @@ namespace KSASM.Assembly
 {
   public class Assembler
   {
+    public const int DEFAULT_STRINGS_START = Processor.MAIN_MEM_SIZE - (2 << 20);
     public static bool Debug = false;
 
     public static DebugSymbols Assemble(SourceString source, MemoryAccessor target)
@@ -32,10 +33,24 @@ namespace KSASM.Assembly
 
       var sb = new StringBuilder();
 
+      var varray = new ValArray();
       foreach (var (addr, type, vals) in ctx.Values)
       {
-        for (var i = 0; i < vals.Count; i++)
-          target.Write(addr + i * type.SizeBytes(), type, vals[i]);
+        var tsize = type.SizeBytes();
+        varray.Mode = type.VMode();
+        for (var i = 0; i < vals.Length; i += 8)
+        {
+          var count = 8;
+          if (i + count > vals.Length)
+            count = vals.Length - count;
+
+          varray.Width = count;
+          ctx.RawValues[new FixedRange(vals.Start + i, count)].CopyTo(varray.Values);
+
+          target.Write(
+            new ValuePointer { Address = addr + tsize * i, Type = type, Width = (byte)count },
+            varray);
+        }
         if (Debug)
         {
           sb.Clear();
@@ -44,8 +59,8 @@ namespace KSASM.Assembly
             if (laddr == addr)
               sb.Append(label).Append(": ");
           sb.Append($"{addr}: {type}");
-          foreach (var val in vals)
-            sb.Append($" {val.As(type)}");
+          for (var i = vals.Start; i < vals.Length; i++)
+            sb.Append($" {ctx.RawValues[i].As(type)}");
           Console.WriteLine(sb.ToString());
         }
       }
@@ -130,7 +145,7 @@ namespace KSASM.Assembly
     public readonly AppendBuffer<FixedRange> ConstRanges = constRanges;
 
     public readonly AppendBuffer<Value> StringChars = new();
-    public readonly AppendBuffer<Value> InlineStringChars = new();
+    public readonly AppendBuffer<FixedRange> InlineStrings = new();
 
     public readonly Dictionary<string, int> Labels = [];
 
@@ -139,7 +154,8 @@ namespace KSASM.Assembly
 
     public int Addr = 0;
 
-    // Filled after first pass
+    // On first pass, stores the current length of all inline strings
+    // On second pass, stores the start memory address of all inline strings
     public int InlineStringStart = 0;
 
     public void EmitLabel(string label)
@@ -158,12 +174,34 @@ namespace KSASM.Assembly
 
     public ValueEmitter Emitter(DataType type) => new(this, type);
 
-    public bool TryAddString(Token tok, out FixedRange range) =>
-      TryAppendString(StringChars, Buffer[tok], out range);
+    public bool TryAddString(Token tok, out FixedRange range)
+    {
+      var start = StringChars.Length;
+      Span<Value> chunk = stackalloc Value[256];
+
+      var parser = new Token.StringParser(Buffer[tok]);
+      while (!parser.Done)
+      {
+        if (!parser.NextChunk(chunk, out var count))
+        {
+          StringChars.Length = start;
+          range = default;
+          return false;
+        }
+      }
+
+      range = new(start, StringChars.Length - start);
+      return true;
+    }
 
     // add InlineStringStart to Start after first pass to get actual memory range
-    public bool TryAddInlineString(Token tok, out FixedRange range) =>
-      TryAppendString(InlineStringChars, Buffer[tok], out range);
+    public FixedRange AddInlineString(FixedRange str)
+    {
+      InlineStrings.Add(str);
+      var res = new FixedRange(InlineStringStart, str.Length);
+      InlineStringStart = res.End;
+      return res;
+    }
 
     private static bool TryAppendString(AppendBuffer<Value> buf, ReadOnlySpan<char> data, out FixedRange range)
     {
@@ -187,9 +225,14 @@ namespace KSASM.Assembly
 
     public void EmitInlineStrings()
     {
-      // TODO: fill InlineStringStart with STRINGS label or default
-      // TODO: emit strings
-      throw new InvalidOperationException();
+      if (!Labels.TryGetValue("STRINGS", out InlineStringStart))
+        InlineStringStart = Labels["STRINGS"] = Assembler.DEFAULT_STRINGS_START;
+
+      Addr = InlineStringStart;
+      using var emitter = Emitter(DataType.U8);
+
+      foreach (var str in InlineStrings)
+        emitter.EmitString(str);
     }
 
     public Value EvalExpr(int index, ValueMode mode)
