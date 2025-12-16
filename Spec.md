@@ -156,12 +156,12 @@ Stack effects are listed in the form `Op:Type*Width ... -> Op:Type*Width`. Opera
 | | bzero | `A:p24*1 B*1 ->` | - | `if (B = 0) A -> PC` |
 | | bpos | `A:p24*1 B*1 ->` | - | `if (B > 0) A -> PC` |
 | | bneg | `A:p24*1 B*1 ->` | - | `if (B < 0) A -> PC` |
-| | blt | `A:p24*1 B*1 C*1 ->` | - | `if (B < C) A -> PC` |
-| | ble | `A:p24*1 B*1 C*1 ->` | - | `if (B <= C) A -> PC` |
-| | beq | `A:p24*1 B*1 C*1 ->` | - | `if (B = C) A -> PC` |
-| | bne | `A:p24*1 B*1 C*1 ->` | - | `if (B != C) A -> PC` |
-| | bge | `A:p24*1 B*1 C*1 ->` | - | `if (B >= C) A -> PC` |
-| | bgt | `A:p24*1 B*1 C*1 ->` | - | `if (B > C) A -> PC` |
+| | blt | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B < C) A -> PC` |
+| | ble | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B <= C) A -> PC` |
+| | beq | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B = C) A -> PC` |
+| | bne | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B != C) A -> PC` |
+| | bge | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B >= C) A -> PC` |
+| | bgt | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B > C) A -> PC` |
 | | sw | `A:p24 B*1 ->` | -, Unsigned | `if (B < Width) A[B] -> PC` |
 | <td colspan=3 align=center>**Function**</td> |
 | | call | `A:p24*1 -> PC FP` | - | `SP -> temp; push PC; push FP; temp -> FP; A -> PC` |

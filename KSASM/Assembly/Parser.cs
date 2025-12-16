@@ -280,6 +280,8 @@ namespace KSASM.Assembly
           parseGroup();
           PushConstOp(ConstOp.Neg, otoken.Index);
         }
+        else if (TakeType(TokenType.Plus))
+          parseGroup();
         else if (TakeType(TokenType.Not, out var bntoken))
         {
           parseGroup();

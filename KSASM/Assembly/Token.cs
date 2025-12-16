@@ -33,7 +33,7 @@ namespace KSASM.Assembly
   {
     public static bool TryParseType(ReadOnlySpan<char> data, out DataType type)
     {
-      if (data.Length < 2 || char.IsAsciiDigit(data[0]))
+      if (data.Length < 2 || char.IsAsciiDigit(data[1]))
       {
         type = default;
         return false;

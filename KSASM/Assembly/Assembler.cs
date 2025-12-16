@@ -42,7 +42,7 @@ namespace KSASM.Assembly
         {
           var count = 8;
           if (i + count > vals.Length)
-            count = vals.Length - count;
+            count = vals.Length - i;
 
           varray.Width = count;
           ctx.RawValues[new FixedRange(vals.Start + i, count)].CopyTo(varray.Values);
@@ -81,7 +81,7 @@ namespace KSASM.Assembly
       return Invalid(token);
     }
 
-    protected Exception Invalid(Token token) =>
+    public Exception Invalid(Token token) =>
       throw new InvalidOperationException($"invalid token {token.Type} '{buffer[token]}'\n{StackPos(token)}");
 
     public static string StackPos(ParseBuffer buffer, Token token, int frameLimit = 20)

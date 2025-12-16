@@ -49,17 +49,17 @@ namespace KSASM.Assembly
       if (Data.Width is Token wtoken)
       {
         if (!Token.TryParseValue(ctx.Buffer[wtoken], out var wval, out var wmode))
-          throw Invalid(wtoken);
+          throw ctx.Invalid(wtoken);
         wval.Convert(wmode, ValueMode.Unsigned);
         if (wval.Unsigned > 1024)
-          throw Invalid(wtoken);
+          throw ctx.Invalid(wtoken);
         width = (int)wval.Unsigned;
       }
 
       if (Data.Value is Token { Type: TokenType.String } strTok)
       {
         if (!ctx.TryAddString(strTok, out stringRange))
-          throw Invalid(strTok);
+          throw ctx.Invalid(strTok);
       }
 
       ctx.Addr += Data switch
@@ -68,7 +68,7 @@ namespace KSASM.Assembly
         { Value: Token { Type: TokenType.String }, Type: DataType.U8 } => stringRange.Length * typeSize,
         { Value: Token { Type: TokenType.String }, Type: DataType.S48 } =>
           (stringRange.Length * DataType.U8.SizeBytes()) + typeSize, // N S48 pointers + N copies of string
-        { Value: Token { Type: TokenType.String } tok } => throw Invalid(tok),
+        { Value: Token { Type: TokenType.String } tok } => throw ctx.Invalid(tok),
         _ => typeSize,
       } * width; ;
     }
@@ -118,7 +118,7 @@ namespace KSASM.Assembly
         case { Value: Token { Type: TokenType.Word } tok }:
           {
             if (!ctx.Labels.TryGetValue(new(ctx.Buffer[tok]), out var addr))
-              throw Invalid(tok);
+              throw ctx.Invalid(tok);
 
             var val = new Value { Unsigned = (ulong)addr };
             val.Convert(ValueMode.Unsigned, mode);
@@ -131,7 +131,7 @@ namespace KSASM.Assembly
         case { Value: Token { Type: TokenType.Number } tok }:
           {
             if (!Token.TryParseValue(ctx.Buffer[tok], out var val, out var vmode))
-              throw Invalid(tok);
+              throw ctx.Invalid(tok);
             val.Convert(vmode, mode);
 
             using var emitter = ctx.Emitter(Data.Type);
@@ -140,12 +140,9 @@ namespace KSASM.Assembly
           }
           break;
         default:
-          throw Invalid(Data.Value);
+          throw ctx.Invalid(Data.Value);
       }
     }
-
-    // TODO
-    private Exception Invalid(Token tok) => throw new InvalidOperationException($"Invalid token {tok.Type}");
   }
 
   public class InstructionStatement(ParsedInstruction parsedInst) : Statement
@@ -163,24 +160,24 @@ namespace KSASM.Assembly
     public override void FirstPass(Context ctx)
     {
       if (!Token.TryParseOpCode(ctx.Buffer[Inst.OpCode], out opCode))
-        throw Invalid(Inst.OpCode);
+        throw ctx.Invalid(Inst.OpCode);
       info = OpCodeInfo.For(opCode);
 
       DataType? defType = null;
       if (Inst.DefaultType is Token dttoken)
       {
         if (!Token.TryParseType(ctx.Buffer[dttoken], out var type))
-          throw Invalid(dttoken);
+          throw ctx.Invalid(dttoken);
         defType = type;
       }
       if (Inst.Width is Token wtoken)
       {
         if (!Token.TryParseValue(ctx.Buffer[wtoken], out var val, out var mode))
-          throw Invalid(wtoken);
+          throw ctx.Invalid(wtoken);
         val.Convert(mode, ValueMode.Unsigned);
         width = (int)val.Unsigned;
         if (width < 1 || width > 8)
-          throw Invalid(wtoken);
+          throw ctx.Invalid(wtoken);
       }
 
       var pin = Inst.ResultIndex != -1 ? Inst.ResultIndex : Inst.OperandCount;
@@ -210,8 +207,10 @@ namespace KSASM.Assembly
           rop.ExprVal = pop.ExprVal;
           if (pop.Type is Token ttoken)
           {
-            if (opInfo.Type != null || !Token.TryParseType(ctx.Buffer[ttoken], out var type))
-              throw Invalid(ttoken);
+            if (!Token.TryParseType(ctx.Buffer[ttoken], out var type))
+              throw ctx.Invalid(ttoken);
+            if (opInfo.Type != null && opInfo.Type != type)
+              throw ctx.Invalid(ttoken);
             ptype = type;
           }
         }
@@ -245,7 +244,7 @@ namespace KSASM.Assembly
           {
             // u8 strings are included inline
             if (!ctx.TryAddString(stok, out rop.String))
-              throw Invalid(stok);
+              throw ctx.Invalid(stok);
             // truncate to width if its too wide
             if (rop.String.Length > rop.Width)
               rop.String = new(rop.String.Start, rop.Width);
@@ -254,14 +253,14 @@ namespace KSASM.Assembly
           {
             // s48 strings are allocated separately and a pointer is stored inline
             if (!ctx.TryAddString(stok, out var str))
-              throw Invalid(stok);
+              throw ctx.Invalid(stok);
             rop.String = ctx.AddInlineString(str);
             // duplicate the string by width so each s48 val points to a different copy
             for (var i = 1; i < rop.Width; i++)
               ctx.AddInlineString(str);
           }
           else
-            throw Invalid(stok);
+            throw ctx.Invalid(stok);
         }
       }
     }
@@ -299,7 +298,7 @@ namespace KSASM.Assembly
         else if (rop.Value is Token { Type: TokenType.Number } ntok)
         {
           if (!Token.TryParseValue(ctx.Buffer[ntok], out vals[0], out var vmode))
-            throw Invalid(ntok);
+            throw ctx.Invalid(ntok);
           vals[0].Convert(vmode, mode);
           for (var i = 1; i < rop.Width; i++)
             vals[i] = vals[0];
@@ -307,7 +306,7 @@ namespace KSASM.Assembly
         else if (rop.Value is Token { Type: TokenType.Word } ltok)
         {
           if (!ctx.Labels.TryGetValue(new(ctx.Buffer[ltok]), out var addr))
-            throw Invalid(ltok);
+            throw ctx.Invalid(ltok);
 
           vals[0].Unsigned = (ulong)addr;
           vals[0].Convert(ValueMode.Unsigned, mode);
@@ -332,10 +331,10 @@ namespace KSASM.Assembly
             }
           }
           else
-            throw Invalid(stok);
+            throw ctx.Invalid(stok);
         }
         else
-          throw Invalid(rop.Value ?? Inst.OpCode);
+          throw ctx.Invalid(rop.Value ?? Inst.OpCode);
 
         emitter.EmitRange(vals[..rop.Width]);
       }
@@ -353,7 +352,6 @@ namespace KSASM.Assembly
     }
 
     // TODO
-    private Exception Invalid(Token tok) => throw new InvalidOperationException($"Invalid token {tok.Type}");
     private Exception InvalidInst(string msg) => throw new InvalidOperationException(msg);
 
     private struct ResolvedOperand

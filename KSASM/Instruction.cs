@@ -1,4 +1,5 @@
 
+using System;
 using KSASM.Assembly;
 
 namespace KSASM
@@ -39,6 +40,14 @@ namespace KSASM
       Encoding.AType.Encode((ulong)AType) |
       Encoding.BType.Encode((ulong)BType) |
       Encoding.CType.Encode((ulong)CType);
+
+    public readonly DataType Type(int idx) => idx switch
+    {
+      0 => AType,
+      1 => BType,
+      2 => CType,
+      _ => throw new IndexOutOfRangeException($"{idx}"),
+    };
 
     public void Format(ref LineBuilder line, DebugSymbols debug = null)
     {

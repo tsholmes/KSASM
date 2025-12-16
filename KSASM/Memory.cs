@@ -130,7 +130,7 @@ namespace KSASM
     public void Read(ValuePointer ptr, ValArray vals)
     {
       if (DebugRead)
-        Console.WriteLine($"READ {ptr.Address} {ptr.Type}*{ptr.Width}");
+        Console.WriteLine($"READ {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
       ReadToBuf(ptr.Address, elSize * ptr.Width);
 
@@ -144,7 +144,7 @@ namespace KSASM
     public Value Read(int addr, DataType type)
     {
       if (DebugRead)
-        Console.WriteLine($"READ {addr} {type}");
+        Console.WriteLine($"READ {addr:X6} {type}");
       ReadToBuf(addr, type.SizeBytes());
       return DecodeAt(0, type);
     }
@@ -152,7 +152,7 @@ namespace KSASM
     public void Write(ValuePointer ptr, ValArray vals)
     {
       if (DebugWrite)
-        Console.WriteLine($"WRITE {ptr.Address} {ptr.Type}*{ptr.Width}");
+        Console.WriteLine($"WRITE {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
 
       if (ptr.Width != vals.Width)
@@ -169,7 +169,7 @@ namespace KSASM
     public void Write(int addr, DataType type, Value value)
     {
       if (DebugWrite)
-        Console.WriteLine($"WRITE {addr} {type}");
+        Console.WriteLine($"WRITE {addr:X6} {type}");
       EncodeAt(0, type, value);
       WriteFromBuf(addr, type.SizeBytes());
     }
