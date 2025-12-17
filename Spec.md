@@ -54,7 +54,7 @@ Specifies the data type of an input or output
 * For each operand up to ImmCount
   * Operand is read from PC
   * PC is advanced by size of Operand (sizeof(DataType) * Width)
-* Non-immediate input operands are popped off the stack in reverse order C,B,A
+* Non-immediate input operands are popped off the stack in order A,B,C
 * Computation is performed
 * Result operands are pushed onto the stack in order A,B,C
 
@@ -82,7 +82,7 @@ Stack effects are listed in the form `Op:Type*Width ... -> Op:Type*Width`. Opera
 | <td colspan=3 align=center>**Stack Manipulation**</td> |
 | | push | `A -> ` | - | `push A` |
 | | pop | `A ->` | - | - |
-| | dup | `A*1 -> B` | - | `A -> B[i]` (duplicates `A` `Width` times) |
+| | dup | `A:u8*1 B ->` | - | `repeat clamp(A,2,8) push B` (duplicates B up to 8 times) |
 | | swz | `A:u8 B -> C` | - | `B[A[i]%Width] -> C[i]` |
 | <td colspan=3 align=center>**Memory Load/Store**</td> |
 | | ld | `A:p24*1 -> B` | - | `Mem[A] -> B`|
@@ -156,15 +156,16 @@ Stack effects are listed in the form `Op:Type*Width ... -> Op:Type*Width`. Opera
 | | bzero | `A:p24*1 B*1 ->` | - | `if (B = 0) A -> PC` |
 | | bpos | `A:p24*1 B*1 ->` | - | `if (B > 0) A -> PC` |
 | | bneg | `A:p24*1 B*1 ->` | - | `if (B < 0) A -> PC` |
-| | blt | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B < C) A -> PC` |
-| | ble | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B <= C) A -> PC` |
-| | beq | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B = C) A -> PC` |
-| | bne | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B != C) A -> PC` |
-| | bge | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B >= C) A -> PC` |
-| | bgt | `A:p24*1 B*1 C*1 ->` | -,-,B | `if (B > C) A -> PC` |
+| | blt | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B < C) A -> PC` |
+| | ble | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B <= C) A -> PC` |
+| | beq | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B = C) A -> PC` |
+| | bne | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B != C) A -> PC` |
+| | bge | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B >= C) A -> PC` |
+| | bgt | `A:p24*1 B*1 C*1 ->` | -, -, B | `if (B > C) A -> PC` |
 | | sw | `A:p24 B*1 ->` | -, Unsigned | `if (B < Width) A[B] -> PC` |
 | <td colspan=3 align=center>**Function**</td> |
 | | call | `A:p24*1 -> PC FP` | - | `SP -> temp; push PC; push FP; temp -> FP; A -> PC` |
+| | adjf | `A:p24*1` | - | `pop temp:p24*2; SP+A -> SP; SP -> FP; push temp`<br/>when return FP,PC on stack, move on stack by A and save addr in FP |
 | | ret | `PC FP ->` | - | `pop FP; pop PC` |
 | <td colspan=3 align=center>**Misc**</td> |
 | | rand | `A -> B` | - | `rand(A[i]) -> B[i]` (`[0, x)` when `x>0`, `(x, \|x\|)` when `x<0`) |

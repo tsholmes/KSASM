@@ -10,6 +10,7 @@ namespace KSASM
     public const int ADDR_MASK = MAIN_MEM_SIZE - 1;
 
     public static bool DebugOps = false;
+    public static bool DebugOperands = false;
 
     public readonly ByteArrayMemory MainMemory;
     public readonly MappedMemory MappedMemory;
@@ -103,18 +104,18 @@ namespace KSASM
         op.Type = info[i].Type ?? inst.Type(i);
         op.Width = (byte)(info[i].Width ?? inst.Width);
       }
-      // fill stack pointers for non-immediate
-      for (var i = info.InOps; --i >= inst.ImmCount;)
-      {
-        ref var op = ref Ptr(i);
-        op.Address = Pop(ref op);
-      }
       // fill immediate pointers
       for (var i = 0; i < inst.ImmCount; i++)
       {
         ref var op = ref Ptr(i);
         op.Address = PC;
         ModPC(op.Type.SizeBytes() * op.Width);
+      }
+      // fill stack pointers for non-immediate
+      for (var i = inst.ImmCount; i < info.InOps; i++)
+      {
+        ref var op = ref Ptr(i);
+        op.Address = Pop(ref op);
       }
       // read input ops
       for (var i = info.InOps; --i >= 0;)
@@ -132,6 +133,11 @@ namespace KSASM
 
       if (DebugOps)
         Console.WriteLine($"{initPC - 3:X6}: {inst.OpCode}*{inst.Width} {Aptr.Type}*{Aptr.Width} {Bptr.Type}*{Bptr.Width} {Cptr.Type}*{Cptr.Width} (FP {FP:X6}, SP {SP:X6})");
+      if (DebugOperands)
+      {
+        for (var i = 0; i < info.InOps; i++)
+          Console.WriteLine($"  IN {"ABC"[i]}: {Op(i)}");
+      }
 
       ExecOp(inst.OpCode);
 
@@ -142,6 +148,8 @@ namespace KSASM
         ref var op = ref Ptr(idx);
         op.Address = Push(ref op);
         Memory.Write(op, Op(idx));
+        if (DebugOperands)
+          Console.WriteLine($"  OUT {"ABC"[idx]}: {Op(idx)}");
       }
     }
 
@@ -224,6 +232,7 @@ namespace KSASM
         case OpCode.bgt: OpBgt(); break;
         case OpCode.sw: OpSw(); break;
         case OpCode.call: OpCall(); break;
+        case OpCode.adjf: OpAdjf(); break;
         case OpCode.ret: OpRet(); break;
         case OpCode.rand: OpRand(); break;
         case OpCode.sleep: OpSleep(); break;

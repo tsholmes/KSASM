@@ -19,7 +19,8 @@ namespace KSASM
       MacroParser.DebugMacros = pargs.HasFlag("debug", "macro");
       MemoryAccessor.DebugRead = pargs.HasFlag("debug", "read") || pargs.HasFlag("debug", "mem");
       MemoryAccessor.DebugWrite = pargs.HasFlag("debug", "write") || pargs.HasFlag("debug", "mem");
-      Processor.DebugOps = pargs.HasFlag("debug", "ops");
+      Processor.DebugOps = pargs.HasFlag("debug", "ops") || pargs.HasFlag("debug", "operands");
+      Processor.DebugOperands = pargs.HasFlag("debug", "operands");
 
       KSASMMod.CWD = Directory.GetCurrentDirectory();
 
@@ -39,6 +40,10 @@ namespace KSASM
 
       Library.Init(KSASMMod.CWD);
       Library.RefreshIndex();
+
+      var limit = 10000000;
+      if (pargs.Val("limit", out var slimit))
+        limit = int.Parse(slimit);
 
       var scriptName = pargs.Positional(0, out var sname) ? sname : "hello_world";
 
@@ -64,7 +69,7 @@ namespace KSASM
 
       var asmTime = stopwatch.Elapsed.TotalMilliseconds;
 
-      for (var i = 0; i < 10000000 && proc.SleepTime == 0; i++)
+      for (var i = 0; i < limit && proc.SleepTime == 0; i++)
         proc.Step();
 
       var runTime = stopwatch.Elapsed.TotalMilliseconds - asmTime;

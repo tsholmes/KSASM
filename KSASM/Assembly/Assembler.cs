@@ -58,9 +58,14 @@ namespace KSASM.Assembly
           foreach (var (label, laddr) in ctx.Labels)
             if (laddr == addr)
               sb.Append(label).Append(": ");
-          sb.Append($"{addr}: {type}");
-          for (var i = vals.Start; i < vals.Length; i++)
-            sb.Append($" {ctx.RawValues[i].As(type)}");
+          sb.Append($"{addr:X6}: {type}");
+          for (var i = vals.Start; i < vals.End; i++)
+          {
+            if (type == DataType.P24)
+              sb.Append($" {ctx.RawValues[i].As(type):X6}");
+            else
+              sb.Append($" {ctx.RawValues[i].As(type)}");
+          }
           Console.WriteLine(sb.ToString());
         }
       }
@@ -166,8 +171,13 @@ namespace KSASM.Assembly
 
     public void EmitInst(Token token, ulong encoded)
     {
+      if (Assembler.Debug)
+      {
+        var inst = Instruction.Decode(encoded);
+        Console.WriteLine($"ASM INST {Addr:X6}: {inst.OpCode}*{inst.Width} {inst.AType} {inst.BType} {inst.CType}");
+      }
+
       Symbols.AddInst(Addr, token.Index);
-      // TODO
       using var emitter = Emitter(DataType.P24);
       emitter.Emit(new() { Unsigned = encoded });
     }

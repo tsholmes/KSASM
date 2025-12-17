@@ -26,7 +26,7 @@ namespace KSASM
     public static Instruction Decode(ulong encoded) => new()
     {
       OpCode = (OpCode)Encoding.OpCode.Decode(encoded),
-      Width = (byte)Encoding.Width.Decode(encoded),
+      Width = (byte)(Encoding.Width.Decode(encoded) + 1u),
       ImmCount = (byte)Encoding.ImmCount.Decode(encoded),
       AType = (DataType)Encoding.AType.Decode(encoded),
       BType = (DataType)Encoding.BType.Decode(encoded),
@@ -35,7 +35,7 @@ namespace KSASM
 
     public readonly ulong Encode() =>
       Encoding.OpCode.Encode((ulong)OpCode) |
-      Encoding.Width.Encode(Width) |
+      Encoding.Width.Encode(Width - 1u) |
       Encoding.ImmCount.Encode(ImmCount) |
       Encoding.AType.Encode((ulong)AType) |
       Encoding.BType.Encode((ulong)BType) |

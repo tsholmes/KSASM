@@ -22,6 +22,16 @@ namespace KSASM
       Memory.Write(ptr, val);
     }
 
+    private void SetupOp(int idx, DataType type, int width)
+    {
+      var op = Op(idx);
+      ref var ptr = ref Ptr(idx);
+      op.Mode = type.VMode();
+      op.Width = width;
+      ptr.Type = type;
+      ptr.Width = (byte)width;
+    }
+
     private void Unary(UnaryOp op)
     {
       var ops = A.Mode.Ops();
@@ -100,7 +110,12 @@ namespace KSASM
 
     private void OpPush() => WriteAt(Push(ref Aptr), Aptr, A);
     private void OpPop() { }
-    private void OpDup() => B.Values.AsSpan(0, B.Width).Fill(A.Values[0]);
+    private void OpDup()
+    {
+      var count = Math.Clamp((int)A.Values[0].Unsigned, 2, 8);
+      for (var i = 0; i < count; i++)
+        WriteAt(Push(ref Bptr), Bptr, B);
+    }
     private void OpSwz()
     {
       var cmode = C.Mode;
@@ -189,22 +204,23 @@ namespace KSASM
     private void OpCall()
     {
       var newFP = SP;
-      B.Mode = ValueMode.Unsigned;
-      B.Width = 2;
-      Bptr.Type = DataType.P24;
-      Bptr.Width = 2;
+      SetupOp(1, DataType.P24, 2);
       B.Values[0].Unsigned = (ulong)FP;
       B.Values[1].Unsigned = (ulong)PC;
       WriteAt(Push(ref Bptr), Bptr, B);
       FP = newFP;
       PC = (int)A.Values[0].Unsigned & ADDR_MASK;
     }
+    private void OpAdjf()
+    {
+      SetupOp(1, DataType.P24, 2);
+      ReadAt(Pop(ref Bptr), Bptr, B);
+      FP = SP = (SP + (int)A.Values[0].Unsigned) & ADDR_MASK;
+      WriteAt(Push(ref Bptr), Bptr, B);
+    }
     private void OpRet()
     {
-      A.Mode = ValueMode.Unsigned;
-      A.Width = 2;
-      Aptr.Type = DataType.P24;
-      Aptr.Width = 2;
+      SetupOp(0, DataType.P24, 2);
       ReadAt(Pop(ref Aptr), Aptr, A);
       FP = (int)A.Values[0].Unsigned & ADDR_MASK;
       PC = (int)A.Values[1].Unsigned & ADDR_MASK;

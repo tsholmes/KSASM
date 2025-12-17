@@ -109,6 +109,7 @@ namespace KSASM
     sw,
     // Function
     call,
+    adjf,
     ret,
     // Misc
     rand,
@@ -168,7 +169,7 @@ namespace KSASM
 
       infos[(int)OpCode.push] =
         infos[(int)OpCode.pop] = in1;
-      infos[(int)OpCode.dup] = new(1, 1) { A = x1 };
+      infos[(int)OpCode.dup] = new(2, 0) { A = new() { Type = DataType.U8, Width = 1 } };
       infos[(int)OpCode.swz] = new(2, 1) { A = u8 };
       infos[(int)OpCode.ld] =
         infos[(int)OpCode.ldf] =
@@ -241,6 +242,7 @@ namespace KSASM
         infos[(int)OpCode.bgt] = br2;
       infos[(int)OpCode.sw] = new(2, 0) { A = p24, B = x1 };
       infos[(int)OpCode.call] = br0;
+      infos[(int)OpCode.adjf] = br0;
       infos[(int)OpCode.ret] = new(0, 0);
       infos[(int)OpCode.rand] = unary;
       infos[(int)OpCode.sleep] = new(1, 0) { A = x1 };
