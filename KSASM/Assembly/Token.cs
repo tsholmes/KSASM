@@ -96,7 +96,7 @@ namespace KSASM.Assembly
 
     public ref struct StringParser(ReadOnlySpan<char> data)
     {
-      private ReadOnlySpan<char> data = data[1..1];
+      private ReadOnlySpan<char> data = data[1..^1];
 
       public bool Done => data.Length == 0;
 

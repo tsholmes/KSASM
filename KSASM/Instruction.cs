@@ -51,6 +51,37 @@ namespace KSASM
 
     public void Format(ref LineBuilder line, DebugSymbols debug = null)
     {
+      var info = OpCodeInfo.For(OpCode);
+
+      line.Add(OpCode, "g");
+      line.Add('(');
+      line.Add(ImmCount, "g");
+      line.Add(')');
+
+      for (var i = 0; i < info.InOps; i++)
+      {
+        var opInfo = info[i];
+        if (i < ImmCount)
+          line.Add(" <>");
+        else
+          line.Add(" _");
+        line.Add(opInfo.Type ?? Type(i));
+        line.Add('*');
+        line.Add(opInfo.Width ?? Width, "g");
+      }
+
+      line.Add("->");
+
+      for (var i = 0; i < info.OutOps; i++)
+      {
+        var j = i + info.InOps;
+        var opInfo = info[j];
+        line.Add(" _");
+        line.Add(opInfo.Type ?? Type(j));
+        line.Add('*');
+        line.Add(opInfo.Width ?? Width, "g");
+      }
+
       // TODO
 
       // var sameTypes = AType == BType;

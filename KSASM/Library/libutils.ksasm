@@ -3,41 +3,70 @@
 .macro withns(ns, inner) .if(ns) { .ns ns } inner .if(ns) { .endns }
 .macro type(name, vals) .macro name(ns) { .withns(ns, { vals }) }
 
-.macro _fn_arg_name(type, name, width, out) name
-.macro _fn_arg_lname(fname, name) .concat(fname ..tomacro(name))
-.macro _fn_arg_gname(fname, name) ..addns(._fn_arg_lname(fname, name))
-
-.macro _fn_arg_label(fname, type, name, width) type ..label(._fn_arg_lname(fname, name)) 0 width
-.macro _fn_arg_labels(fname, arg, ...args) ..if(arg) { .._fn_arg_label(fname, arg) .._fn_arg_labels(fname, args) }
-
-.macro _fn_in_arg(fname, type, name, width) {
-  copy width .._fn_arg_gname(fname, name) type, name
+.macro memcpy.big(n) {
+  ldf:p24 (-9) # from
+  ld:u64*n
+  ldf:p24 (-12) # to
+  st:u64*n
+  add:u64 (n*64,n*64,-n*64)
 }
-.macro _fn_in_args(fname, arg, ...args) ..if(arg) { .._fn_in_arg(fname, arg) .._fn_in_args(fname, args) }
-
-.macro _fn_out_arg(fname, type, name, width, out) {
-  ..if(out) { copy width name, .._fn_arg_gname(fname, name) type }
+# don't bother adjusting pointers after final small copy
+.macro memcpy.small(n) {
+  ldf:p24 (-9) # from
+  ld:u8*n
+  ldf:p24 (-12) # to
+  st:u8*n
 }
-.macro _fn_out_args(fname, arg, ...args) ..if(arg) { .._fn_out_arg(fname, arg) .._fn_out_args(fname, args) }
 
-.macro _fn_macro_arg(arg, ...args) ..if(arg) { , .._fn_arg_name(arg) .._fn_macro_arg(args) }
-.macro _fn_macro_args(arg, ...args) ( ..if(arg) { .._fn_arg_name(arg) .._fn_macro_arg(args) } )
-
-# each arg is {:type, name, *width?, out?}
-.macro fn(name, ...args) {
-  ..macro _retname ..concat(name .ret)
-  ..macro _retname_full ..addns(._retname)
-  :p24 .label(.._retname) 0
-  .._fn_arg_labels(name, args)
-  .macro ..concat(name .fnret) [.._retname_full]:p24
-  .macro name .._fn_macro_args(args) {
-    .._fn_in_args(name, args)
-    call:p24 .._retname_full, ..addns(name)
-    .._fn_out_args(name, args)
-  }
-  ..unmacro _retname_full
-  ..unmacro _retname
-  .label(name)
-}
+# to +0 :p24
+# from +3 :s48
+# to from ->
+# copies memory from:s48 into to:p24
+memcpy:
+  ldf:p24*3 (+0)
+  # to@f-15 from@f-12 len@f-9
+memcpy.big:
+  ldf:p24 (-9)
+  div:p24 8
+  sw:p24 (memcpy.small, memcpy.big1, memcpy.big2, memcpy.big3, \
+    memcpy.big4, memcpy.big5, memcpy.big6, memcpy.big7)
+  # on fallthrough we have at least 8
+  .memcpy.big(8)
+  jump memcpy.big
+memcpy.big1: .memcpy.big(1)
+  jump memcpy.small
+memcpy.big2: .memcpy.big(2)
+  jump memcpy.small
+memcpy.big3: .memcpy.big(3)
+  jump memcpy.small
+memcpy.big4: .memcpy.big(4)
+  jump memcpy.small
+memcpy.big5: .memcpy.big(5)
+  jump memcpy.small
+memcpy.big6: .memcpy.big(6)
+  jump memcpy.small
+memcpy.big7: .memcpy.big(7)
+memcpy.small:
+  # len will be 0-7 at this point
+  ldf:p24 (-9)
+  sw:p24 (memcpy.end, memcpy.small1, memcpy.small2, memcpy.small3, \
+    memcpy.small4, memcpy.small5, memcpy.small6)
+  .memcpy.small(7)
+  jump memcpy.end
+memcpy.small1: .memcpy.small(1)
+  jump memcpy.end
+memcpy.small2: .memcpy.small(2)
+  jump memcpy.end
+memcpy.small3: .memcpy.small(3)
+  jump memcpy.end
+memcpy.small4: .memcpy.small(4)
+  jump memcpy.end
+memcpy.small5: .memcpy.small(5)
+  jump memcpy.end
+memcpy.small6: .memcpy.small(6)
+memcpy.end:
+  pop:p24*3
+  adjf (+9)
+  ret
 
 } # end if

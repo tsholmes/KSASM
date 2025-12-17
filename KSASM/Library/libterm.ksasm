@@ -1,5 +1,4 @@
 .import libutils
-.import libstring
 .import libsystem
 
 .ifndef libterm { .macro libterm
@@ -8,71 +7,94 @@
 .region data 2048
 
 :p24 ptr: system.terminal_data 0
-:u64 temp: 0 temp1: 0
-:p24 temps: 0*2
 
-.macro _lstart {
-  sub:p24 term.ptr, $(system.terminal_data)
-  and:p24 term.ptr, $(~31)
-  add:p24 term.ptr, $(system.terminal_data)
-}
+.macro line(n) (system.terminal_data+32*n)
 
-.fn(clear)
-  copy:p24 term.ptr, $(system.terminal_data)
-  copy:u64*8 $[system.terminal_data+64*0], $(0)
-  copy:u64*8 $[system.terminal_data+64*1], $(0)
-  copy:u64*8 $[system.terminal_data+64*2], $(0)
-  copy:u64*8 $[system.terminal_data+64*3], $(0)
-  copy:u64*8 $[system.terminal_data+64*4], $(0)
-  copy:u64*8 $[system.terminal_data+64*5], $(0)
-  copy:u64*8 $[system.terminal_data+64*6], $(0)
-  copy:u64*8 $[system.terminal_data+64*7], $(0)
-  jump _, .term.clear.fnret
+# clear the terminal and reset cursor to top-left
+clear:
+  st term.ptr system.terminal_data:p24
+  st:u64*8 .term.line(0) 0
+  st:u64*8 .term.line(2) 0
+  st:u64*8 .term.line(4) 0
+  st:u64*8 .term.line(6) 0
+  st:u64*8 .term.line(8) 0
+  st:u64*8 .term.line(10) 0
+  st:u64*8 .term.line(12) 0
+  st:u64*8 .term.line(14) 0
+  ret
 
-.fn(up)
-  copy:u64*8 $[system.terminal_data+32*0], $[system.terminal_data+32*1]
-  copy:u64*8 $[system.terminal_data+32*2], $[system.terminal_data+32*3]
-  copy:u64*8 $[system.terminal_data+32*4], $[system.terminal_data+32*5]
-  copy:u64*8 $[system.terminal_data+32*6], $[system.terminal_data+32*7]
-  copy:u64*8 $[system.terminal_data+32*8], $[system.terminal_data+32*9]
-  copy:u64*8 $[system.terminal_data+32*10], $[system.terminal_data+32*11]
-  copy:u64*8 $[system.terminal_data+32*12], $[system.terminal_data+32*13]
-  copy:u64*8 $[system.terminal_data+32*14], $[system.terminal_data+32*15]
-  copy:u64*4 $[system.terminal_data+32*15], $(0)
-  .term._lstart
-  sub:p24 term.ptr, $(32)
-  jump _, .term.up.fnret
+# shift all lines up
+# shift cursor up and to the beginning of line
+up:
+  ld:u64*8 .term.line(1)
+  st:u64*8 .term.line(0)
+  ld:u64*8 .term.line(3)
+  st:u64*8 .term.line(2)
+  ld:u64*8 .term.line(5)
+  st:u64*8 .term.line(4)
+  ld:u64*8 .term.line(7)
+  st:u64*8 .term.line(6)
+  ld:u64*8 .term.line(9)
+  st:u64*8 .term.line(8)
+  ld:u64*8 .term.line(11)
+  st:u64*8 .term.line(10)
+  ld:u64*8 .term.line(13)
+  st:u64*8 .term.line(12)
+  ld:u64*8 .term.line(15)
+  st:u64*8 .term.line(14)
+  st:u64*4 .term.line(15) 0
+  ld:p24 term.ptr
+  sub:p24 system.terminal_data
+  and:p24 (~31) # line start
+  sub:p24 32 # line up
+  max:p24 0 # don't move cursor before start
+  add:p24 system.terminal_data
+  st:p24 term.ptr
+  ret
 
-.fn(_tryup)
-  copy term.temp:i64, term.ptr:p24
-  sub:i64 term.temp, $(system.terminal_data+32*16)
-  bneg term.temp:i64, .term._tryup.fnret
-  copy:p24 term.up.ret, term._tryup.ret
-  jump:p24 term.up, _
+# shift up if cursor is at end
+_tryup:
+  ld:p24 term.ptr
+  bge:p24 term.up .term.line(16)
+  ret
 
-.fn(nl)
-  .term._lstart
-  add:p24 term.ptr, $(32)
-  copy:p24 term._tryup.ret, term.nl.ret
-  jump:p24 term._tryup, _
+# shift up if cursor on last line
+# move cursor to start of next line
+nl:
+  ld:p24 term.ptr
+  sub:p24 system.terminal_data
+  and:p24 (~31)
+  add:p24 32
+  jump term._tryup
 
-.fn(print, {:p24, msg, *2})
-  copy term.temp:i64, term.ptr:p24
-  sub:i64 term.temp, $(system.terminal_data)
-  and:i64 term.temp, $(~31)
-  add:i64 term.temp, $(32)
-  add:i64 term.temp, $(system.terminal_data)
-  sub term.temp:i64, term.ptr:p24
-  min term.temp:i64, $[term.print.msg+3]:p24
-  copy $[term.temp+3]:p24, term.temp:i64
-  copy term.temp:p24, term.print.msg
-  .str.copy(term.ptr:p24, term.temp:p24)
-  add:p24 term.ptr, $[term.temp+3]
-  add:p24 term.print.msg, $[term.temp+3]
-  sub:p24 $[term.print.msg+3], $[term.temp+3]
-  .term._tryup
-  bpos:p24 $[term.print.msg+3], term.print
-  jump _, .term.print.fnret
+# print the string to the current terminal cursor
+# shift up lines as needed
+# str :s48 +0
+#   str.ptr :p24 +0
+#   str.len :p24 +3
+print:
+  ldf:p24 (+3) # str.len
+  ld:p24 term.ptr
+  add:p24
+  min:p24 .term.line(16)
+  ld:p24 term.ptr
+  sub:p24 # str.len capped at terminal end
+  dup:p24 4
+  ldf:p24 (+0) # str.ptr
+  ld:p24 term.ptr
+  call memcpy
+  ld:p24 term.ptr
+  add:p24
+  st:p24 term.ptr
+  call term._tryup
+  mul:p24 (1,-1)
+  ldf:s48 (+0)
+  add:p24*2
+  stf:s48 (+0)
+  ldf:p24 (+3)
+  bpos:p24 term.print
+  adjf (+6)
+  ret
 
 .endns
 }

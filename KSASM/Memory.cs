@@ -178,7 +178,12 @@ namespace KSASM
     {
       var val = Encoding.Decode(From(index), type);
       if (DebugRead)
-        Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      {
+        if (type == DataType.P24)
+          Console.WriteLine($"  {index} {type} = {val.As(type):X6}");
+        else
+          Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      }
       return val;
     }
 
@@ -186,7 +191,12 @@ namespace KSASM
     {
       Encoding.Encode(From(index), type, val);
       if (DebugWrite)
-        Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      {
+        if (type == DataType.P24)
+          Console.WriteLine($"  {index} {type} = {val.As(type):X6}");
+        else
+          Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      }
     }
   }
 }

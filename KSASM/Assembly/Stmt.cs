@@ -184,9 +184,9 @@ namespace KSASM.Assembly
       var pout = Inst.OperandCount - pin;
 
       if (pin > info.InOps)
-        throw InvalidInst($"invalid input count");
+        throw ctx.Invalid(Inst.OpCode, $"invalid input count ({pin} > {info.InOps}):");
       if (pout > info.OutOps)
-        throw InvalidInst($"invalid output count");
+        throw ctx.Invalid(Inst.OpCode, $"invalid output count ({pout > info.OutOps}):");
 
       for (var idx = 0; idx < info.TotalOps; idx++)
       {
@@ -214,7 +214,8 @@ namespace KSASM.Assembly
             ptype = type;
           }
         }
-        rop.Type = opInfo.Type ?? ptype ?? defType ?? throw InvalidInst($"missing type for operand {idx}");
+        rop.Type = opInfo.Type ?? ptype ?? defType
+          ?? throw ctx.Invalid(Inst.OpCode, $"missing type for operand {idx}");
 
         // if no width is specified and this is not a fixed-width operand, use const width as the instruction width
         if (width == 0 && opInfo.Width == null && rop.ExprVal is FixedRange range)
@@ -350,9 +351,6 @@ namespace KSASM.Assembly
         default: throw new IndexOutOfRangeException($"{idx}");
       }
     }
-
-    // TODO
-    private Exception InvalidInst(string msg) => throw new InvalidOperationException(msg);
 
     private struct ResolvedOperand
     {

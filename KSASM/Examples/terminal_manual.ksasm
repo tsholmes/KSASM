@@ -1,37 +1,38 @@
 .region CONST 65536
 
 .import libsystem
-
-.region maindata 1024
-
-:u8 blankline: "                                "
-
-:u64 idx: 0
-:u8 dot: "."
-:p24 temp: 0
+.import libterm
 
 @0
 .system.init
 main:
   # move all lines down
-  copy:u64*8 $[system.terminal_data + 32*14], $[system.terminal_data + 32*13]
-  copy:u64*8 $[system.terminal_data + 32*12], $[system.terminal_data + 32*11]
-  copy:u64*8 $[system.terminal_data + 32*10], $[system.terminal_data + 32*09]
-  copy:u64*8 $[system.terminal_data + 32*08], $[system.terminal_data + 32*07]
-  copy:u64*8 $[system.terminal_data + 32*06], $[system.terminal_data + 32*05]
-  copy:u64*8 $[system.terminal_data + 32*04], $[system.terminal_data + 32*03]
-  copy:u64*8 $[system.terminal_data + 32*02], $[system.terminal_data + 32*01]
-  copy:u64*4 $[system.terminal_data + 32*01], $[system.terminal_data + 32*00]
+  ld:u64*8 .term.line(13)
+  st:u64*8 .term.line(14)
+  ld:u64*8 .term.line(11)
+  st:u64*8 .term.line(12)
+  ld:u64*8 .term.line(9)
+  st:u64*8 .term.line(10)
+  ld:u64*8 .term.line(7)
+  st:u64*8 .term.line(8)
+  ld:u64*8 .term.line(5)
+  st:u64*8 .term.line(6)
+  ld:u64*8 .term.line(3)
+  st:u64*8 .term.line(4)
+  ld:u64*8 .term.line(1)
+  st:u64*8 .term.line(2)
+  ld:u64*4 .term.line(0)
+  st:u64*4 .term.line(1)
   # clear first line
-  copy:u64*4 system.terminal_data, blankline
-  # convert universe time to index by summing bytes
-  copy:f64 idx, system.time
-  sum:u8*8 idx, $(0)
-  and:p24 idx, $(0x1F)
+  st:u64*4 .term.line(0) 0
   # set column to dot
-  copy:p24 temp, $(system.terminal_data)
-  add:p24 temp, idx
-  copy:u8 [temp], dot
+  push ".":u8
+  # convert universe time to column by summing bytes
+  ld:f64 system.time
+  addr:u8*8
+  and:u8 0x1F
+  add system.terminal_data:p24 _:u8 -> _:p24
+  st:u8
   # wait a few frames
-  sleep:u8 _, $(4)
-  jump:p24 _, main
+  sleep 4:u8
+  jump main

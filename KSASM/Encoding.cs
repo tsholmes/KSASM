@@ -10,26 +10,34 @@ namespace KSASM
     public static int SizeBytes(this DataType type) => type switch
     {
       DataType.U8 => 1,
+      DataType.U16 => 2,
+      DataType.U32 => 4,
+      DataType.U64 => 8,
+      DataType.I8 => 1,
       DataType.I16 => 2,
       DataType.I32 => 4,
       DataType.I64 => 8,
-      DataType.U64 => 8,
       DataType.F64 => 8,
+      // DataType.C128 => 0,
       DataType.P24 => 3,
-      // DataType.C128 => 16,
+      DataType.S48 => 6,
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),
     };
 
     public static ValueMode VMode(this DataType type) => type switch
     {
       DataType.U8 => ValueMode.Unsigned,
+      DataType.U16 => ValueMode.Unsigned,
+      DataType.U32 => ValueMode.Unsigned,
+      DataType.U64 => ValueMode.Unsigned,
+      DataType.I8 => ValueMode.Signed,
       DataType.I16 => ValueMode.Signed,
       DataType.I32 => ValueMode.Signed,
       DataType.I64 => ValueMode.Signed,
-      DataType.U64 => ValueMode.Unsigned,
       DataType.F64 => ValueMode.Float,
+      // DataType.C128 => ValueMode.Unsigned,
       DataType.P24 => ValueMode.Unsigned,
-      // DataType.C128 => ValueMode.Complex,
+      DataType.S48 => ValueMode.Unsigned,
       _ => throw new InvalidOperationException($"Invalid DataType {type}"),
     };
 
@@ -41,18 +49,26 @@ namespace KSASM
       [FieldOffset(0)]
       public byte U8;
       [FieldOffset(0)]
+      public ushort U16;
+      [FieldOffset(0)]
+      public uint U32;
+      [FieldOffset(0)]
+      public ulong U64;
+      [FieldOffset(0)]
+      public sbyte I8;
+      [FieldOffset(0)]
       public short I16;
       [FieldOffset(0)]
       public int I32;
       [FieldOffset(0)]
       public long I64;
       [FieldOffset(0)]
-      public ulong U64;
-      [FieldOffset(0)]
       public double F64;
+      // TODO: C128
       [FieldOffset(0)]
       public uint P24;
-      // TODO: C128
+      [FieldOffset(0)]
+      public ulong S48;
     }
     private static Span<byte> BytesOf(this ref EVal val, DataType type) => val.Bytes[..type.SizeBytes()];
 
@@ -68,13 +84,17 @@ namespace KSASM
       switch (type)
       {
         case DataType.U8: val.Unsigned = eval.U8; break;
+        case DataType.U16: val.Unsigned = eval.U16; break;
+        case DataType.U32: val.Unsigned = eval.U32; break;
+        case DataType.U64: val.Unsigned = eval.U64; break;
+        case DataType.I8: val.Signed = eval.I8; break;
         case DataType.I16: val.Signed = eval.I16; break;
         case DataType.I32: val.Signed = eval.I32; break;
         case DataType.I64: val.Signed = eval.I64; break;
-        case DataType.U64: val.Unsigned = eval.U64; break;
         case DataType.F64: val.Float = eval.F64; break;
+        // case DataType.C128: val.Complex = eval.C128; break;
         case DataType.P24: val.Unsigned = eval.P24; break;
-        // case DataType.C128:
+        case DataType.S48: val.Unsigned = eval.S48; break;
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
       }
@@ -87,13 +107,17 @@ namespace KSASM
       switch (type)
       {
         case DataType.U8: eval.U8 = (byte)val.Unsigned; break;
+        case DataType.U16: eval.U16 = (ushort)val.Unsigned; break;
+        case DataType.U32: eval.U32 = (uint)val.Unsigned; break;
+        case DataType.U64: eval.U64 = val.Unsigned; break;
+        case DataType.I8: eval.I8 = (sbyte)val.Signed; break;
         case DataType.I16: eval.I16 = (short)val.Signed; break;
         case DataType.I32: eval.I32 = (int)val.Signed; break;
         case DataType.I64: eval.I64 = val.Signed; break;
-        case DataType.U64: eval.U64 = val.Unsigned; break;
         case DataType.F64: eval.F64 = val.Float; break;
+        // case DataType.C128: eval.C128 = val.Complex; break;
         case DataType.P24: eval.P24 = (uint)val.Unsigned; break;
-        // case DataType.C128:
+        case DataType.S48: eval.S48 = val.Unsigned; break;
         default:
           throw new InvalidOperationException($"Invalid DataType {type}");
       }

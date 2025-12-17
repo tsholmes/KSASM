@@ -37,7 +37,7 @@ namespace KSASM
         if (addr == pc)
           ImGuiX.DrawRect(ImGuiX.LineRect(), PCHighlight);
         line.Clear();
-        var inst = Instruction.Decode(mem.Read(addr, DataType.U64).Unsigned);
+        var inst = Instruction.Decode(mem.Read(addr, DataType.P24).Unsigned);
         inst.Format(ref line, Current.Symbols);
         ImGui.Text(line.Line);
         if (instFollowPC && addr == pc && pc != instLastPC)

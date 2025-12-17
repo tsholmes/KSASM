@@ -20,7 +20,7 @@ namespace KSASM
     [HarmonyPatch(typeof(Vehicle), nameof(Vehicle.OnDrawUi)), HarmonyPrefix]
     public static void Vehicle_OnDrawUi_Postfix(ref bool __result, Vehicle __instance, Viewport inViewport)
     {
-      __result |= DrawUi(__instance, inViewport);
+      __result |= AsmStep(__instance, inViewport);
     }
 
     [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]
@@ -130,13 +130,27 @@ namespace KSASM
     private static ImColor8 TokenHighlight => new(64, 64, 64);
     private static ImColor8 TokenHoverHilight => new(128, 128, 128);
 
-    public static bool DrawUi(Vehicle vehicle, Viewport inViewport)
+    public static bool AsmStep(Vehicle vehicle, Viewport inViewport)
     {
       if (vehicle != KSA.Program.ControlledVehicle)
         return false;
+      Step(vehicle);
+
+      // disable read debug during UI draw so it doesn't spam
+      var prevDebug = MemoryAccessor.DebugRead;
+      MemoryAccessor.DebugRead = false;
+
+      var res = DrawUi(vehicle, inViewport);
+
+      MemoryAccessor.DebugRead = prevDebug;
+
+      return res;
+    }
+
+    private static bool DrawUi(Vehicle vehicle, Viewport inViewport)
+    {
 
       isTyping = false;
-      Step(vehicle);
 
       ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 

@@ -86,8 +86,10 @@ namespace KSASM.Assembly
       return Invalid(token);
     }
 
-    public Exception Invalid(Token token) =>
-      throw new InvalidOperationException($"invalid token {token.Type} '{buffer[token]}'\n{StackPos(token)}");
+    public Exception Invalid(Token token) => throw Invalid(token, $"invalid token {token.Type} '{buffer[token]}'");
+
+    public Exception Invalid(Token token, string msg) =>
+      throw new InvalidOperationException($"{msg}\n{StackPos(token)}");
 
     public static string StackPos(ParseBuffer buffer, Token token, int frameLimit = 20)
     {
@@ -198,6 +200,13 @@ namespace KSASM.Assembly
           range = default;
           return false;
         }
+        StringChars.AddRange(chunk[..count]);
+      }
+
+      if (StringChars.Length == start)
+      {
+        range = default;
+        return false;
       }
 
       range = new(start, StringChars.Length - start);
