@@ -31,6 +31,8 @@
   .endns
 })
 
+# _ -> _
+# wait until burns are not outdated
 burn_wait:
   ld:u8 fc.burns.outdated
   bzero:u8 burn_wait.end
@@ -41,6 +43,8 @@ burn_wait.loop:
 burn_wait.end:
   ret
 
+# _ -> _
+# clear all burns. leaves burn index at 0
 burn_clear:
   st fc.burns.index 0:u64
 burn_clear.loop:

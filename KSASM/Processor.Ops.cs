@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace KSASM
 {
@@ -71,6 +72,21 @@ namespace KSASM
       C.Convert(cmode);
     }
 
+    private void BinaryShift(BinaryOp op)
+    {
+      var ops = B.Mode.Ops();
+      A.Convert(ValueMode.Unsigned);
+      var cmode = C.Mode;
+      C.Mode = B.Mode;
+      for (var i = 0; i < A.Width; i++)
+      {
+        ref var val = ref C.Values[i];
+        val = B.Values[i];
+        op(ops, ref val, A.Values[i]);
+      }
+      C.Convert(cmode);
+    }
+
     private void Reduce(BinaryOp op)
     {
       var ops = A.Mode.Ops();
@@ -91,8 +107,8 @@ namespace KSASM
 
     private void BranchCompare(Compare tgt)
     {
-      C.Convert(B.Mode);
-      if (B.Mode.Ops().Compare(B.Values[0], C.Values[0]) switch
+      B.Convert(C.Mode);
+      if (C.Mode.Ops().Compare(C.Values[0], B.Values[0]) switch
       {
         < 0 => tgt.HasFlag(Compare.Less),
         0 => tgt.HasFlag(Compare.Equal),
@@ -141,8 +157,8 @@ namespace KSASM
     private void OpAnd() => Binary((ops, ref a, b) => ops.BitAnd(ref a, b));
     private void OpOr() => Binary((ops, ref a, b) => ops.BitOr(ref a, b));
     private void OpXor() => Binary((ops, ref a, b) => ops.BitXor(ref a, b));
-    private void OpShl() => throw new NotImplementedException();
-    private void OpShr() => throw new NotImplementedException();
+    private void OpShl() => BinaryShift((ops, ref a, b) => ops.ShiftLeft(ref a, b));
+    private void OpShr() => BinaryShift((ops, ref a, b) => ops.ShiftRight(ref a, b));
     private void OpNeg() => Unary((ops, ref v) => ops.Negate(ref v));
     private void OpSign() => Unary((ops, ref v) => ops.Sign(ref v));
     private void OpAbs() => Unary((ops, ref v) => ops.Abs(ref v));
@@ -203,6 +219,8 @@ namespace KSASM
     }
     private void OpCall()
     {
+      if (DebugOps)
+        Console.WriteLine($"  CALL {A.Values[0].Unsigned & ADDR_MASK:X6} (rFP: {FP:X6}, rPC: {PC:X6}, SP: {SP-6:X6})");
       var newFP = SP;
       SetupOp(1, DataType.P24, 2);
       B.Values[0].Unsigned = (ulong)FP;
@@ -213,17 +231,24 @@ namespace KSASM
     }
     private void OpAdjf()
     {
+      var origFP = FP;
+      var origSP = SP;
       SetupOp(1, DataType.P24, 2);
       ReadAt(Pop(ref Bptr), Bptr, B);
       FP = SP = (SP + (int)A.Values[0].Unsigned) & ADDR_MASK;
       WriteAt(Push(ref Bptr), Bptr, B);
+      if (DebugOps)
+        Console.WriteLine($"  ADJF {A.Values[0].Unsigned & ADDR_MASK:X6} (FP: {origFP:X6}->{FP:X6}, SP: {origSP:X6}->{SP:X6})");
     }
     private void OpRet()
     {
+      var origFP = FP;
       SetupOp(0, DataType.P24, 2);
       ReadAt(Pop(ref Aptr), Aptr, A);
       FP = (int)A.Values[0].Unsigned & ADDR_MASK;
       PC = (int)A.Values[1].Unsigned & ADDR_MASK;
+      if (DebugOps)
+        Console.WriteLine($"  RET {A.Values[0].Unsigned & ADDR_MASK:X6} (FP: {origFP:X6}->{FP:X6}, PC: {PC:X6}, SP: {SP:X6})");
     }
     private void OpRand() => throw new NotImplementedException();
     private void OpSleep()
@@ -251,7 +276,28 @@ namespace KSASM
     private void OpDebug()
     {
       // TODO
-      Console.WriteLine(A.ToString());
+      if (Aptr.Type == DataType.S48)
+      {
+        Span<byte> buf = stackalloc byte[256];
+        var sb = new StringBuilder();
+        sb.Append('(');
+        for (var i = 0; i < A.Width; i++)
+        {
+          if (i > 0) sb.Append(',');
+          var s48 = A.Values[i].Unsigned;
+          var addr = (int)s48 & ADDR_MASK;
+          var len = (int)(s48 >> 24) & 0xFF;
+          MappedMemory.Read(buf[..len], addr);
+          sb.Append('"');
+          foreach (var b in buf[..len])
+            sb.Append((char)b);
+          sb.Append('"');
+        }
+        sb.Append(')');
+        Console.WriteLine(sb.ToString());
+      }
+      else
+        Console.WriteLine(A.ToString());
     }
   }
 }

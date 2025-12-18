@@ -3,183 +3,85 @@
 .ifndef libstring { .macro libstring
 .region libstring 4096
 
-# :p24 name: addr name.len: len
-.macro str.ptr(name, addr, len) :p24 .label(name) addr .label(.concat(name .len)) len
-
-# :p24 name: addr name.len: len(val)
-# :u8 name.value: val name.end:
-.macro str(name, val) {
-  .str.ptr(name, .addns(.concat(name .value)), $(.addns(.concat(name .end)) - .addns(.concat(name .value))))
-  :u8 .label(.concat(name .value)) val .label(.concat(name .end))
-}
-
-.macro _str.copy.bigcopy(n) {
-  .label(.concat(str.copy.big n))
-  copy:u64 .add(*0, n) [str.copy.to], [str.copy.from]
-  add:p24*4 str.copy.to, $(8*n, -n, 8*n, -8*n)
-}
-
-# copy bytes from(addr, len) into to(addr, _)
-.fn(str.copy, {:p24, to, *2}, {:p24, from, *2})
-  # copy from.len into to.len and divide by 8 to get bigcopy size
-  copy:p24 $[str.copy.to+3], $[str.copy.from+3]
-  divide:p24 $[str.copy.to+3], $(8)
-  str.copy.bigloop:
-    switch:p24*8 $[str.copy.to+3], \
-      $(str.copy.small, str.copy.big1, str.copy.big2, str.copy.big3, \
-        str.copy.big4, str.copy.big5, str.copy.big6, str.copy.big7)
-    # on fallthrough do big copy and jump back to loop
-    ._str.copy.bigcopy(8)
-    jump:p24 _, str.copy.bigloop
-    # otherwise do partial bigcopy and jump to next section
-    ._str.copy.bigcopy(7)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(6)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(5)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(4)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(3)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(2)
-    jump:p24 _, str.copy.small
-    ._str.copy.bigcopy(1)
-  str.copy.small:
-    # at this point we have 7 or less. copy in one step and jump to end
-    switch:p24*7 $[str.copy.from+3], \
-      $(str.copy.end, str.copy.small1, str.copy.small2, str.copy.small3, \
-        str.copy.small4, str.copy.small5, str.copy.small6)
-    copy:u8*7 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small6:
-    copy:u8*6 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small5:
-    copy:u8*5 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small4:
-    copy:u8*4 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small3:
-    copy:u8*3 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small2:
-    copy:u8*2 [str.copy.to], [str.copy.from]
-    jump _, .str.copy.fnret
-  str.copy.small1:
-    copy:u8*1 [str.copy.to], [str.copy.from]
-  str.copy.end:
-    jump _, .str.copy.fnret
-
-:p24 str.append.local: 0*8
-.fn(str.append, {:p24, to, *2, out}, {:p24, from, *2})
-  copy:p24*2 str.append.local, str.append.to # copy to into local
-  sum:p24*2 str.append.local, $(0) # move local ptr to end
-  .str.copy(str.append.local:p24, str.append.from:p24)
-  add:p24 $[str.append.to+3], $[str.append.from+3] # add from length
-  jump _, .str.append.fnret
-
-:u8 char.zero: "0" char.neg: "-" char.dot: "."
-:u8 str.fmt.buf: 0*64 str.fmt.buf.end:
+# to:s48 from:s48 -> res:s48
+# to   @ f+0
+# from @ f+6
+# res  @ f+6
+# returns to:s48 with its length increased by the length of from:s48
+str.append:
+  ldf:s48*2 (+0)
+  add:p24 # end of to:s48
+  call memcpy
+  # load args and zero out from ptr
+  ldf:s48*2 (+0)
+  mul:p24*4 (1,1,0,1)
+  # add lengths and store result
+  add:p24*2
+  stf:s48 (+6)
+  adjf (+6)
+  ret
 
 .import libstring_itoa
 
-:u8 str.ftoa_unit.prefixes: "fpnum kMGTP"
-
-:f64 str.ftoa_unit.sign: 0 str.ftoa_unit.temp: 0
-:i16 str.ftoa_unit.pindex: 0
-:p24 str.ftoa_unit.work: 0*2
-.fn(str.ftoa_unit, {:p24, to, *2, out}, {:f64, val}, {:p24, unit, *2})
-  copy:p24*2 str.ftoa_unit.work, str.ftoa_unit.to
-  sign:f64 str.ftoa_unit.sign, str.ftoa_unit.val
-  copy str.ftoa_unit.sign:i64, str.ftoa_unit.sign:f64
-  add:i64 str.ftoa_unit.sign, $(1)
-  bpos:i64 str.ftoa_unit.sign, str.ftoa_unit.nonneg
-  copy:u8 [str.ftoa_unit.work], char.neg
-  add:u8 str.ftoa_unit.work, $(1)
-str.ftoa_unit.nonneg:
-  abs:f64 str.ftoa_unit.val, _
-  log10:f64 str.ftoa_unit.temp, str.ftoa_unit.val
-  div:f64 str.ftoa_unit.temp, $(3)
-  floor str.ftoa_unit.pindex:i16, str.ftoa_unit.temp:f64
-  max:i16 str.ftoa_unit.pindex, $(-5)
-  min:i16 str.ftoa_unit.pindex, $(5)
-  copy str.ftoa_unit.temp:f64, str.ftoa_unit.pindex:i16
-  add:i16 str.ftoa_unit.pindex, $(5)
-  mul:f64 str.ftoa_unit.temp, $(3)
-  pow10:f64 str.ftoa_unit.temp, _
-  div:f64 str.ftoa_unit.val, str.ftoa_unit.temp
-  .str.itoa(str.ftoa_unit.work:p24, str.ftoa_unit.val:f64)
-  sum:p24*2 str.ftoa_unit.work, $(0,0)
-  copy:u8 [str.ftoa_unit.work], char.dot
-  add:p24 str.ftoa_unit.work, $(1)
-# add eps to handle fp error
-  add:f64 str.ftoa_unit.val, $(1e-5)
-# 0.1
-  mul:f64 str.ftoa_unit.val, $(10)
-  mod:f64 str.ftoa_unit.val, $(10)
-  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
-  add:u8 [str.ftoa_unit.work], char.zero
-  add:p24 str.ftoa_unit.work, $(1)
-# 0.01
-  mul:f64 str.ftoa_unit.val, $(10)
-  mod:f64 str.ftoa_unit.val, $(10)
-  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
-  add:u8 [str.ftoa_unit.work], char.zero
-  add:p24 str.ftoa_unit.work, $(1)
-# 0.001
-  mul:f64 str.ftoa_unit.val, $(10)
-  mod:f64 str.ftoa_unit.val, $(10)
-  copy [str.ftoa_unit.work]:u8, str.ftoa_unit.val:f64
-  add:u8 [str.ftoa_unit.work], char.zero
-  add:p24 str.ftoa_unit.work, $(1)
-# prefix
-  copy:i16 str.ftoa_unit.temp, str.ftoa_unit.pindex
-  sub:i16 str.ftoa_unit.temp, $(5)
-  bzero str.ftoa_unit.temp:i16, str.ftoa_unit.endprefix
-  copy str.ftoa_unit.temp:p24, str.ftoa_unit.pindex:i16
-  add:p24 str.ftoa_unit.temp, $(str.ftoa_unit.prefixes)
-  copy:u8 [str.ftoa_unit.work], [str.ftoa_unit.temp]
-  add:p24 str.ftoa_unit.work, $(1)
-str.ftoa_unit.endprefix:
-# calc final length before unit
-  copy:p24 $[str.ftoa_unit.to+3], str.ftoa_unit.work
-  sub:p24 $[str.ftoa_unit.to+3], str.ftoa_unit.to
-  .str.append(str.ftoa_unit.to:p24, str.ftoa_unit.unit:p24)
-str.ftoa_unit.end:
-  jump _, .str.ftoa_unit.fnret
-
-
-:f64 str.ftoa_n3.temp: 0
-:p24 str.ftoa_n3.work: 0*2
-:u8 str.ftoa_n3.dot_base: ".000"
-:u8 str.ftoa_n3.dot: 0*4
-.fn(str.ftoa_n3, {:p24, to, *2, out}, {:f64, val})
-  .str.itoa(str.ftoa_n3.to:p24, str.ftoa_n3.val:f64)
-  abs:f64 str.ftoa_n3.val, _
-  copy:u8*4 str.ftoa_n3.dot, str.ftoa_n3.dot_base
-# add eps to handle fp error
-  add:f64 str.ftoa_n3.val, $(1e-5)
-# 0.1
-  mul:f64 str.ftoa_n3.val, $(10)
-  mod:f64 str.ftoa_n3.val, $(10)
-  add $[str.ftoa_n3.dot+1]:u8, str.ftoa_n3.val:f64
-# 0.01
-  mul:f64 str.ftoa_n3.val, $(10)
-  mod:f64 str.ftoa_n3.val, $(10)
-  add $[str.ftoa_n3.dot+2]:u8, str.ftoa_n3.val:f64
-# 0.001
-  mul:f64 str.ftoa_n3.val, $(10)
-  mod:f64 str.ftoa_n3.val, $(10)
-  add $[str.ftoa_n3.dot+3]:u8, str.ftoa_n3.val:f64
-# copy decimal digits over
-  add:p24 $[str.ftoa_n3.to+3], str.ftoa_n3.to # use length as append ptr
-  copy:u8*4 [$[str.ftoa_n3.to+3]], str.ftoa_n3.dot
-# calc final length
-  add:p24 $[str.ftoa_n3.to+3], $(4)
-  sub:p24 $[str.ftoa_n3.to+3], str.ftoa_n3.to
-str.ftoa_n3.end:
-  jump _, .str.ftoa_n3.fnret
+# val:f64 to:p24 -> fstr:s48
+# val  @ f+0
+# to   @ f+8
+# fstr @ f+5
+str.ftoa_n3:
+  # add eps to val for fp error
+  ldf:f64 (+0)
+  dup:f64 2
+  sign:f64
+  mul:f64 1e-5
+  add:f64
+  # val @ f-14
+  # call itoa for integer part
+  ldf:p24 (+8)
+  ldf:f64 (-14)
+  add 0:f64 _:f64 -> _:i64
+  call str.itoa
+  add:p24
+  # fstr.end @ f-17
+  ldf:f64 (-14)
+  abs:f64
+  stf:f64 (-14)
+  # |val| @ f-14
+  push ".":u8
+  ldf:p24 (-17)
+  st:u8
+  add:p24 1
+  # 0.1
+  ldf:f64 (-14)
+  mul:f64 10
+  mod:f64 10
+  add "0":u8 _:f64 -> _:u8
+  ldf:p24 (-17)
+  st:u8
+  add:p24 1
+  # 0.01
+  ldf:f64 (-14)
+  mul:f64 100
+  mod:f64 10
+  add "0":u8 _:f64 -> _:u8
+  ldf:p24 (-17)
+  st:u8
+  add:p24 1
+  # 0.001
+  ldf:f64 (-14)
+  mul:f64 1000
+  mod:f64 10
+  add "0":u8 _:f64 -> _:u8
+  ldf:p24 (-17)
+  st:u8
+  add:p24 1
+  # calc result
+  ldf:p24 (+8)
+  sub:p24
+  ldf:p24 (+8)
+  stf:s48 (+5)
+  # pop |val| and adjust frame
+  pop:f64
+  adjf (+5)
+  ret
 
 }

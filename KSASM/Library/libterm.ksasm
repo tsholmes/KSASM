@@ -10,6 +10,7 @@
 
 .macro line(n) (system.terminal_data+32*n)
 
+# _ -> _
 # clear the terminal and reset cursor to top-left
 clear:
   st term.ptr system.terminal_data:p24
@@ -23,6 +24,7 @@ clear:
   st:u64*8 .term.line(14) 0
   ret
 
+# _ -> _
 # shift all lines up
 # shift cursor up and to the beginning of line
 up:
@@ -52,12 +54,14 @@ up:
   st:p24 term.ptr
   ret
 
+# _ -> _
 # shift up if cursor is at end
 _tryup:
   ld:p24 term.ptr
   bge:p24 term.up .term.line(16)
   ret
 
+# _ -> _
 # shift up if cursor on last line
 # move cursor to start of next line
 nl:
@@ -67,11 +71,11 @@ nl:
   add:p24 32
   jump term._tryup
 
+# str:s48 -> _
+# str.ptr @ f+0
+# str.len @ f+3
 # print the string to the current terminal cursor
 # shift up lines as needed
-# str :s48 +0
-#   str.ptr :p24 +0
-#   str.len :p24 +3
 print:
   ldf:p24 (+3) # str.len
   ld:p24 term.ptr

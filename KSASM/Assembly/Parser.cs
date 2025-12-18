@@ -120,7 +120,7 @@ namespace KSASM.Assembly
         else if (TakeType(TokenType.Word, out data.Value)) { }
         else if (TakeType(TokenType.String, out data.Value))
         {
-          if (type is not (DataType.U8 or DataType.P24))
+          if (type is not (DataType.U8 or DataType.S48))
             throw Invalid(data.Value);
         }
         else if (TakeType(TokenType.POpen, out data.Value))

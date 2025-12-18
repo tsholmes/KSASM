@@ -128,9 +128,6 @@ namespace KSASM
         opv.Init(op.Type.VMode(), op.Width);
       }
 
-      // if (DebugOps)
-      //   Console.WriteLine($"{PC - 8}: {op}*{opA.Width} {opA.Address},{opA.Type} {opB.Address},{opB.Type}");
-
       if (DebugOps)
         Console.WriteLine($"{initPC - 3:X6}: {inst.OpCode}*{inst.Width} {Aptr.Type}*{Aptr.Width} {Bptr.Type}*{Bptr.Width} {Cptr.Type}*{Cptr.Width} (FP {FP:X6}, SP {SP:X6})");
       if (DebugOperands)
@@ -151,6 +148,9 @@ namespace KSASM
         if (DebugOperands)
           Console.WriteLine($"  OUT {"ABC"[idx]}: {Op(idx)}");
       }
+
+      if (DebugOps)
+        Console.WriteLine($"  FP {FP:X6} - SP {SP:X6} = {FP - SP}");
     }
 
     private void ExecOp(OpCode op)

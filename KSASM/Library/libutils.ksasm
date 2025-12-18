@@ -1,26 +1,28 @@
 .ifndef libutils { .macro libutils
 
+.region libutils 1024
+
 .macro withns(ns, inner) .if(ns) { .ns ns } inner .if(ns) { .endns }
 .macro type(name, vals) .macro name(ns) { .withns(ns, { vals }) }
 
 .macro memcpy.big(n) {
-  ldf:p24 (-9) # from
+  ldf:p24 (-12) # from
   ld:u64*n
-  ldf:p24 (-12) # to
+  ldf:p24 (-15) # to
   st:u64*n
-  add:u64 (n*64,n*64,-n*64)
+  add:p24 (n*8,n*8,-n*8)
 }
 # don't bother adjusting pointers after final small copy
 .macro memcpy.small(n) {
-  ldf:p24 (-9) # from
+  ldf:p24 (-12) # from
   ld:u8*n
-  ldf:p24 (-12) # to
+  ldf:p24 (-15) # to
   st:u8*n
 }
 
-# to +0 :p24
-# from +3 :s48
-# to from ->
+# to:p24 from:s48 -> _
+# to   @ f+0
+# from @ f+3
 # copies memory from:s48 into to:p24
 memcpy:
   ldf:p24*3 (+0)

@@ -196,13 +196,13 @@ namespace KSASM.Assembly
         var pindex = -1;
         if (idx < info.InOps && idx < pin)
           pindex = idx;
-        else if (idx >= info.InOps && (idx - pin) < pout)
-          pindex = idx - info.InOps;
+        else if (idx >= info.InOps && (idx - info.InOps) < pout)
+          pindex = idx - info.InOps + pin;
 
         DataType? ptype = null;
         if (pindex != -1)
         {
-          ref var pop = ref Inst.Op(idx);
+          ref var pop = ref Inst.Op(pindex);
           rop.Value = pop.Val;
           rop.ExprVal = pop.ExprVal;
           if (pop.Type is Token ttoken)

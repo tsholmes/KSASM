@@ -16,9 +16,10 @@
   :u8 terminal_data: 0*512 # 32*16 chars
 })
 
-# valid printables: 45-57 (- . / 0-9) 65-90 (A-Z) 97-122 (a-z), space excluded
-# c +0 :u8
-# c -> valid:u8
+# c:u8 -> v:u8
+# c @ f+0
+# v @ f+0
+# v = c in [45-57] (- . 0-9) 65-90 (A-Z) 97-122 (a-z)
 printable:
   ldf:u8 (+0)
   add:u8 0 -> _:i16
