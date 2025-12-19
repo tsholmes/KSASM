@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -170,6 +169,244 @@ namespace KSASM
     }
   }
 
+  public class FixedWidthRangeTree<T>(int width) where T : struct, IRange<T>
+  {
+    private readonly int width = width;
+    private readonly AppendBuffer<Node> nodes = new();
+
+    public void Add(T range)
+    {
+      if (range.Offset < 0 || range.Offset + range.Length > width)
+        throw new IndexOutOfRangeException($"{range.Offset}+{range.Length} not in [0,{width})");
+
+      if (nodes.Length == 0)
+        nodes.Add(new() { Parent = -1, Left = -1, Right = -1 });
+
+      AddInternal(ref range, 0, 0, width);
+
+      void check(int index, int min, int max)
+      {
+        ref var node = ref nodes[index];
+        if (node.Leaf is T leaf && leaf.Offset + leaf.Length is int end && (leaf.Offset != min || end != max))
+          throw new InvalidOperationException($"{index} [{leaf.Offset:X6}-{end:X6}] != [{min:X6}:{max:X6}] ({range.Offset:X6}-{range.Offset + range.Length:X6})");
+        var mid = (min + max) >> 1;
+        if (node.Left != -1) check(node.Left, min, mid);
+        if (node.Right != -1) check(node.Right, mid, max);
+      }
+      check(0, 0, width);
+    }
+
+    private void AddInternal(ref readonly T range, int idx, int min, int max)
+    {
+      var start = range.Offset;
+      var end = start + range.Length;
+
+      if (start < min || end > max)
+        throw new InvalidOperationException();
+
+      ref var node = ref nodes[idx];
+
+      if (start == min && end == max)
+      {
+        node.Leaf = range;
+        return;
+      }
+
+      var mid = (min + max) >> 1;
+
+      // slice existing leaf into children
+      if (node.Leaf is T cur)
+      {
+        node.Leaf = null;
+        if (start > min)
+        {
+          var send = Math.Min(start, mid);
+          var scur = cur.Slice(min, send - min);
+          AddInternal(ref scur, idx, min, max);
+        }
+        if (end < mid)
+        {
+          var scur = cur.Slice(end, mid - end);
+          AddInternal(ref scur, idx, min, max);
+        }
+        if (start > mid)
+        {
+          var scur = cur.Slice(mid, start - mid);
+          AddInternal(ref scur, idx, min, max);
+        }
+        if (end < max)
+        {
+          var sstart = Math.Max(end, mid);
+          var scur = cur.Slice(sstart, max - sstart);
+          AddInternal(ref scur, idx, min, max);
+        }
+      }
+
+      if (start < mid)
+      {
+        if (node.Left == -1)
+        {
+          node.Left = nodes.Length;
+          nodes.Add(new() { Parent = idx, Left = -1, Right = -1 });
+        }
+        if (end <= mid)
+          AddInternal(in range, node.Left, min, mid);
+        else
+        {
+          var lrange = range.Slice(start, mid - start);
+          AddInternal(ref lrange, node.Left, min, mid);
+        }
+      }
+      if (end > mid)
+      {
+        if (node.Right == -1)
+        {
+          node.Right = nodes.Length;
+          nodes.Add(new() { Parent = idx, Left = -1, Right = -1 });
+        }
+        if (start >= mid)
+          AddInternal(in range, node.Right, mid, max);
+        else
+        {
+          var rrange = range.Slice(mid, end - mid);
+          AddInternal(ref rrange, node.Right, mid, max);
+        }
+      }
+    }
+
+    private struct Node
+    {
+      public int Parent;
+      public int Left;
+      public int Right;
+      public T? Leaf;
+    }
+
+    public OverlapIterator<T2> Overlap<T2>(T2 other) where T2 : struct, IRange<T2>, allows ref struct =>
+      new(this, other);
+
+    private struct WalkState
+    {
+      public int Index;
+      public int Min;
+      public int Max;
+    }
+    private readonly WalkState[] stack = new WalkState[32];
+
+    public ref struct OverlapIterator<T2>(FixedWidthRangeTree<T> list, T2 rem)
+      where T2 : IRange<T2>, allows ref struct
+    {
+      private readonly FixedWidthRangeTree<T> list = list;
+      private readonly Span<WalkState> stack = list.stack;
+      private int stackIndex = -2;
+      private T2 rem = rem;
+      private bool keep = false;
+
+      public bool Next(out T range, out T2 other)
+      {
+        if (!keep)
+          NextLeaf();
+        keep = false;
+        if (stackIndex == -1)
+        {
+          range = default;
+          other = default;
+          return false;
+        }
+        ref var n = ref stack[stackIndex];
+        range = list.nodes[stack[stackIndex].Index].Leaf.Value;
+        var start = Math.Max(range.Offset, rem.Offset);
+        var rend = rem.Offset + rem.Length;
+        var end = Math.Min(range.Offset + range.Length, rend);
+        if (range.Offset != n.Min || range.Offset + range.Length != n.Max)
+          throw new InvalidOperationException();
+        if (end <= start)
+        {
+          range = default;
+          other = default;
+          return false;
+        }
+        var initrem = rem;
+        rem = rem.Slice(end, rend - end);
+
+        while (range.Offset + range.Length <= rem.Offset + rem.Length)
+        {
+          NextLeaf();
+          if (stackIndex == -1)
+            break;
+          var nrange = list.nodes[stack[stackIndex].Index].Leaf.Value;
+          if (!range.TryMerge(nrange, out var merged))
+          {
+            keep = true;
+            break;
+          }
+          range = merged;
+          end = Math.Min(range.Offset + range.Length, rend);
+          rem = rem.Slice(end, rend - end);
+        }
+        range = range.Slice(start, end - start);
+        other = initrem.Slice(start, end - start);
+        return true;
+      }
+
+      private void NextLeaf()
+      {
+        var start = rem.Offset;
+        var end = start + rem.Length;
+
+        if (stackIndex == -2)
+        {
+          if (list.nodes.Length == 0)
+          {
+            stackIndex = -1;
+            return;
+          }
+          stackIndex = 0;
+          stack[0] = new() { Index = 0, Min = 0, Max = list.width };
+        }
+
+        var last = -1;
+        while (stackIndex > -1)
+        {
+          ref var curs = ref stack[stackIndex];
+          ref var curn = ref list.nodes[curs.Index];
+          var mid = (curs.Min + curs.Max) >> 1;
+          var curLast = last;
+          last = curs.Index;
+          if (start >= curs.Max || end <= curs.Min)
+          {
+            stackIndex--;
+            continue;
+          }
+          if (curn.Leaf != null)
+            return;
+
+          if (start < mid && curn.Left != -1 && curn.Left != curLast)
+          {
+            stack[++stackIndex] = new()
+            {
+              Index = curn.Left,
+              Min = curs.Min,
+              Max = mid,
+            };
+            continue;
+          }
+          if (end >= curs.Max && curn.Right != -1 && curn.Right != curLast)
+          {
+            stack[++stackIndex] = new()
+            {
+              Index = curn.Right,
+              Min = mid,
+              Max = curs.Max,
+            };
+            continue;
+          }
+          stackIndex--;
+        }
+      }
+    }
+  }
+
   public class ListPool<T>
   {
     private readonly Stack<List<T>> lists = [];
@@ -200,7 +437,7 @@ namespace KSASM
 
   public interface IAddr { public int Addr { get; } }
 
-  public readonly struct FixedRange(int start, int length) : IAddr
+  public readonly struct FixedRange(int start, int length) : IAddr, IRange<FixedRange>
   {
     public static readonly FixedRange Invalid = new(-1, -1);
 
@@ -225,6 +462,12 @@ namespace KSASM
         return new(Start + off, len);
       }
     }
+
+    int IRange<FixedRange>.Offset => Start;
+    int IRange<FixedRange>.Length => Length;
+    FixedRange IRange<FixedRange>.Slice(int offset, int length) => new(offset, length);
+    bool IRange<FixedRange>.TryMerge(FixedRange next, out FixedRange merged) =>
+      (merged = End == next.Start ? new(Start, Length + next.Length) : default).Length > 0;
 
     public static FixedRange operator +(FixedRange range, int offset) => new(range.Start + offset, range.Length);
     public static FixedRange operator -(FixedRange range, int offset) => new(range.Start - offset, range.Length);

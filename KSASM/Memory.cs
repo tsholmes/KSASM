@@ -111,15 +111,18 @@ namespace KSASM
     }
   }
 
-  public class MemoryAccessor
+  public class MemoryAccessor(IMemory memory)
   {
     public static bool DebugRead = false;
     public static bool DebugWrite = false;
 
-    private readonly IMemory memory;
-    private readonly byte[] buffer = new byte[16 * 8];
+    public delegate void MemAction(int addr, DataType type, int width);
 
-    public MemoryAccessor(IMemory memory) => this.memory = memory;
+    public MemAction OnWrite;
+    public MemAction OnRead;
+
+    private readonly IMemory memory = memory;
+    private readonly byte[] buffer = new byte[16 * 8];
 
     private Span<byte> To(int len) => buffer.AsSpan()[..len];
     private Span<byte> From(int index) => buffer.AsSpan()[index..];
@@ -129,6 +132,8 @@ namespace KSASM
 
     public void Read(ValuePointer ptr, ValArray vals)
     {
+      OnRead?.Invoke(ptr.Address, ptr.Type, ptr.Width);
+
       if (DebugRead)
         Console.WriteLine($"READ {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
@@ -143,6 +148,8 @@ namespace KSASM
 
     public Value Read(int addr, DataType type)
     {
+      OnRead?.Invoke(addr, type, 1);
+
       if (DebugRead)
         Console.WriteLine($"READ {addr:X6} {type}");
       ReadToBuf(addr, type.SizeBytes());
@@ -151,6 +158,8 @@ namespace KSASM
 
     public void Write(ValuePointer ptr, ValArray vals)
     {
+      OnWrite?.Invoke(ptr.Address, ptr.Type, ptr.Width);
+
       if (DebugWrite)
         Console.WriteLine($"WRITE {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
@@ -168,6 +177,8 @@ namespace KSASM
 
     public void Write(int addr, DataType type, Value value)
     {
+      OnWrite?.Invoke(addr, type, 1);
+
       if (DebugWrite)
         Console.WriteLine($"WRITE {addr:X6} {type}");
       EncodeAt(0, type, value);

@@ -159,11 +159,18 @@ namespace KSASM
 
     public void Add(Value val, DataType type)
     {
+      var fmt = type switch
+      {
+        DataType.U8 => "X2",
+        DataType.P24 => "X6",
+        DataType.S48 => "X12",
+        _ => "g",
+      };
       switch (type.VMode())
       {
-        case ValueMode.Unsigned: Add(val.Unsigned, type == DataType.P24 ? "X6" : "g"); break;
-        case ValueMode.Signed: Add(val.Signed, "g"); break;
-        case ValueMode.Float: Add(val.Float, "g"); break;
+        case ValueMode.Unsigned: Add(val.Unsigned, fmt); break;
+        case ValueMode.Signed: Add(val.Signed, fmt); break;
+        case ValueMode.Float: Add(val.Float, fmt); break;
         default: throw new InvalidOperationException($"{type.VMode()}");
       }
     }
@@ -215,6 +222,15 @@ namespace KSASM
         return;
       line[..length].CopyTo(line[pad..]);
       line[..pad].Fill(' ');
+      length = len;
+    }
+
+    public void PadRight(int len)
+    {
+      var pad = len - length;
+      if (pad <= 0)
+        return;
+      line[length..len].Fill(' ');
       length = len;
     }
   }

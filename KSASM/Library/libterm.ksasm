@@ -68,7 +68,8 @@ nl:
   ld:p24 term.ptr
   sub:p24 system.terminal_data
   and:p24 (~31)
-  add:p24 32
+  add:p24 (system.terminal_data+32)
+  st:p24 term.ptr
   jump term._tryup
 
 # str:s48 -> _
