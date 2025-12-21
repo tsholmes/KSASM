@@ -23,8 +23,6 @@
   call loginput
 }
 
-# TODO: debug probably errors in term funcs
-
 @0
 premain:
   .system.init

@@ -67,7 +67,7 @@ namespace KSASM
 
       var proc = new Processor
       {
-        OnDebug = (A, B) => Console.WriteLine($"> {A} {B}"),
+        OnDebug = A => Console.WriteLine($"> {A}"),
         OnDebugStr = str => Console.WriteLine($"> {str}"),
       };
 

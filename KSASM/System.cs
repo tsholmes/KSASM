@@ -82,7 +82,7 @@ namespace KSASM
       }
     }
 
-    private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");
+    private void OnDebug(ValArray A) => log?.Invoke($"> {A}");
     private void OnDebugStr(string str) => log?.Invoke($"> {str}");
   }
 

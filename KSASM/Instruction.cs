@@ -54,9 +54,6 @@ namespace KSASM
       var info = OpCodeInfo.For(OpCode);
 
       line.Add(OpCode, "g");
-      line.Add('(');
-      line.Add(ImmCount, "g");
-      line.Add(')');
 
       for (var i = 0; i < info.InOps; i++)
       {
@@ -70,10 +67,10 @@ namespace KSASM
         line.Add(opInfo.Width ?? Width, "g");
       }
 
-      line.Add("->");
-
       for (var i = 0; i < info.OutOps; i++)
       {
+        if (i == 0)
+          line.Add(" ->");
         var j = i + info.InOps;
         var opInfo = info[j];
         line.Add(" _");
@@ -81,82 +78,6 @@ namespace KSASM
         line.Add('*');
         line.Add(opInfo.Width ?? Width, "g");
       }
-
-      // TODO
-
-      // var sameTypes = AType == BType;
-
-      // line.Add(OpCode, "g");
-
-      // if (DataWidth > 1)
-      // {
-      //   line.Add('*');
-      //   line.Add(DataWidth, "g");
-      // }
-
-      // if (sameTypes)
-      // {
-      //   line.Add(':');
-      //   line.Add(AType, "g");
-      // }
-
-      // line.Sp();
-
-      // var ia = OperandMode.HasFlag(OperandMode.IndirectA);
-      // var ib = OperandMode.HasFlag(OperandMode.IndirectB);
-
-      // if (OperandMode.HasFlag(OperandMode.AddrBaseOffAB))
-      // {
-      //   if (BaseIndirect) line.Add('[');
-      //   line.AddAddr(AddrBase, debug);
-      //   if (BaseIndirect) line.Add(']');
-
-      //   if (ia) line.Add('[');
-      //   if (OffsetA >= 0) line.Add('+');
-      //   line.Add(OffsetA, "g");
-      //   if (ia) line.Add(']');
-      //   if (!sameTypes)
-      //   {
-      //     line.Add(':');
-      //     line.Add(AType, "g");
-      //   }
-
-      //   line.Add(',');
-      //   line.Sp();
-
-      //   if (ib) line.Add('[');
-      //   if (OffsetB >= 0) line.Add('+');
-      //   line.Add(OffsetB, "g");
-      //   if (ib) line.Add(']');
-      //   if (!sameTypes)
-      //   {
-      //     line.Add(':');
-      //     line.Add(BType, "g");
-      //   }
-      // }
-      // else
-      // {
-      //   if (ia) line.Add('[');
-      //   line.AddAddr(AddrBase, debug);
-      //   if (ia) line.Add(']');
-      //   if (!sameTypes)
-      //   {
-      //     line.Add(':');
-      //     line.Add(AType, "g");
-      //   }
-
-      //   line.Add(',');
-      //   line.Sp();
-
-      //   if (ib) line.Add('[');
-      //   line.AddAddr(AddrBase + OffsetB, debug);
-      //   if (ib) line.Add(']');
-      //   if (!sameTypes)
-      //   {
-      //     line.Add(':');
-      //     line.Add(BType, "g");
-      //   }
-      // }
     }
   }
 }

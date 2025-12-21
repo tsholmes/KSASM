@@ -29,7 +29,7 @@ namespace KSASM
     private readonly ValArray C = new();
     private ValuePointer Cptr;
 
-    public Action<ValArray, ValArray> OnDebug;
+    public Action<ValArray> OnDebug;
     public Action<string> OnDebugStr;
 
     public readonly IDevice[] Devices;

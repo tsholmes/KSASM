@@ -257,10 +257,11 @@ namespace KSASM.Assembly
         emitter.EmitString(str);
     }
 
+    private readonly Stack<Value> evalStack = new();
     public Value EvalExpr(int index, ValueMode mode)
     {
-      // TODO: reuse stack
-      var vals = new Stack<Value>();
+      var vals = evalStack;
+      vals.Clear();
       Value left = default, right = default;
       var ops = mode.Ops();
       var range = ConstRanges[index];

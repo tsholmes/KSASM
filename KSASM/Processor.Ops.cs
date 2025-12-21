@@ -220,7 +220,7 @@ namespace KSASM
     private void OpCall()
     {
       if (DebugOps)
-        Console.WriteLine($"  CALL {A.Values[0].Unsigned & ADDR_MASK:X6} (rFP: {FP:X6}, rPC: {PC:X6}, SP: {SP-6:X6})");
+        Console.WriteLine($"  CALL {A.Values[0].Unsigned & ADDR_MASK:X6} (rFP: {FP:X6}, rPC: {PC:X6}, SP: {SP - 6:X6})");
       var newFP = SP;
       SetupOp(1, DataType.P24, 2);
       B.Values[0].Unsigned = (ulong)FP;
@@ -275,12 +275,12 @@ namespace KSASM
     }
     private void OpDebug()
     {
-      // TODO
       if (Aptr.Type == DataType.S48)
       {
         Span<byte> buf = stackalloc byte[256];
         var sb = new StringBuilder();
-        sb.Append('(');
+        if (A.Width > 1)
+          sb.Append('(');
         for (var i = 0; i < A.Width; i++)
         {
           if (i > 0) sb.Append(',');
@@ -293,11 +293,12 @@ namespace KSASM
             sb.Append((char)b);
           sb.Append('"');
         }
-        sb.Append(')');
-        Console.WriteLine(sb.ToString());
+        if (A.Width > 1)
+          sb.Append(')');
+        OnDebugStr(sb.ToString());
       }
       else
-        Console.WriteLine(A.ToString());
+        OnDebug(A);
     }
   }
 }
