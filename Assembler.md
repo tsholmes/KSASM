@@ -3,6 +3,8 @@
 This describes the textual language the assembler parses to generate the instruction binary
 
 ## Tokens
+TODO: bitwise/mod/rem/pow? for const expressions
+TODO: escapable double quote in string
 
 | Name | Pattern | Notes |
 | --- | --- | --- |
@@ -11,24 +13,21 @@ This describes the textual language the assembler parses to generate the instruc
 | `Word` | `[_A-Za-z][_A-Za-z0-9.]*` | when not followed by `:`+whitespace |
 | `Label` | `<Word>:` | must be followed by whitespace |
 | `Position` | `@[0-9]+` | |
-| `Width` | `*[0-9]+` | |
-| `IOpen` | `[` | |
-| `IClose` | `]` | |
+| `Result` | `->` | |
 | `Comma` | `,` | |
 | `Type` | `:<type>` | where `<type>` is one of `u8` `i16` `i32` `i64` `u64` `f64` `p24` `c128` |
-| `Offset` | `[+-]` | |
 | `Number` | `0[xX][0-9a-fA-F]+` | hex number |
 |          | `0[bB][01]+` | binary number |
 |          | `[0-9]+(.[0-9]+)([eE][+-]?[0-9]+)` | decimal integer, float, or scientific notation |
-| `COpen` | `$(` | |
-| `CIOpen` | `$[` | |
 | `POpen` | `(` | |
 | `PClose` | `)` | |
 | `Macro` | `.[_A-Za-z0-9.]+` | |
 | `String` | `"[^"\n]*"` | can contain any characters other than double quote and newline |
 | `BOpen` | `{` | |
 | `BClose` | `}` | |
-| `Mult` | `*` | when not followed by digit |
+| `Plus` | `+` | |
+| `Minus` | `-` | |
+| `Mult` | `*` | |
 | `Div` | `/` | |
 | `Not` | `~` | |
 
@@ -41,51 +40,42 @@ line-prefix = Label | Position
 
 statement = data-line | instruction
 
-data-line = (Type (Label | Position | String | data-number | data-const)+)+
-  :u8 0*10 label: "string" @300 :u64 $(const * val + 3)
+data-line = data-group+
 
-data-number = (Number | Word) Width?
+data-group = Type (line-prefix?  data-value)+ line-prefix?
 
-data-const = COpen const-expr PClose Width?
-  $(a*(b+123))
+data-value = (String | Number | Word | const-list) width?
 
-instruction = Word Type? Width? operands
+data-const = const-list width?
+  $(a*(b+123))*8
+
+instruction = Word Type? operands
   add*3 a+0:u8, +64:i64
 
-operands = base-offab-operands | a-b-operands | placeholder-operands
+operands =
+  | width? # width only
+  | width? imm-operand* stack-operand* (Result stack-operand?)? # width before operands
+  | imm-operand width imm-operand* stack-operand* (Result stack-operand?)? # width on first immediate
+  | stack-operand width stack-operand* (Result stack-operand?)? # width on first stack
+  | Result stack-operand width
 
-base-offab-operands = simple-operand offset-operand Type? Comma offset-operand Type?
-  a+4, -3:u64
-  [a][+4]:u64, [-3]
+imm-operand = imm-value Type?
 
-a-b-operands = value-operand Type? Comma (value-operand | offset-operand) Type?
-  a, b
-  $[a+4], +10
-  [a], $(1,2,3*x,4)
+stack-operand = PlaceHolder Type?
 
-placeholder-operands = (value-operand Type? Comma Placeholder) | (Placeholder Comma value-operand Type?)
+imm-value = Number | Word | String | const-list
 
-value-operand = simple-operand | const-operand | iconst-operand
+width = Mult Number
 
-simple-operand = simple-operand-val | (IOpen simple-operand-val IClose)
-
-offset-operand = (Offset simple-operand-val) | (IOpen Offset simple-operand-val IClose)
-
-simple-operand-val = Word | Number
-
-const-operand = COpen const-expr (Comma const-expr)* PClose
-
-iconst-operand = CIOpen const-expr IClose
+const-list = POpen const-expr (Comma const-expr*) PClose
 
 const-expr = addsub-expr
 
-addsub-expr = muldiv-expr (Offset muldiv-expr)*
+addsub-expr = muldiv-expr ((Plus | Minus) muldiv-expr)*
 
-muldiv-expr = group-expr muldiv-expr-right*
+muldiv-expr = group-expr ((Mult | Div) group-expr)*
 
-muldiv-expr-right = Width | ((Mult | Div) group-expr)
-
-group-expr = Number | Word | (POpen addsub-expr PClose) | (Offset group-expr) | (Not group-expr)
+group-expr = Number | Word | (POpen addsub-expr PClose) | (Minus group-expr) | (Not group-expr)
 ```
 
 ## Macros
@@ -96,16 +86,16 @@ Macros operate on the stream of tokens before they are parsed into statements. T
 `.import Word`
 - replaced with all tokens in the library file identified by `Word`
 
-`.region Word Offset? Number`
+`.region Word Minus? Number`
 - allocations a chunk `Number` bytes starting at the end of 1MB counting down, creating a label as a marker
-- no offset or positive offset produces `@<chunk-address> Word:`
+- positive offset produces `@<chunk-address> Word:`
 - negative offset produces `@<chunk-address-plus-size> Word: @<chunk-address>`
   - this puts the label at the end of the chunk instead of the beginning
 
-`.add POpen (Width | Number) (Comma Number)* PClose`
-- adds the numeric values, outputting the same type of token as the first
+`.add POpen Number (Comma Number)* PClose`
+- adds the numeric values, outputting a Number token
   - `.add(1, 2, 3)` outputs `6`
-  - `.add(*3, 1)` outputs `*4`
+- TODO: replace this with macro const expressions `.(expr)`
 
 `.ifdef Word BOpen any-with-matched-brackets BClose`
 - outputs the contained tokens if `Word` identifies a user-defined macro
@@ -164,10 +154,12 @@ tokens = (any-non-eol* EOL) | (BOpen any-with-matched-brackets* BClose)
 - defines a new macro identified by `Word` which expands to the supplied token sequence
 - any `Word` tokens defined in the args list will be replaced by the tokens sequence passed as that argument position when the macro is called
 - the final argument may have a `...` prefix, which will cause it to include all tokens after the previous argument values, including `Comma` tokens
+- if the macro tokens start with `(`, you must wrap it in brackets so it isn't interpreted as arguments
+  `.macro test { (1+2) }`
 
 `.unmacro Word`
 - removes the definition of a macro defined by `Word` prefixed with the current namespace
-= errors if macro is not defined
+- errors if macro is not defined
   ```
   .macro mymacro(a, b) a + b
   .unmacro mymacro

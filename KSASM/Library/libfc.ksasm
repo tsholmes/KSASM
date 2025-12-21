@@ -31,17 +31,28 @@
   .endns
 })
 
-.fn(burn_wait)
-  branchifzero fc.burns.outdated:u8, .burn_wait.fnret
-  sleep:u8 _, $(1)
-  jump:p24 fc.burn_wait, _
+# _ -> _
+# wait until burns are not outdated
+burn_wait:
+  ld:u8 fc.burns.outdated
+  bzero:u8 burn_wait.end
+burn_wait.loop:
+  sleep 1:u8
+  ld:u8 fc.burns.outdated
+  bpos burn_wait.loop
+burn_wait.end:
+  ret
 
-.fn(burn_clear)
-  copy:u64 fc.burns.index, $(0)
-  _burn_clear_loop:
-    branchifzero fc.burns.count:u64, .burn_clear.fnret
-    copy:u8 fc.burn.delete, $(1)
-    jump:p24 fc._burn_clear_loop, _
+# _ -> _
+# clear all burns. leaves burn index at 0
+burn_clear:
+  st fc.burns.index 0:u64
+burn_clear.loop:
+  st fc.burn.delete 1:u8
+  ld:u64 fc.burns.count
+  bpos fc.burn_clear
+burn_clear.end:
+  ret
 
 .endns
 }

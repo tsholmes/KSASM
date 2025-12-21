@@ -20,7 +20,7 @@ namespace KSASM
     [HarmonyPatch(typeof(Vehicle), nameof(Vehicle.OnDrawUi)), HarmonyPrefix]
     public static void Vehicle_OnDrawUi_Postfix(ref bool __result, Vehicle __instance, Viewport inViewport)
     {
-      __result |= DrawUi(__instance, inViewport);
+      __result |= AsmStep(__instance, inViewport);
     }
 
     [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]
@@ -130,13 +130,27 @@ namespace KSASM
     private static ImColor8 TokenHighlight => new(64, 64, 64);
     private static ImColor8 TokenHoverHilight => new(128, 128, 128);
 
-    public static bool DrawUi(Vehicle vehicle, Viewport inViewport)
+    public static bool AsmStep(Vehicle vehicle, Viewport inViewport)
     {
       if (vehicle != KSA.Program.ControlledVehicle)
         return false;
+      Step(vehicle);
+
+      // disable read debug during UI draw so it doesn't spam
+      var prevDebug = MemoryAccessor.DebugRead;
+      MemoryAccessor.DebugRead = false;
+
+      var res = DrawUi(vehicle, inViewport);
+
+      MemoryAccessor.DebugRead = prevDebug;
+
+      return res;
+    }
+
+    private static bool DrawUi(Vehicle vehicle, Viewport inViewport)
+    {
 
       isTyping = false;
-      Step(vehicle);
 
       ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 
@@ -167,6 +181,7 @@ namespace KSASM
         IImGui.DockBuilderDockWindow($"MacroView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"InstView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"MemView##{vehicle.Id}", upID);
+        IImGui.DockBuilderDockWindow($"StackView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"MemWatch##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"DevView##{vehicle.Id}", upID);
         IImGui.DockBuilderDockWindow($"Controls##{vehicle.Id}", downID);
@@ -186,16 +201,17 @@ namespace KSASM
       void drawWindow(string title, Action draw)
       {
         ImGuiX.SetNextWindowClass(windowClass);
-        ImGui.Begin($"{title}##{vehicle.Id}");
+        var visible = ImGui.Begin($"{title}##{vehicle.Id}");
 
         if (IImGui.GetWindowDockNode().RootNode() != dockID &&
           !(ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && ImGui.IsMouseDragging(ImGuiMouseButton.Left) && ImGui.IsItemActive()))
         {
           ImGui.End();
           ImGui.SetNextWindowDockID(dockID);
-          ImGui.Begin($"{title}##{vehicle.Id}");
+          visible = ImGui.Begin($"{title}##{vehicle.Id}");
         }
-        draw();
+        if (visible)
+          draw();
         ImGui.End();
       }
 
@@ -203,6 +219,7 @@ namespace KSASM
       drawWindow("MacroView", DrawMacroView);
       drawWindow("InstView", DrawInstView);
       drawWindow("MemView", DrawMemView);
+      drawWindow("StackView", DrawStackView);
       drawWindow("MemWatch", DrawMemWatch);
       drawWindow("DevView", DrawDevView);
       drawWindow("Controls", DrawControls);

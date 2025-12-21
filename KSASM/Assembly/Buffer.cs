@@ -138,10 +138,11 @@ namespace KSASM.Assembly
       }
     }
 
-    public readonly struct SyntheticTokenBuilder(
+    public struct SyntheticTokenBuilder(
       ParseBuffer buf, SourceIndex source, TokenType type, TokenIndex from) : IDisposable
     {
       private readonly int dataStart = buf.sourceData.Length;
+      private TokenType type = type;
 
       public void AddData(params ReadOnlySpan<char> data) => buf.sourceData.AddRange(data);
       public void AddData(char c) => buf.sourceData.Add(c);
@@ -162,11 +163,24 @@ namespace KSASM.Assembly
         AddData(data[..length]);
       }
 
+      public void Reparse()
+      {
+        var len = buf.sourceData.Length - dataStart;
+        if (len > AppendBuffer.CHUNK_SIZE)
+        {
+          type = TokenType.Invalid;
+          return;
+        }
+        var data = buf.sourceData[new FixedRange(dataStart, len)];
+        var (ptype, plen) = Lexer.Next(data);
+        type = (plen == len) ? ptype : type;
+      }
+
       public void Dispose() => buf.AddToken(source, type, new(dataStart, buf.sourceData.Length - dataStart), from);
     }
   }
 
-  public readonly struct Token(
+  public readonly partial struct Token(
     SourceIndex source, TokenIndex index, TokenType type, FixedRange data, TokenIndex previous)
   {
     public readonly SourceIndex Source = source;

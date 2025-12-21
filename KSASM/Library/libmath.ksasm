@@ -5,94 +5,169 @@
 
 .region libmath 2048
 
-:f64 v.tempv0: 0*8 v.tempv1: 0*8 v.tempv2: 0*8 v.tempv3: 0*8
+.macro pi 3.14159265358979
 
-.macro v.dot(a, b, wid) {
-  mul:f64 wid a, b
-  sum:f64 wid a, $(0)
+.macro v.dot(wid) {
+  mul:f64 wid
+  addr:f64 wid
 }
 
 # a[0] = a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
-.macro d3.dot(a, b) .v.dot(a, b, *3)
+.macro d3.dot .v.dot(*3)
 
 # v[0] = |v|
-.macro d3.mag(v) {
-  .d3.dot(v, v)
-  sqrt:f64 v, _
+.macro d3.mag {
+  dup:f64*3 2
+  .d3.dot
+  sqrt:f64
 }
 
 # |v| = 1
-.macro d3.norm(v) {
-  copy:f64*3 v.tempv0, v
-  .d3.mag(v.tempv0)
-  max:f64 v.tempv0, $(1e-8)
-  swz:f64*3 v.tempv0, $(0,0,0)
-  div:f64*3 v, v.tempv0
+.macro d3.norm {
+  dup:f64*3 2
+  .d3.mag
+  max:f64 1e-8
+  dup:f64 3
+  div:f64*3
 }
 
-# a = (a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0])
-.macro d3.cross(a, b) {
-  copy:f64*3 v.tempv0, a
-  copy:f64*3 v.tempv1, b
-  swz:f64*6 v.tempv0, $(1,2,2,0,0,1)
-  swz:f64*6 v.tempv1, $(2,1,0,2,1,0)
-  mul:f64*6 v.tempv0, v.tempv1
-  mul:f64*6 v.tempv0, $(1,-1,1,-1,1,-1)
-  sum:f64*6 v.tempv0, $(0,0,1,1,2,2)
-  copy:f64*3 a, v.tempv0
-}
+# b:f64*3 a:f64*3 -> c:f64*3
+# b @ f+0
+# a @ f+24
+# c @ f+24
+# c = (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
+# c = cross(a, b)
+d3.cross:
+  ldf:f64*6 (+0)
+  swz:f64 (4,5,3,2,0,1)
+  mul:f64*3
+  ldf:f64*6 (+0)
+  swz:f64 (5,3,4,1,2,0)
+  mul:f64*3
+  sub:f64*3
+  stf:f64*3 (+24)
+  adjf (+24)
+  ret
 
-# a[0] = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]
-.macro dq.dot(a, b) .v.dot(a, b, *4)
+# a:f64*4 -> b:f64
+# b = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3]
+.macro dq.dot .v.dot(*4)
 
-# a = (
-#  +a[0]*b[3] -a[1]*b[2] +a[2]*b[1] +a[3]*b[0] # (+3, -2, +1, +0)
-#  +a[0]*b[2] +a[1]*b[3] -a[2]*b[0] +a[3]*b[1] # (+2, +3, -0, +1)
-#  -a[0]*b[1] +a[1]*b[0] +a[2]*b[3] +a[3]*b[2] # (-1, +0, +3, +2)
-#  -a[0]*b[0] -a[1]*b[1] -a[2]*b[2] +a[3]*b[3] # (-0, -1, -2, +3)
+# b:f64*4 a:f64*4 -> c:f64*4
+# b @ f+0
+# a @ f+32
+# c @ f+32
+# c = (
+#  +a[0]*b[3] -a[1]*b[2] +a[2]*b[1] +a[3]*b[0]
+#  +a[0]*b[2] +a[1]*b[3] -a[2]*b[0] +a[3]*b[1]
+#  -a[0]*b[1] +a[1]*b[0] +a[2]*b[3] +a[3]*b[2]
+#  -a[0]*b[0] -a[1]*b[1] -a[2]*b[2] +a[3]*b[3]
 # )
-# aka hamilton_wzyx
-.macro dq.concat(a, b) {
-  copy:f64*4 v.tempv0, a
-  swz:f64*8 v.tempv0, $(0,1,2,3,0,1,2,3)
-  copy:f64*4 v.tempv1, b
-  swz:f64*8 v.tempv1, $(3,2,1,0,2,3,0,1)
-  mul:f64*8 v.tempv1, $(1,-1,1,1,1,1,-1,1)
-  mul:f64*8 v.tempv1, v.tempv0
-  sum:f64*8 v.tempv1, $(0,0,0,0,1,1,1,1)
-  copy:f64*4 v.tempv2, b
-  swz:f64*8 v.tempv2, $(1,0,3,2,0,1,2,3)
-  mul:f64*8 v.tempv2, $(-1,1,1,1,-1,-1,-1,1)
-  mul:f64*8 v.tempv2, v.tempv0
-  sum:f64*8 v.tempv2, $(2,2,2,2,3,3,3,3)
-  copy:f64*4 a, v.tempv1
-  add:f64*4 a, v.tempv2
-}
+dq.concat:
+  ldf:f64*8 (+0)
+  swz:f64 (4,4,4,4,3,2,1,0) # column 1
+  mul:f64*4
+  mul:f64*4 (+1,+1,-1,-1)
+  ldf:f64*8 (+0)
+  swz:f64 (5,5,5,5,2,3,0,1) # column 2
+  mul:f64*4
+  mul:f64*4 (-1,+1,+1,-1)
+  add:f64*4
+  ldf:f64*8 (+0)
+  swz:f64 (6,6,6,6,1,0,3,2) # column 3
+  mul:f64*4
+  mul:f64*4 (+1,-1,+1,-1)
+  add:f64*4
+  ldf:f64*8 (+0)
+  swz:f64 (7,7,7,7,0,1,2,3) # column 4
+  mul:f64*4
+  add:f64*4
+  stf:f64*4 (+32)
+  adjf (+32)
+  ret
 
-# r = conj(r)/(r.r)
-.macro dq.invert(r) {
-  copy:f64*4 v.tempv0, r
-  mul:f64*4 r, $(-1,-1,-1,1)
-  .v.dot(v.tempv0, v.tempv0, *4)
-  swz:f64*4 v.tempv0, $(0)
-  div:f64*4 r, v.tempv0
-}
+# a:f64*4 -> b:f64*4
+# a @ f+0
+# b @ f+0
+# b = conj(a)/(a.a)
+dq.invert:
+  ldf:f64*4 (+0)
+  dup:f64*4 3
+  .dq.dot
+  dup:f64 4
+  div:f64*4
+  mul:f64*4 (-1,-1,-1,1)
+  stf:f64*4 (+0)
+  ret
 
-# dq.concat(
-#   dq.concat(
-#     (-r[0], -r[1], -r[2], r[3]),
-#     (v[0], v[1], v[2], 1),
-#   ),
-#   (r[0], r[1], r[2], r[3])
-# )
-.macro d3dq.transform(v, r) {
-  copy:f64*3 v.tempv3, v
-  copy:f64 $[v.tempv3+8*3], $(1)
-  copy:f64*4 $[v.tempv3+8*4], $(-1,-1,-1,1)
-  mul:f64*4 $[v.tempv3+8*4], r
-  .dq.concat($[v.tempv3+8*4], v.tempv3)
-  .dq.concat($[v.tempv3+8*4], r)
-  copy:f64*3 v, $[v.tempv3+8*4]
-}
+# angle:f64 axis:f64*3 -> quat:f64*4
+# angle @ f+0
+# axis  @ f+8
+# quat  @ f+0
+dq.from_axis_angle:
+  ldf:f64 (+0)
+  mul:f64 0.5
+  cos:f64 # cos(angle/2)
+  ldf:f64*4 (+0)
+  mul:f64 0.5
+  sin:f64
+  dup:f64 3
+  mul:f64*3 # sin(angle/2) * axis
+  stf:f64*4 (+0)
+  ret
+
+# rpy:f64*3 -> quat:f64*4
+# +8 start frame
+# rpy  @ f+8
+# quat @ f+0
+dq.from_yaw_pitch_roll:
+  adjf (-8)
+  ldf:f64*3 (+8)
+  mul:f64*3 0.5
+  cos:f64*3             # d e f @f-30
+  ldf:f64*3 (+8)
+  mul:f64*3 0.5
+  sin:f64*3             # a b c @f-54
+
+  ldf:f64*3 (-30)
+  mulr:f64*3            # def
+  ldf:f64*6 (-54)
+  swz:f64 (1,2,0,3,4,5) # b c a d e f
+  mul:f64*3             # bd ce af
+  ldf:f64*3 (-30)
+  swz:f64 (2,0,1)       # f d e
+  mul:f64*3             # bdf ced afe def
+
+  ldf:f64*3 (-54)
+  mulr:f64*3            # abc
+  ldf:f64*6 (-54)
+  swz:f64 (2,0,1,4,5,3) # c a b e f d
+  mul:f64*3             # ce af bd
+  ldf:f64*3 (-54)
+  mul:f64*3             # ace abf bcd
+  mul:f64*4 (1,-1,-1,1) # ace -abf -bcd abc
+  add:f64*4             # bdf+ace ced-abf afe-bcd def+abc
+
+  stf:f64*4 (+0)
+  pop:f64*6
+  ret
+
+# v:f64*3 r:f64*4 -> xv:f64*3
+# v  @ f+0
+# r  @ f+24
+# xv @ f+32
+# xv = dq.concat(dq.concat(conj(r), (...v, 1)), r)
+d3dq.transform:
+  ldf:f64*4 (+24)
+  mul:f64*4 (-1,-1,-1,1)
+  push 1:f64
+  ldf:f64*3 (+0)
+  call dq.concat
+  ldf:f64*4 (+24)
+  call dq.concat
+  stf:f64*3 (+32)
+  pop:f64
+  adjf (+32)
+  ret
 
 }

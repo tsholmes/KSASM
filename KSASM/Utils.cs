@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -170,37 +169,9 @@ namespace KSASM
     }
   }
 
-  public class ListPool<T>
-  {
-    private readonly Stack<List<T>> lists = [];
-
-    public List<T> Take(params Span<T> values)
-    {
-      if (!lists.TryPop(out var list))
-        list = new();
-      list.AddRange(values);
-      return list;
-    }
-
-    public void Return(List<T> list)
-    {
-      if (list == null)
-        return;
-      list.Clear();
-      lists.Push(list);
-    }
-
-    public BufferLease Lease() => new(this, Take());
-
-    public record struct BufferLease(ListPool<T> Pool, List<T> List) : IDisposable
-    {
-      public void Dispose() => Pool.Return(List);
-    }
-  }
-
   public interface IAddr { public int Addr { get; } }
 
-  public readonly struct FixedRange(int start, int length) : IAddr
+  public readonly struct FixedRange(int start, int length) : IAddr, IRange<FixedRange>
   {
     public static readonly FixedRange Invalid = new(-1, -1);
 
@@ -225,6 +196,12 @@ namespace KSASM
         return new(Start + off, len);
       }
     }
+
+    int IRange<FixedRange>.Offset => Start;
+    int IRange<FixedRange>.Length => Length;
+    FixedRange IRange<FixedRange>.Slice(int offset, int length) => new(offset, length);
+    bool IRange<FixedRange>.TryMerge(FixedRange next, out FixedRange merged) =>
+      (merged = End == next.Start ? new(Start, Length + next.Length) : default).Length > 0;
 
     public static FixedRange operator +(FixedRange range, int offset) => new(range.Start + offset, range.Length);
     public static FixedRange operator -(FixedRange range, int offset) => new(range.Start - offset, range.Length);
@@ -328,10 +305,49 @@ namespace KSASM
 
     public struct Enumerator(AppendBuffer<T> buf)
     {
+      private readonly AppendBuffer<T> buf = buf;
       private int index = -1;
       public T Current => buf[index];
       public bool MoveNext() => ++index < buf.Length;
       public Enumerator GetEnumerator() => this;
+    }
+
+    public ChunkEnumerator Chunks() => new(this, new(0, length));
+    public ChunkEnumerator Chunks(FixedRange range)
+    {
+      if (range.Start < 0) throw new IndexOutOfRangeException($"{range.Start}");
+      if (range.End > length) throw new IndexOutOfRangeException($"{range.End}");
+      return new(this, range);
+    }
+
+    public ref struct ChunkEnumerator(AppendBuffer<T> buf, FixedRange range)
+    {
+      private readonly AppendBuffer<T> buf = buf;
+      private readonly FixedRange range = range;
+      private int index = -1;
+      public ReadOnlySpan<T> Current
+      {
+        get
+        {
+          var cstart = index << CHUNK_SHIFT;
+          var start = cstart;
+          var end = cstart + CHUNK_SIZE;
+          if (start < range.Start)
+            start = range.Start;
+          if (end > range.End)
+            end = range.End;
+          return buf.chunks[index].AsSpan(start - cstart, end - start);
+        }
+      }
+      public bool MoveNext()
+      {
+        if (index == -1)
+          index = range.Start >> CHUNK_SHIFT;
+        else
+          index++;
+        return index << CHUNK_SHIFT < buf.Length;
+      }
+      public ChunkEnumerator GetEnumerator() => this;
     }
   }
 

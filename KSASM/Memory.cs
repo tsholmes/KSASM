@@ -111,15 +111,18 @@ namespace KSASM
     }
   }
 
-  public class MemoryAccessor
+  public class MemoryAccessor(IMemory memory)
   {
     public static bool DebugRead = false;
     public static bool DebugWrite = false;
 
-    private readonly IMemory memory;
-    private readonly byte[] buffer = new byte[16 * 8];
+    public delegate void MemAction(int addr, DataType type, int width);
 
-    public MemoryAccessor(IMemory memory) => this.memory = memory;
+    public MemAction OnWrite;
+    public MemAction OnRead;
+
+    private readonly IMemory memory = memory;
+    private readonly byte[] buffer = new byte[16 * 8];
 
     private Span<byte> To(int len) => buffer.AsSpan()[..len];
     private Span<byte> From(int index) => buffer.AsSpan()[index..];
@@ -129,8 +132,10 @@ namespace KSASM
 
     public void Read(ValuePointer ptr, ValArray vals)
     {
+      OnRead?.Invoke(ptr.Address, ptr.Type, ptr.Width);
+
       if (DebugRead)
-        Console.WriteLine($"READ {ptr.Address} {ptr.Type}*{ptr.Width}");
+        Console.WriteLine($"READ {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
       ReadToBuf(ptr.Address, elSize * ptr.Width);
 
@@ -143,16 +148,20 @@ namespace KSASM
 
     public Value Read(int addr, DataType type)
     {
+      OnRead?.Invoke(addr, type, 1);
+
       if (DebugRead)
-        Console.WriteLine($"READ {addr} {type}");
+        Console.WriteLine($"READ {addr:X6} {type}");
       ReadToBuf(addr, type.SizeBytes());
       return DecodeAt(0, type);
     }
 
     public void Write(ValuePointer ptr, ValArray vals)
     {
+      OnWrite?.Invoke(ptr.Address, ptr.Type, ptr.Width);
+
       if (DebugWrite)
-        Console.WriteLine($"WRITE {ptr.Address} {ptr.Type}*{ptr.Width}");
+        Console.WriteLine($"WRITE {ptr.Address:X6} {ptr.Type}*{ptr.Width}");
       var elSize = ptr.Type.SizeBytes();
 
       if (ptr.Width != vals.Width)
@@ -168,8 +177,10 @@ namespace KSASM
 
     public void Write(int addr, DataType type, Value value)
     {
+      OnWrite?.Invoke(addr, type, 1);
+
       if (DebugWrite)
-        Console.WriteLine($"WRITE {addr} {type}");
+        Console.WriteLine($"WRITE {addr:X6} {type}");
       EncodeAt(0, type, value);
       WriteFromBuf(addr, type.SizeBytes());
     }
@@ -178,7 +189,12 @@ namespace KSASM
     {
       var val = Encoding.Decode(From(index), type);
       if (DebugRead)
-        Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      {
+        if (type == DataType.P24)
+          Console.WriteLine($"  {index} {type} = {val.As(type):X6}");
+        else
+          Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      }
       return val;
     }
 
@@ -186,7 +202,12 @@ namespace KSASM
     {
       Encoding.Encode(From(index), type, val);
       if (DebugWrite)
-        Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      {
+        if (type == DataType.P24)
+          Console.WriteLine($"  {index} {type} = {val.As(type):X6}");
+        else
+          Console.WriteLine($"  {index} {type} = {val.As(type)}");
+      }
     }
   }
 }

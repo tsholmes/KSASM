@@ -7,6 +7,7 @@ namespace KSASM.Assembly
 {
   public class Assembler
   {
+    public const int DEFAULT_STRINGS_START = Processor.MAIN_MEM_SIZE - (2 << 20);
     public static bool Debug = false;
 
     public static DebugSymbols Assemble(SourceString source, MemoryAccessor target)
@@ -18,23 +19,41 @@ namespace KSASM.Assembly
       while (mp.Next(out var token))
         tokens.Add(token);
 
-      var ctx = new Context(buffer, tokens);
       var parser = new Parser(buffer, tokens);
       parser.Parse();
 
+      var ctx = new Context(buffer, tokens, parser.ConstNodes, parser.ConstRanges);
+
       foreach (var stmt in parser.Statements)
         stmt.FirstPass(ctx);
-      ctx.EmitConstants();
+      ctx.EmitInlineStrings();
       ctx.Addr = 0;
       foreach (var stmt in parser.Statements)
         stmt.SecondPass(ctx);
 
       var sb = new StringBuilder();
 
+      var varray = new ValArray();
       foreach (var (addr, type, vals) in ctx.Values)
       {
-        for (var i = 0; i < vals.Count; i++)
-          target.Write(addr + i * type.SizeBytes(), type, vals[i]);
+        var tsize = type.SizeBytes();
+        varray.Mode = type.VMode();
+        for (var i = 0; i < vals.Length; i += 8)
+        {
+          var count = 8;
+          if (i + count > vals.Length)
+            count = vals.Length - i;
+
+          varray.Width = count;
+          ctx.RawValues[new FixedRange(vals.Start + i, count)].CopyTo(varray.Values);
+
+          var vaddr = addr + tsize * i;
+          target.Write(
+            new ValuePointer { Address = vaddr, Type = type, Width = (byte)count },
+            varray);
+
+          ctx.Symbols.AddData(vaddr, type, count);
+        }
         if (Debug)
         {
           sb.Clear();
@@ -42,9 +61,14 @@ namespace KSASM.Assembly
           foreach (var (label, laddr) in ctx.Labels)
             if (laddr == addr)
               sb.Append(label).Append(": ");
-          sb.Append($"{addr}: {type}");
-          foreach (var val in vals)
-            sb.Append($" {val.As(type)}");
+          sb.Append($"{addr:X6}: {type}");
+          for (var i = vals.Start; i < vals.End; i++)
+          {
+            if (type == DataType.P24)
+              sb.Append($" {ctx.RawValues[i].As(type):X6}");
+            else
+              sb.Append($" {ctx.RawValues[i].As(type)}");
+          }
           Console.WriteLine(sb.ToString());
         }
       }
@@ -65,8 +89,10 @@ namespace KSASM.Assembly
       return Invalid(token);
     }
 
-    protected Exception Invalid(Token token) =>
-      throw new InvalidOperationException($"invalid token {token.Type} '{buffer[token]}'\n{StackPos(token)}");
+    public Exception Invalid(Token token) => throw Invalid(token, $"invalid token {token.Type} '{buffer[token]}'");
+
+    public Exception Invalid(Token token, string msg) =>
+      throw new InvalidOperationException($"{msg}\n{StackPos(token)}");
 
     public static string StackPos(ParseBuffer buffer, Token token, int frameLimit = 20)
     {
@@ -115,18 +141,32 @@ namespace KSASM.Assembly
     protected string StackPos(Token token, int frameLimit = 20) => StackPos(buffer, token, frameLimit);
   }
 
-  public class Context(ParseBuffer buffer, AppendBuffer<Token> tokens) : TokenProcessor(buffer)
+  public class Context(
+    ParseBuffer buffer,
+    AppendBuffer<Token> tokens,
+    AppendBuffer<ExprNode> constNodes,
+    AppendBuffer<FixedRange> constRanges
+  ) : TokenProcessor(buffer)
   {
     public readonly DebugSymbols Symbols = new(buffer, tokens);
     public readonly ParseBuffer Buffer = buffer;
 
-    public readonly Dictionary<string, int> Labels = [];
-    public readonly List<(int, DataType, List<Value>)> Values = [];
+    public readonly AppendBuffer<ExprNode> ConstNodes = constNodes;
+    public readonly AppendBuffer<FixedRange> ConstRanges = constRanges;
 
-    public readonly List<(DataType, ConstExprList, int)> ConstExprs = [];
-    public readonly Dictionary<(DataType, ConstExprList), int> ConstExprAddrs = [];
+    public readonly AppendBuffer<Value> StringChars = new();
+    public readonly AppendBuffer<FixedRange> InlineStrings = new();
+
+    public readonly Dictionary<string, int> Labels = [];
+
+    public readonly AppendBuffer<Value> RawValues = new();
+    public readonly AppendBuffer<(int, DataType, FixedRange)> Values = new();
 
     public int Addr = 0;
+
+    // On first pass, stores the current length of all inline strings
+    // On second pass, stores the start memory address of all inline strings
+    public int InlineStringStart = 0;
 
     public void EmitLabel(string label)
     {
@@ -136,115 +176,117 @@ namespace KSASM.Assembly
 
     public void EmitInst(Token token, ulong encoded)
     {
+      if (Assembler.Debug)
+      {
+        var inst = Instruction.Decode(encoded);
+        Console.WriteLine($"ASM INST {Addr:X6}: {inst.OpCode}*{inst.Width} {inst.AType} {inst.BType} {inst.CType}");
+      }
+
       Symbols.AddInst(Addr, token.Index);
-      Values.Add((Addr, DataType.U64, [new Value() { Unsigned = encoded }]));
-      Addr += DataType.U64.SizeBytes();
+      using var emitter = Emitter(DataType.P24);
+      emitter.Emit(new() { Unsigned = encoded });
     }
 
-    public void Emit(DataType type, List<Value> values)
-    {
-      Values.Add((Addr, type, values));
-      Symbols.AddData(Addr, type, values.Count);
-      Addr += type.SizeBytes() * values.Count;
-    }
+    public ValueEmitter Emitter(DataType type) => new(this, type);
 
-    public void Emit(DataType type, params ReadOnlySpan<Value> values)
+    public bool TryAddString(Token tok, out FixedRange range)
     {
-      Values.Add((Addr, type, [.. values]));
-      Symbols.AddData(Addr, type, values.Length);
-      Addr += type.SizeBytes() * values.Length;
-    }
+      var start = StringChars.Length;
+      Span<Value> chunk = stackalloc Value[256];
 
-    public void RegisterConst(DataType type, ConstExprList consts, int width)
-    {
-      // if (Debug)
-      //   Console.WriteLine($"ASM RCONST {type}*{width} {val.As(type)}");
-      ConstExprs.Add((type, consts, width));
-    }
-
-    public void EmitConstants()
-    {
-      var vals = new Dictionary<(DataType, ConstExprList), ValueX8>();
-      var maxWidths = new Dictionary<(DataType, ValueX8), int>();
-      var sb = new StringBuilder();
-      foreach (var (type, consts, wid) in ConstExprs)
+      var parser = new Token.StringParser(Buffer[tok]);
+      while (!parser.Done)
       {
-        if (consts.Addr)
+        if (!parser.NextChunk(chunk, out var count))
         {
-          var addr = EvalExpr(consts[0], type.VMode());
-          addr.Convert(type.VMode(), ValueMode.Unsigned);
-          if (Assembler.Debug)
-            Console.WriteLine($"CONST ADDR {addr}");
-          ConstExprAddrs[(type, consts)] = (int)addr.Unsigned;
-          continue;
+          StringChars.Length = start;
+          range = default;
+          return false;
         }
-        ValueX8 vs = new();
-        for (var i = 0; i < consts.Count; i++)
-        {
-          vs[i] = EvalExpr(consts[i], type.VMode());
-        }
-        for (var i = consts.Count; i < 8; i++)
-        {
-          vs[i] = vs[i % consts.Count];
-        }
-        vals[(type, consts)] = vs;
-
-        if (Assembler.Debug)
-        {
-          sb.Clear();
-          sb.Append($"CONST {type}*{wid}");
-          for (var i = 0; i < 8; i++)
-            sb.Append($" {vs[i].As(type)}");
-          Console.WriteLine(sb.ToString());
-        }
-
-        maxWidths[(type, vs)] = Math.Max(maxWidths.GetValueOrDefault((type, vs)), wid);
+        StringChars.AddRange(chunk[..count]);
       }
 
-      if (maxWidths.Count == 0)
-        return;
-
-      if (!Labels.TryGetValue("CONST", out var caddr))
-        throw new InvalidOperationException("Cannot emit inlined constants without CONST label");
-
-      Addr = caddr;
-      var constAddrs = new Dictionary<(DataType, ValueX8), int>();
-      foreach (var ((type, vs), width) in maxWidths)
+      if (StringChars.Length == start)
       {
-        constAddrs[(type, vs)] = Addr;
-        Emit(type, vs[..width]);
+        range = default;
+        return false;
       }
 
-      foreach (var (type, expr, _) in ConstExprs)
-      {
-        if (expr.Addr) continue;
-        var val = vals[(type, expr)];
-        ConstExprAddrs[(type, expr)] = constAddrs[(type, val)];
-      }
+      range = new(start, StringChars.Length - start);
+      return true;
     }
 
-    public Value EvalExpr(ConstExpr expr, ValueMode mode)
+    // add InlineStringStart to Start after first pass to get actual memory range
+    public FixedRange AddInlineString(FixedRange str)
     {
-      var vals = new Stack<Value>();
+      InlineStrings.Add(str);
+      var res = new FixedRange(InlineStringStart, str.Length);
+      InlineStringStart = res.End;
+      return res;
+    }
+
+    private static bool TryAppendString(AppendBuffer<Value> buf, ReadOnlySpan<char> data, out FixedRange range)
+    {
+      var start = buf.Length;
+      Span<Value> chunk = stackalloc Value[256];
+
+      var parser = new Token.StringParser(data);
+      while (!parser.Done)
+      {
+        if (!parser.NextChunk(chunk, out var count))
+        {
+          buf.Length = start;
+          range = default;
+          return false;
+        }
+      }
+
+      range = new(start, buf.Length - start);
+      return true;
+    }
+
+    public void EmitInlineStrings()
+    {
+      if (!Labels.TryGetValue("STRINGS", out InlineStringStart))
+        InlineStringStart = Labels["STRINGS"] = Assembler.DEFAULT_STRINGS_START;
+
+      Addr = InlineStringStart;
+      using var emitter = Emitter(DataType.U8);
+
+      foreach (var str in InlineStrings)
+        emitter.EmitString(str);
+    }
+
+    private readonly Stack<Value> evalStack = new();
+    public Value EvalExpr(int index, ValueMode mode)
+    {
+      var vals = evalStack;
+      vals.Clear();
       Value left = default, right = default;
       var ops = mode.Ops();
-      foreach (var node in expr)
+      var range = ConstRanges[index];
+      for (var i = range.Start; i < range.End; i++)
       {
+        var node = ConstNodes[i];
+        var token = Buffer[node.Token];
         switch (node.Op)
         {
           case ConstOp.Leaf:
-            if (node.Val.StringVal != null)
+            if (token.Type == TokenType.Number)
             {
-              if (!Labels.TryGetValue(node.Val.StringVal, out var lpos))
-                throw Invalid(buffer[node.Token]);
+              if (!Token.TryParseValue(Buffer[token], out left, out var lmode))
+                throw Invalid(token);
+              left.Convert(lmode, mode);
+            }
+            else if (token.Type == TokenType.Word)
+            {
+              if (!Labels.TryGetValue(new(Buffer[token]), out var lpos))
+                throw Invalid(token);
               left.Unsigned = (ulong)lpos;
               left.Convert(ValueMode.Unsigned, mode);
             }
             else
-            {
-              left = node.Val.Value;
-              left.Convert(node.Val.Mode, mode);
-            }
+              throw Invalid(token);
             vals.Push(left);
             break;
           case ConstOp.Neg:
@@ -289,5 +331,35 @@ namespace KSASM.Assembly
     }
 
     protected override bool Peek(out Token token) => throw new NotImplementedException();
+
+    public readonly struct ValueEmitter(Context ctx, DataType type) : IDisposable
+    {
+      private readonly Context ctx = ctx;
+      private readonly int addr = ctx.Addr;
+      private readonly DataType type = type;
+      private readonly int valSize = type.SizeBytes();
+      private readonly int start = ctx.RawValues.Length;
+
+      public readonly void Emit(Value val)
+      {
+        ctx.RawValues.Add(val);
+        ctx.Addr += valSize;
+      }
+
+      public readonly void EmitRange(ReadOnlySpan<Value> vals)
+      {
+        ctx.RawValues.AddRange(vals);
+        ctx.Addr += valSize * vals.Length;
+      }
+
+      public readonly void EmitString(FixedRange range)
+      {
+        foreach (var chunk in ctx.StringChars.Chunks(range))
+          EmitRange(chunk);
+      }
+
+      readonly void IDisposable.Dispose() =>
+        ctx.Values.Add((addr, type, new(start, ctx.RawValues.Length - start)));
+    }
   }
 }

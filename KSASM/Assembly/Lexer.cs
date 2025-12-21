@@ -3,79 +3,57 @@ using System;
 
 namespace KSASM.Assembly
 {
-  public class Lexer : IDisposable
+  public static class Lexer
   {
     public static SourceIndex LexSource(ParseBuffer buffer, SourceString source, TokenIndex producer)
     {
       SourceIndex sourceIndex;
 
-      using (var lexer = new Lexer(buffer, source, producer))
+      var src = source.Source.AsSpan();
+      var index = 0;
+
+      using (var s = buffer.NewRawSource(source.Name, src, producer))
       {
-        sourceIndex = lexer.SourceIndex;
-        while (lexer.Next()) ;
+        sourceIndex = s.Source;
+        while (src.Length > 0)
+        {
+          var ws = SkipWS(src);
+          src = src[ws..];
+          index += ws;
+          if (src.Length == 0)
+            break;
+
+          var (type, length) = Next(src);
+          src = src[length..];
+          s.AddToken(type, new(index, length));
+          index += length;
+        }
+        s.AddToken(TokenType.EOL, new(index, 0));
       }
 
       return sourceIndex;
     }
 
-    private readonly SourceString source;
-    private readonly ParseBuffer.RawSourceBuilder s;
-    private int index = 0;
-
-    private SourceIndex SourceIndex => s.Source;
-
-    private Lexer(ParseBuffer buffer, SourceString source, TokenIndex producer)
+    private static char At(ReadOnlySpan<char> src, int index)
     {
-      this.source = source;
-      s = buffer.NewRawSource(source.Name, source.Source, producer);
+      if (index >= src.Length)
+        return default;
+      return src[index];
     }
 
-    private bool Next()
+    private static int SkipWS(ReadOnlySpan<char> src)
     {
-      SkipWS();
-
-      if (index == source.Length)
-        return false;
-
-      var c = At(index);
-
-      return c switch
+      var index = 0;
+      var len = src.Length;
+      while (index < len)
       {
-        '\n' => Add(TokenType.EOL, 1),
-        '[' => Add(TokenType.IOpen, 1),
-        ']' => Add(TokenType.IClose, 1),
-        '+' or '-' => Add(TokenType.Offset, 1),
-        ',' => Add(TokenType.Comma, 1),
-        '$' when At(index + 1) == '(' => Add(TokenType.COpen, 2),
-        '$' when At(index + 1) == '[' => Add(TokenType.CIOpen, 2),
-        '(' => Add(TokenType.POpen, 1),
-        ')' => Add(TokenType.PClose, 1),
-        '{' => Add(TokenType.BOpen, 1),
-        '}' => Add(TokenType.BClose, 1),
-        '/' => Add(TokenType.Div, 1),
-        '~' => Add(TokenType.Not, 1),
-        _ when IsWordStart(c) => TakeWordLike(),
-        '@' => TakePosition(),
-        '*' => TakeWidth(),
-        ':' => TakeType(),
-        _ when IsDigit(c) => TakeNumber(),
-        '.' => TakeMacro(),
-        '"' => TakeString(),
-        _ => Add(TokenType.Invalid, 1),
-      };
-    }
-
-    private void SkipWS()
-    {
-      while (index < source.Length)
-      {
-        var c = At(index);
-        if (c == '\\' && At(index + 1) == '\n')
+        var c = At(src, index);
+        if (c == '\\' && At(src, index + 1) == '\n')
         {
           index += 2;
           continue;
         }
-        else if (c == '\\' && At(index + 1) == '\r' && At(index + 2) == '\n')
+        else if (c == '\\' && At(src, index + 1) == '\r' && At(src, index + 2) == '\n')
         {
           index += 3;
           continue;
@@ -84,158 +62,158 @@ namespace KSASM.Assembly
           break;
         index++;
       }
-      if (At(index) != '#')
-        return;
-      while (index < source.Length && At(index) != '\n')
+      if (At(src, index) != '#')
+        return index;
+      while (index < len && At(src, index) != '\n')
         index++;
+      return index;
     }
 
-    private bool Add(TokenType type, int len)
+    public static (TokenType, int) Next(ReadOnlySpan<char> src)
     {
-      s.AddToken(type, new(index, len));
-      index += len;
-      return true;
+      var c = src[0];
+
+      return c switch
+      {
+        '\n' => (TokenType.EOL, 1),
+        // Placeholder handled in WordLike
+        // Word handled in WordLine
+        // Label handled in WordLike
+        '@' => TakePosition(src),
+        '-' when At(src, 1) == '>' => (TokenType.Result, 2),
+        ',' => (TokenType.Comma, 1),
+        ':' => TakeType(src),
+        _ when IsDigit(c) => TakeNumber(src),
+        '(' => (TokenType.POpen, 1),
+        ')' => (TokenType.PClose, 1),
+        '.' => TakeMacro(src),
+        '"' => TakeString(src),
+        '{' => (TokenType.BOpen, 1),
+        '}' => (TokenType.BClose, 1),
+        '+' => (TokenType.Plus, 1),
+        '-' => (TokenType.Minus, 1),
+        '*' => (TokenType.Mult, 1),
+        '/' => (TokenType.Div, 1),
+        '~' => (TokenType.Not, 1),
+        _ when IsWordStart(c) => TakeWordLike(src),
+        _ => (TokenType.Invalid, 1),
+      };
     }
 
-    private bool TakeWordLike()
+    private static (TokenType, int) TakeWordLike(ReadOnlySpan<char> src)
     {
       var len = 1;
-      while (IsWordChar(At(index + len)))
+      while (IsWordChar(At(src, len)))
         len++;
 
-      if (len == 1 && At(index) == '_')
-        return Add(TokenType.Placeholder, 1);
-      else if (At(index + len) == ':' && IsBoundary(At(index + len + 1)))
-        return Add(TokenType.Label, len + 1);
+      if (len == 1 && src[0] == '_')
+        return (TokenType.Placeholder, 1);
+      else if (At(src, len) == ':' && IsBoundary(At(src, len + 1)))
+        return (TokenType.Label, len + 1);
       else
-        return Add(TokenType.Word, len);
+        return (TokenType.Word, len);
     }
 
-    private bool TakeMacro()
+    private static (TokenType, int) TakeMacro(ReadOnlySpan<char> src)
     {
       var len = 1;
-      while (IsWordChar(At(index + len)))
+      while (IsWordChar(At(src, len)))
         len++;
 
       if (len == 1)
-        return Add(TokenType.Invalid, 1);
+        return (TokenType.Invalid, 1);
       else
-        return Add(TokenType.Macro, len);
+        return (TokenType.Macro, len);
     }
 
-    private bool TakeString()
+    private static (TokenType, int) TakeString(ReadOnlySpan<char> src)
     {
       var len = 1;
-      while (index + len < source.Length && At(index + len) is not '"' and not '\n')
+      while (len < src.Length && At(src, len) is not '"' and not '\n')
         len++;
 
       len++;
 
-      if (At(index + len - 1) != '"')
-        return Add(TokenType.Invalid, len);
+      if (At(src, len - 1) != '"')
+        return (TokenType.Invalid, len);
       else
-        return Add(TokenType.String, len);
+        return (TokenType.String, len);
     }
 
-    private bool TakePosition()
+    private static (TokenType, int) TakePosition(ReadOnlySpan<char> src)
     {
       var len = 1;
       // TODO: support hex positions?
-      while (IsDigit(At(index + len)))
+      while (IsDigit(At(src, len)))
         len++;
 
       if (len == 1)
-        return Add(TokenType.Invalid, 1);
+        return (TokenType.Invalid, 1);
       else
-        return Add(TokenType.Position, len);
+        return (TokenType.Position, len);
     }
 
-    private bool TakeWidth()
+    private static (TokenType, int) TakeType(ReadOnlySpan<char> src)
     {
       var len = 1;
-      while (IsDigit(At(index + len)))
+      while (IsWordChar(At(src, len)))
         len++;
 
       if (len == 1)
-        return Add(TokenType.Mult, 1);
+        return (TokenType.Invalid, 1);
       else
-        return Add(TokenType.Width, len);
+        return (TokenType.Type, len);
     }
 
-    private bool TakeType()
-    {
-      var len = 1;
-      while (IsWordChar(At(index + len)))
-        len++;
-
-      if (len == 1)
-        return Add(TokenType.Invalid, 1);
-      else
-        return Add(TokenType.Type, len);
-    }
-
-    private bool TakeNumber()
+    private static (TokenType, int) TakeNumber(ReadOnlySpan<char> src)
     {
       var len = 1;
       var minLen = 1;
-      if ((At(index), At(index + 1)) is ('0', 'x') or ('0', 'X'))
+      if ((src[0], At(src, 1)) is ('0', 'x') or ('0', 'X'))
       {
         // hex
         len = 2;
         minLen = 3;
-        while (char.IsAsciiHexDigit(At(index + len)))
+        while (char.IsAsciiHexDigit(At(src, len)))
           len++;
       }
-      else if ((At(index), At(index + 1)) is ('0', 'b') or ('0', 'B'))
+      else if ((src[0], At(src, 1)) is ('0', 'b') or ('0', 'B'))
       {
         // binary
         len = 2;
         minLen = 3;
-        while (At(index + len) is '0' or '1')
+        while (At(src, len) is '0' or '1')
           len++;
       }
       else
       {
         // decimal
 
-        while (IsDigit(At(index + len)))
+        while (IsDigit(At(src, len)))
           len++;
 
-        if (At(index + len) is '.')
+        if (At(src, len) is '.')
         {
           len++;
           minLen = len + 1;
-          while (IsDigit(At(index + len)))
+          while (IsDigit(At(src, len)))
             len++;
         }
 
-        if (At(index + len) is 'e' or 'E')
+        if (At(src, len) is 'e' or 'E')
         {
           len++;
-          if (At(index + len) is '+' or '-')
+          if (At(src, len) is '+' or '-')
             len++;
           minLen = len + 1;
-          while (IsDigit(At(index + len)))
+          while (IsDigit(At(src, len)))
             len++;
         }
       }
       if (len < minLen)
-        return Add(TokenType.Invalid, len);
+        return (TokenType.Invalid, len);
       else
-        return Add(TokenType.Number, len);
-    }
-
-    private char At(int index)
-    {
-      if (index < 0 || index >= source.Length)
-        return (char)0;
-      return source[index];
-    }
-
-    public void Dispose()
-    {
-      s.AddToken(TokenType.EOL, new(source.Length, 0));
-      s.Dispose();
+        return (TokenType.Number, len);
     }
 
     public static bool IsWordStart(char c) => c switch
@@ -249,16 +227,17 @@ namespace KSASM.Assembly
     public static bool IsWordChar(char c) => IsDigit(c) || IsWordStart(c) || c == '.';
     public static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c == 0;
 
+    // TODO: switch this to just take in firstEnd and secondStart
+    // TODO: move Is* character methods to extension properties
     public static bool NeedsSpace(TokenType firstType, char firstEnd, TokenType secondType, char secondStart) =>
       (firstType, firstEnd, secondType, secondStart) switch
       {
         (TokenType.Label or TokenType.Comma, _, _, _) => true,
-        (_, _, TokenType.Mult, _) => true,
         _ when IsWordChar(firstEnd) && IsWordChar(secondStart) => true,
-        (_, '(' or '[', TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => false,
+        (_, '(', TokenType.POpen, _) => false,
         (_, _, TokenType.POpen, _) when IsWordChar(firstEnd) => false,
-        (_, _, TokenType.POpen or TokenType.COpen or TokenType.CIOpen, _) => true,
-        (TokenType.PClose, _, _, ')' or ']') => false,
+        (_, _, TokenType.POpen, _) => true,
+        (TokenType.PClose, _, _, ')') => false,
         (TokenType.PClose, _, _, _) => true,
         _ => false,
       };

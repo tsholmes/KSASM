@@ -39,6 +39,7 @@ namespace KSASM
     public abstract void Min(ref Value val, Value other);
 
     public abstract int GetSign(Value val);
+    public abstract int Compare(Value val, Value other);
   }
 
   public class UnsignedValueOps : ValueOps
@@ -80,6 +81,7 @@ namespace KSASM
     public override void Min(ref Value val, Value other) => val.Unsigned = Math.Min(val.Unsigned, other.Unsigned);
 
     public override int GetSign(Value val) => val.Unsigned == 0 ? 0 : 1;
+    public override int Compare(Value val, Value other) => val.Unsigned.CompareTo(other.Unsigned);
   }
 
   public class SignedValueOps : ValueOps
@@ -126,6 +128,7 @@ namespace KSASM
     public override void Min(ref Value val, Value other) => val.Signed = Math.Min(val.Signed, other.Signed);
 
     public override int GetSign(Value val) => val.Signed < 0 ? -1 : val.Signed > 0 ? 1 : 0;
+    public override int Compare(Value val, Value other) => val.Signed.CompareTo(other.Signed);
   }
 
   public class FloatValueOps : ValueOps
@@ -160,5 +163,6 @@ namespace KSASM
     public override void Min(ref Value val, Value other) => val.Float = Math.Min(val.Float, other.Float);
 
     public override int GetSign(Value val) => val.Float < 0 ? -1 : val.Float > 0 ? 1 : 0;
+    public override int Compare(Value val, Value other) => val.Float.CompareTo(other.Float);
   }
 }

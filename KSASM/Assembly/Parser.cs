@@ -7,6 +7,8 @@ namespace KSASM.Assembly
   public class Parser : TokenProcessor
   {
     public readonly List<Statement> Statements = [];
+    public readonly AppendBuffer<ExprNode> ConstNodes = new();
+    public readonly AppendBuffer<FixedRange> ConstRanges = new(); // ranges in ConstNodes of a single expression
 
     private readonly AppendBuffer<Token> tokens;
     private int index = 0;
@@ -63,15 +65,7 @@ namespace KSASM.Assembly
 
     private void ParseLine()
     {
-      while (!EOF && !PeekType(TokenType.EOL))
-      {
-        if (TakeType(TokenType.Label, out var ltoken))
-          AddLabel(ltoken);
-        else if (TakeType(TokenType.Position, out var ptoken))
-          AddPosition(ptoken);
-        else
-          break;
-      }
+      ParseLinePrefix();
       if (TakeType(TokenType.EOL))
         return;
       if (PeekType(TokenType.Type))
@@ -81,6 +75,19 @@ namespace KSASM.Assembly
 
       if (!TakeType(TokenType.EOL))
         Invalid();
+    }
+
+    private void ParseLinePrefix()
+    {
+      while (true)
+      {
+        if (TakeType(TokenType.Label, out var ltoken))
+          AddLabel(ltoken);
+        else if (TakeType(TokenType.Position, out var ptoken))
+          AddPosition(ptoken);
+        else
+          break;
+      }
     }
 
     private void AddLabel(Token token) =>
@@ -95,240 +102,145 @@ namespace KSASM.Assembly
 
     private void ParseDataLine()
     {
-      if (!TakeType(TokenType.Type, out var token))
-        Invalid();
+      while (TakeType(TokenType.Type, out var typeToken))
+        ParseDataGroup(typeToken);
+    }
 
-      if (!Enum.TryParse(buffer[token][1..], true, out DataType curType))
-        Invalid(token);
+    private void ParseDataGroup(Token typeToken)
+    {
+      if (!Token.TryParseType(buffer[typeToken], out var type))
+        throw Invalid(typeToken);
 
-      while (!EOF && !PeekType(TokenType.EOL))
+      while (true)
       {
-        if (TakeType(TokenType.Type, out token))
-        {
-          if (!Enum.TryParse(buffer[token][1..], true, out curType))
-            Invalid(token);
-        }
-        else if (TakeType(TokenType.Label, out token))
-          AddLabel(token);
-        else if (TakeType(TokenType.Position, out token))
-          AddPosition(token);
-        else if (TakeType(TokenType.Word, out token))
-          Statements.Add(new ValueStatement { Token = token, Type = curType, StrValue = buffer[token].ToString() });
-        else if (TakeType(TokenType.Number, out token))
-        {
-          var stmt = new ValueStatement { Token = token, Type = curType };
-          var valid = false;
-          switch (curType.VMode())
-          {
-            case ValueMode.Unsigned:
-              valid = Values.TryParseUnsigned(buffer[token], out stmt.Value.Unsigned);
-              break;
-            case ValueMode.Signed:
-              valid = Values.TryParseSigned(buffer[token], out stmt.Value.Signed);
-              break;
-            case ValueMode.Float:
-              valid = Values.TryParseFloat(buffer[token], out stmt.Value.Float);
-              break;
-          }
-          if (!valid)
-            Invalid(token);
-          if (TakeType(TokenType.Width, out token))
-          {
-            if (!int.TryParse(buffer[token][1..], out stmt.Width))
-              Invalid(token);
-          }
-          Statements.Add(stmt);
-        }
-        else if (TakeType(TokenType.String, out token))
-        {
-          if (curType != DataType.U8)
-            Invalid(token);
+        ParseLinePrefix();
 
-          var stmt = new ValueListStatement { Token = token, Values = [] };
-          var str = buffer[token][1..^1];
-          for (var i = 0; i < str.Length; i++)
-          {
-            var c = str[i];
-            if (c == '\\')
-            {
-              if (i == str.Length - 1)
-                Invalid(token);
-              var cn = str[i + 1];
-              c = cn switch
-              {
-                'n' => '\n',
-                'r' => '\r',
-                '\\' => '\\',
-                't' => '\t',
-                _ => throw Invalid(token),
-              };
-              i++;
-            }
-            stmt.Values.Add(new() { Unsigned = c });
-          }
-          Statements.Add(stmt);
-        }
-        else if (PeekType(TokenType.COpen, out _))
+        var data = new ParsedData() { Type = type };
+        if (TakeType(TokenType.Number, out data.Value)) { }
+        else if (TakeType(TokenType.Word, out data.Value)) { }
+        else if (TakeType(TokenType.String, out data.Value))
         {
-          var stmt = new ExprValueStatement
-          {
-            Type = curType,
-            Exprs = ParseConsts(),
-          };
-          if (TakeType(TokenType.Width, out token))
-          {
-            if (!int.TryParse(buffer[token][1..], out stmt.Width))
-              throw Invalid(token);
-          }
-          Statements.Add(stmt);
+          if (type is not (DataType.U8 or DataType.S48))
+            throw Invalid(data.Value);
+        }
+        else if (TakeType(TokenType.POpen, out data.Value))
+        {
+          data.ExprVal = ParseConsts();
+          if (!TakeType(TokenType.PClose))
+            throw Invalid();
         }
         else
-          Invalid();
+          break;
+
+        if (TakeType(TokenType.Mult))
+        {
+          if (TakeType(TokenType.Number, out var wtoken))
+            data.Width = wtoken;
+          else
+            throw Invalid();
+        }
+
+        Statements.Add(new DataStatement(data));
       }
     }
 
     private void ParseInstruction()
     {
-      var inst = new InstructionStatement();
+      var inst = new ParsedInstruction();
 
-      if (!TakeType(TokenType.Word, out inst.OpToken))
-        Invalid();
-      if (!Enum.TryParse(buffer[inst.OpToken], true, out inst.Op))
-        Invalid(inst.OpToken);
+      if (!TakeType(TokenType.Word, out inst.OpCode))
+        throw Invalid();
 
       if (TakeType(TokenType.Type, out var ttoken))
+        inst.DefaultType = ttoken;
+
+      if (TakeType(TokenType.Mult))
       {
-        if (!Enum.TryParse(buffer[ttoken][1..], true, out DataType parsedType))
-          Invalid(ttoken);
-        inst.Type = parsedType;
+        if (!TakeType(TokenType.Number, out var wtoken))
+          throw Invalid();
+        inst.Width = wtoken;
       }
 
-      if (TakeType(TokenType.Width, out var wtoken) && !int.TryParse(buffer[wtoken][1..], out inst.Width))
-        Invalid(wtoken);
+      var allowImm = true;
+      while (inst.OperandCount < 3 && !PeekType(TokenType.EOL))
+      {
+        if (inst.ResultIndex == -1 && TakeType(TokenType.Result))
+        {
+          inst.ResultIndex = inst.OperandCount;
+          allowImm = false;
+          continue;
+        }
 
-      inst.OperandA = ParseOperand();
+        ParseOperand(ref inst.Op(inst.OperandCount++), ref allowImm);
 
-      if (!TakeType(TokenType.Comma, out _))
-        Invalid();
+        if (inst.OperandCount == 1 && inst.Width == null && TakeType(TokenType.Mult))
+        {
+          if (!TakeType(TokenType.Number, out var wtoken))
+            throw Invalid();
+          inst.Width = wtoken;
+        }
+      }
 
-      inst.OperandB = ParseOperand();
-
-      Statements.Add(inst);
+      Statements.Add(new InstructionStatement(inst));
     }
 
-    private ParsedOperand ParseOperand()
+    private void ParseOperand(ref ParsedOperand op, ref bool allowImm)
     {
-      var op = new ParsedOperand();
-
-      if (TakeType(TokenType.Placeholder, out _))
+      if (TakeType(TokenType.Placeholder, out var token))
       {
-        op.Mode = ParsedOpMode.Placeholder;
-        return op;
+        allowImm = false;
+        op.Val = token;
       }
-
-      var indirect = TakeType(TokenType.IOpen, out _);
-
-      if (PeekType(TokenType.COpen, out _) || PeekType(TokenType.CIOpen, out _))
+      else if (!allowImm)
+        throw Invalid();
+      else if (TakeType(TokenType.Number, out token))
+        op.Val = token;
+      else if (TakeType(TokenType.Word, out token))
+        op.Val = token;
+      else if (TakeType(TokenType.String, out token))
+        op.Val = token;
+      else if (TakeType(TokenType.POpen, out token))
       {
-        op.Consts = ParseConsts();
-        op.Consts.Indirect = indirect;
-        op.Mode = ParsedOpMode.Const;
-
-        if (indirect && !TakeType(TokenType.IClose, out _))
+        op.Val = token;
+        op.ExprVal = ParseConsts();
+        if (!TakeType(TokenType.PClose))
           throw Invalid();
       }
       else
-      {
-        var first = ParseAddr(indirect, false);
-        if (Peek(out var token) &&
-            (token.Type is TokenType.IOpen or TokenType.Offset or TokenType.Word or TokenType.Number))
-        {
-          op.Base = first;
-          op.Addr = ParseAddr(indirect, true);
-          op.Mode = ParsedOpMode.BaseOffset;
-        }
-        else
-        {
-          op.Addr = first;
-          op.Mode = first.Offset != null ? ParsedOpMode.Offset : ParsedOpMode.Addr;
-        }
-      }
-
-      if (TakeType(TokenType.Type, out var ttoken))
-      {
-        if (!Enum.TryParse(buffer[ttoken][1..], true, out DataType type))
-          Invalid(ttoken);
-        op.Type = type;
-      }
-
-      return op;
-    }
-
-    private AddrRef ParseAddr(bool indirect, bool requireOffset)
-    {
-      var addr = new AddrRef();
-
-      addr.Indirect = indirect || TakeType(TokenType.IOpen, out _);
-
-      if (TakeType(TokenType.Offset, out var otoken))
-        addr.Offset = buffer[otoken].ToString();
-      else if (requireOffset)
-        Invalid();
-
-      if (TakeType(TokenType.Word, out var wtoken))
-        addr.StrAddr = buffer[wtoken].ToString();
-      else if (TakeType(TokenType.Number, out var ntoken))
-      {
-        if (!Values.TryParseValue(buffer[ntoken], out var val, out var mode))
-          Invalid(ntoken);
-        if (mode != ValueMode.Unsigned)
-          Invalid(ntoken);
-        addr.IntAddr = (int)val.Unsigned;
-      }
-      else
-        Invalid();
-
-      if (addr.Indirect && !TakeType(TokenType.IClose, out _))
-        Invalid();
-
-      return addr;
-    }
-
-    private ConstExprList ParseConsts()
-    {
-      var consts = new ConstExprList();
-
-      if (TakeType(TokenType.CIOpen, out _))
-        consts.Addr = true;
-      else if (!TakeType(TokenType.COpen, out _))
         throw Invalid();
 
-      consts.Add(ParseConstInner());
+      if (TakeType(TokenType.Type, out token))
+        op.Type = token;
+    }
+
+    private FixedRange ParseConsts()
+    {
+      var start = ConstRanges.Length;
+
+      ParseConstInner();
 
       while (TakeType(TokenType.Comma, out _))
-        consts.Add(ParseConstInner());
+        ParseConstInner();
 
-      if (consts.Addr && !TakeType(TokenType.IClose, out _))
-        throw Invalid();
-      else if (!consts.Addr && !TakeType(TokenType.PClose, out _))
-        throw Invalid();
-
-      return consts;
+      return new(start, ConstRanges.Length - start);
     }
 
-    private ConstExpr ParseConstInner()
+    private void ParseConstInner()
     {
-      var expr = new ConstExpr();
-
       void parseAddSub()
       {
         parseMulDiv();
         while (true)
         {
-          if (TakeType(TokenType.Offset, out var otoken))
+          if (TakeType(TokenType.Plus, out var otoken))
           {
             parseMulDiv();
-            expr.PushOp(otoken.Index, buffer[otoken][0] == '-' ? ConstOp.Sub : ConstOp.Add);
+            PushConstOp(ConstOp.Add, otoken.Index);
+          }
+          else if (TakeType(TokenType.Minus, out otoken))
+          {
+            parseMulDiv();
+            PushConstOp(ConstOp.Sub, otoken.Index);
           }
           else
             break;
@@ -342,19 +254,12 @@ namespace KSASM.Assembly
           if (TakeType(TokenType.Mult, out var mtoken))
           {
             parseGroup();
-            expr.PushOp(mtoken.Index, ConstOp.Mul);
+            PushConstOp(ConstOp.Mul, mtoken.Index);
           }
           else if (TakeType(TokenType.Div, out var dtoken))
           {
             parseGroup();
-            expr.PushOp(dtoken.Index, ConstOp.Div);
-          }
-          else if (TakeType(TokenType.Width, out var wtoken))
-          {
-            if (!Values.TryParseValue(buffer[wtoken][1..], out var val, out var mode))
-              throw Invalid(wtoken);
-            expr.PushVal(wtoken.Index, new(Value: val, Mode: mode));
-            expr.PushOp(wtoken.Index, ConstOp.Mul);
+            PushConstOp(ConstOp.Div, dtoken.Index);
           }
           else
             break;
@@ -369,82 +274,73 @@ namespace KSASM.Assembly
             throw Invalid();
         }
         else if (TakeType(TokenType.Word, out var wtoken))
-          expr.PushVal(wtoken.Index, new(StringVal: buffer[wtoken].ToString()));
-        else if (TakeType(TokenType.Offset, out var otoken))
+          PushConstVal(wtoken.Index);
+        else if (TakeType(TokenType.Minus, out var otoken))
         {
           parseGroup();
-          if (buffer[otoken][0] == '-')
-            expr.PushOp(otoken.Index, ConstOp.Neg);
+          PushConstOp(ConstOp.Neg, otoken.Index);
         }
+        else if (TakeType(TokenType.Plus))
+          parseGroup();
         else if (TakeType(TokenType.Not, out var bntoken))
         {
           parseGroup();
-          expr.PushOp(bntoken.Index, ConstOp.Not);
+          PushConstOp(ConstOp.Not, bntoken.Index);
         }
         else if (TakeType(TokenType.Number, out var ntoken))
-        {
-          if (!Values.TryParseValue(buffer[ntoken], out var val, out var mode))
-            throw Invalid(ntoken);
-          expr.PushVal(ntoken.Index, new(Value: val, Mode: mode));
-        }
+          PushConstVal(ntoken.Index);
         else
           throw Invalid();
       }
+      var start = ConstNodes.Length;
       parseAddSub();
-      return expr;
+      ConstRanges.Add(new(start, ConstNodes.Length - start));
+    }
+
+    private void PushConstOp(ConstOp op, TokenIndex index) => ConstNodes.Add(new(op, index));
+    private void PushConstVal(TokenIndex index) => PushConstOp(ConstOp.Leaf, index);
+  }
+
+  public class ParsedData
+  {
+    public DataType Type;
+    public Token Value;
+    public FixedRange? ExprVal;
+    public Token? Width;
+  }
+
+  public class ParsedInstruction()
+  {
+    public Token OpCode;
+    public Token? DefaultType;
+    public Token? Width;
+
+    public int ResultIndex = -1;
+    public int OperandCount;
+
+    public ParsedOperand A;
+    public ParsedOperand B;
+    public ParsedOperand C;
+
+    public ref ParsedOperand Op(int idx)
+    {
+      switch (idx)
+      {
+        case 0: return ref A;
+        case 1: return ref B;
+        case 2: return ref C;
+        default: throw new IndexOutOfRangeException($"{idx}");
+      }
     }
   }
 
-  public enum ParsedOpMode
+  public struct ParsedOperand
   {
-    Placeholder,
-    Addr,
-    Offset,
-    BaseOffset,
-    Const,
-  }
-
-  public class ParsedOperand
-  {
-    public ParsedOpMode Mode;
-    public AddrRef Base;
-    public AddrRef Addr;
-    public ConstExprList Consts;
-    public DataType? Type;
-  }
-
-  public class AddrRef
-  {
-    public string Offset;
-
-    public string StrAddr;
-    public int IntAddr;
-
-    public bool Indirect;
-  }
-
-  public record struct ConstVal(string StringVal = null, ValueMode Mode = default, Value Value = default);
-
-  public class ConstExprList : List<ConstExpr>
-  {
-    public bool Addr;
-    public bool Indirect;
+    public Token? Val;
+    public FixedRange? ExprVal;
+    public Token? Type;
   }
 
   public enum ConstOp { Leaf, Neg, Not, Add, Sub, Mul, Div }
-
-  public record struct ExprNode(ConstOp Op, TokenIndex Token, ConstVal Val = default);
-
-  public class ConstExpr : List<ExprNode>
-  {
-    public void PushVal(TokenIndex token, ConstVal val) => DoAdd(new(ConstOp.Leaf, token, val));
-    public void PushOp(TokenIndex token, ConstOp op) => DoAdd(new(op, token));
-
-    public ExprNode Root => Count > 0 ? this[^1] : default;
-
-    private void DoAdd(ExprNode node)
-    {
-      Add(node);
-    }
-  }
+  public record struct ExprNode(ConstOp Op, TokenIndex Token);
 }

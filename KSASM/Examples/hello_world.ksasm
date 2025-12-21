@@ -1,25 +1,35 @@
-# define CONST region to store inline constant values
-.region CONST 65536
-
 # import a library script, which inserts that entire script here
 .import libstring
 
 # define region for our main data
 .region maindata 1024
 
+# u8 strings are inserted as regular data
 # define string with beginning and end labels
 :u8 hello.value: "hello" hello.end:
 # add value containing address of hello.value
 :p24 hello: hello.value
 # compute the length in a constant expression
-:p24 hello.len: $(hello.end - hello.value)
+:p24 hello.len: (hello.end - hello.value)
 
-# use a macro from libstring to do all of the above
-.str(world, "world")
+# s48 strings put the string data following ptr:p24,len:p24
+:s48 world: "world"
+
+# define a buffer to append to
+:s48 buf: bufdata # high 24 bits are 0 length
+:u8 bufdata: 0*32 # repeat 0 byte 32 times
 
 # execution always starts from address 0
 @0 main:
-  debugstr:p24 hello, hello.len
-  debugstr:p24 world, world.len
-  sleep:u64 _, $(-1)
-  jump:p24 _, main
+  # load ptr stored at hello label
+  ld:s48 hello # from:s48 param
+  ld:s48 buf   # to:s48 param
+  # this function leaves to:s48 on the stack with the length increased
+  call str.append
+  ld:s48 world # from:s48 param
+  swz:s48 (1,0) # params are out of order, so swap the top 2 values
+  call str.append
+  # debug print our resulting string
+  debug:s48
+  sleep (-1):u64
+  jump main

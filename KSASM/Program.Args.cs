@@ -7,6 +7,7 @@ namespace KSASM
   {
     private readonly HashSet<string> flags = [];
     private readonly HashSet<(string, string)> subflags = [];
+    private readonly Dictionary<string, string> vals = [];
     private readonly HashSet<string> allSub = [];
     private readonly List<string> positional = [];
 
@@ -34,7 +35,9 @@ namespace KSASM
         return;
       }
       var flag = arg[..eqIdx];
-      var sflags = arg[(eqIdx + 1)..].Split(',');
+      var val = arg[(eqIdx + 1)..];
+      vals[flag] = val;
+      var sflags = val.Split(',');
       foreach (var subflag in sflags)
       {
         subflags.Add((flag, subflag));
@@ -60,5 +63,7 @@ namespace KSASM
       arg = positional[index];
       return true;
     }
+
+    public bool Val(string flag, out string val) => vals.TryGetValue(flag, out val);
   }
 }

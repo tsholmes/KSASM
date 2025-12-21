@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Brutal.Numerics;
 using KSA;
+using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -13,7 +14,8 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
-    public Assembly.DebugSymbols Symbols;
+    public DebugSymbols Symbols;
+    public TypeMemory TypeMem;
     public readonly Terminal Terminal;
     private readonly Action<string> log;
 
@@ -48,6 +50,8 @@ namespace KSASM
       LastMs = 0;
 
       Symbols = null;
+      TypeMem = new();
+      Processor.Memory.OnWrite = TypeMem.Write;
     }
 
     public void OnFrame(int maxSteps = STEPS_PER_FRAME)
@@ -78,7 +82,7 @@ namespace KSASM
       }
     }
 
-    private void OnDebug(ValArray A, ValArray B) => log?.Invoke($"> {A} {B}");
+    private void OnDebug(ValArray A) => log?.Invoke($"> {A}");
     private void OnDebugStr(string str) => log?.Invoke($"> {str}");
   }
 
@@ -113,6 +117,49 @@ namespace KSASM
       for (var i = 0; i < 256; i++)
         codes[i].X |= 0xFFFFC0u;
       return codes;
+    }
+  }
+
+  public struct MemRange : IRange<MemRange>
+  {
+    public int Start;
+    public DataType Type;
+    public int Width;
+
+    public int Offset;
+    public int Length;
+
+    int IRange<MemRange>.Offset => Offset;
+    int IRange<MemRange>.Length => Length;
+
+    public MemRange Slice(int offset, int length) => new()
+    {
+      Start = Start,
+      Type = Type,
+      Width = Width,
+
+      Offset = offset,
+      Length = length
+    };
+
+    public bool TryMerge(MemRange next, out MemRange merged)
+    {
+      var end = Offset + Length;
+      var nend = next.Offset + next.Length;
+      if (next.Start != Start || next.Type != Type || next.Width != Width || end != next.Offset)
+      {
+        merged = default;
+        return false;
+      }
+      merged = new()
+      {
+        Start = Start,
+        Type = Type,
+        Width = Width,
+        Offset = Offset,
+        Length = nend - Offset,
+      };
+      return true;
     }
   }
 }
