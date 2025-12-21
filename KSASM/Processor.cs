@@ -8,6 +8,8 @@ namespace KSASM
   {
     public const int MAIN_MEM_SIZE = 1 << 24;
     public const int ADDR_MASK = MAIN_MEM_SIZE - 1;
+    public const DataType INST_TYPE = DataType.P24;
+    public static readonly int INST_SIZE = INST_TYPE.SizeBytes();
 
     public static bool DebugOps = false;
     public static bool DebugOperands = false;
@@ -54,8 +56,8 @@ namespace KSASM
 
     public void Step()
     {
-      var inst = Instruction.Decode(Memory.Read(PC, DataType.P24).Unsigned);
-      ModPC(DataType.P24.SizeBytes());
+      var inst = Instruction.Decode(Memory.Read(PC, INST_TYPE).Unsigned);
+      ModPC(INST_SIZE);
 
       Exec(ref inst);
     }

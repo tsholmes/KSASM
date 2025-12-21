@@ -324,11 +324,11 @@ namespace KSASM.Assembly
           }
           else if (rop.Type == DataType.S48)
           {
+            var start = (ulong)(ctx.InlineStringStart + rop.String.Start);
             for (var i = 0; i < rop.Width; i++)
             {
-              var start = (ulong)(ctx.InlineStringStart + i * rop.String.Length);
               var len = (ulong)rop.String.Length;
-              vals[i].Unsigned = start | (len << 24);
+              vals[i].Unsigned = (start + (ulong)i * len) | (len << 24);
             }
           }
           else

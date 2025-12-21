@@ -20,42 +20,23 @@ namespace KSASM
       if (end - start > 256)
         start = end - 256;
 
-      var iter = Current.Ranges.Overlap(new FixedRange(start, end - start));
-      var addr = end;
-
       var line = new LineBuilder(stackalloc char[128]);
-      Span<MemRange> stack = stackalloc MemRange[256];
+      Span<DataType?> stack = stackalloc DataType?[256];
       var stackCount = 0;
 
-      var first = true;
-      while (iter.Next(out var range, out _))
+      var addr = start;
+      while (addr < end)
       {
-        stack[stackCount++] = range;
+        var type = stack[stackCount++] = Current.TypeMem.Read(addr);
+        addr += type?.SizeBytes() ?? 1;
       }
-      for (var i = stackCount; --i >= 0;)
-      {
-        var range = stack[i];
-        var tsize = range.Type.SizeBytes();
-        var rend = range.Offset + range.Length;
-        var roff = rend - range.Start;
-        roff -= roff % tsize;
-        var aend = range.Start + roff;
-        if (first)
-        {
-          first = false;
-          addr = aend;
-        }
-        else
-        {
-          while (addr > aend)
-            DrawStackVal(ref line, addr--, DataType.U8, false);
-        }
 
-        while (addr - tsize >= range.Offset)
-        {
-          addr -= tsize;
-          DrawStackVal(ref line, addr, range.Type, true);
-        }
+      while (--stackCount >= 0)
+      {
+        var type = stack[stackCount];
+        var sz = type?.SizeBytes() ?? 1;
+        addr -= sz;
+        DrawStackVal(ref line, addr, type ?? DataType.U8, type != null);
       }
     }
 

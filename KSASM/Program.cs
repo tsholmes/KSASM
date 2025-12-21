@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using Brutal.ImGuiApi;
 using KSASM.Assembly;
 
 namespace KSASM
@@ -28,6 +29,17 @@ namespace KSASM
 
       AppDomain.CurrentDomain.AssemblyResolve += FindAssembly;
 
+      if (pargs.HasFlag("standalone"))
+      {
+        StandaloneImGui.Run(() =>
+        {
+          ImGui.Begin("Test");
+          ImGui.Text("TESTING 123");
+          ImGui.End();
+        });
+        return 0;
+      }
+
       if (pargs.HasFlag("game"))
       {
         var mod = new KSASMMod();
@@ -45,6 +57,10 @@ namespace KSASM
       if (pargs.Val("limit", out var slimit))
         limit = int.Parse(slimit);
 
+      var maxsleep = 0ul;
+      if (pargs.Val("maxsleep", out var smaxsleep))
+        maxsleep = ulong.Parse(smaxsleep);
+
       var scriptName = pargs.Positional(0, out var sname) ? sname : "hello_world";
 
       var source = Library.LoadExample(scriptName);
@@ -54,6 +70,9 @@ namespace KSASM
         OnDebug = (A, B) => Console.WriteLine($"> {A} {B}"),
         OnDebugStr = str => Console.WriteLine($"> {str}"),
       };
+
+      var types = new TypeMemory();
+      proc.Memory.OnWrite = types.Write;
 
       var stopwatch = Stopwatch.StartNew();
 
@@ -69,7 +88,7 @@ namespace KSASM
 
       var asmTime = stopwatch.Elapsed.TotalMilliseconds;
 
-      for (var i = 0; i < limit && proc.SleepTime == 0; i++)
+      for (var i = 0; i < limit && proc.SleepTime <= maxsleep; i++)
         proc.Step();
 
       var runTime = stopwatch.Elapsed.TotalMilliseconds - asmTime;

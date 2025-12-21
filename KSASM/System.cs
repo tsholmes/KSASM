@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Brutal.Numerics;
 using KSA;
+using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -13,8 +14,8 @@ namespace KSASM
 
     public readonly Vehicle Vehicle;
     public Processor Processor { get; private set; }
-    public Assembly.DebugSymbols Symbols;
-    public FixedWidthRangeTree<MemRange> Ranges;
+    public DebugSymbols Symbols;
+    public TypeMemory TypeMem;
     public readonly Terminal Terminal;
     private readonly Action<string> log;
 
@@ -49,16 +50,8 @@ namespace KSASM
       LastMs = 0;
 
       Symbols = null;
-      Ranges = new(Processor.MAIN_MEM_SIZE);
-      Processor.Memory.OnWrite = (addr, type, width) => Ranges.Add(new()
-      {
-        Start = addr,
-        Type = type,
-        Width = width,
-
-        Offset = addr,
-        Length = type.SizeBytes() * width,
-      });
+      TypeMem = new();
+      Processor.Memory.OnWrite = TypeMem.Write;
     }
 
     public void OnFrame(int maxSteps = STEPS_PER_FRAME)

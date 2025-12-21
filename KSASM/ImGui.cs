@@ -65,21 +65,21 @@ namespace KSASM
         highlightRem--;
       if (infoRem == 0 && infoWidthRem > 0)
         FillDataValue(data);
-      if (infoRem == 0 && info.Inst.HasValue && data.Length >= 8)
+      if (infoRem == 0 && info.Inst.HasValue && data.Length >= Processor.INST_SIZE)
       {
         this.info = info;
-        infoRem = 8;
-        var val = Encoding.Decode(data, DataType.U64);
+        infoRem = Processor.INST_SIZE;
+        var val = Encoding.Decode(data, Processor.INST_TYPE);
         var inst = Instruction.Decode(val.Unsigned);
         valLine.Clear();
         inst.Format(ref valLine, debug);
-        if (valLine.Length > 24)
+        if (valLine.Length > Processor.INST_SIZE * 3)
         {
-          valLine.Length = 21;
+          valLine.Length = Processor.INST_SIZE * 3 - 3;
           valLine.Add("...");
         }
         else
-          valLine.PadLeft(24);
+          valLine.PadLeft(Processor.INST_SIZE * 3);
         curval = valLine.Line;
       }
       else if (infoRem == 0 && info.Type.HasValue && data.Length >= info.Type.Value.SizeBytes())
@@ -164,6 +164,7 @@ namespace KSASM
         DataType.U8 => "X2",
         DataType.P24 => "X6",
         DataType.S48 => "X12",
+        DataType.F64 => "G12",
         _ => "g",
       };
       switch (type.VMode())

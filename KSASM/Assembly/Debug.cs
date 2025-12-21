@@ -641,4 +641,62 @@ namespace KSASM.Assembly
       public override int Compare(T x, T y) => x.Addr.CompareTo(y.Addr);
     }
   }
+
+  public class TypeMemory
+  {
+    private const int CHUNK_SHIFT = 12;
+    private const int CHUNK_SIZE = 1 << CHUNK_SHIFT;
+    private const int CHUNK_MASK = CHUNK_SIZE - 1;
+    private const int CHUNK_COUNT = Processor.MAIN_MEM_SIZE >> CHUNK_SHIFT;
+
+    private static byte Encode(DataType type, int offset) => (byte)((int)type | ((offset & 0xF) << 4));
+    private static (DataType, int) Decode(byte encoded) => ((DataType)(encoded & 0xF), (encoded >> 4) & 0xF);
+
+    private readonly byte[][] chunks = new byte[CHUNK_COUNT][];
+
+    public void Write(int addr, DataType type, int width)
+    {
+      var sz = type.SizeBytes();
+      for (var w = 0; w < width; w++)
+        for (var off = 0; off < sz; off++)
+          this[addr++] = Encode(type, off);
+    }
+
+    public DataType? Read(int addr)
+    {
+      var (type, offset) = Decode(this[addr]);
+      if (offset != 0)
+        return null;
+
+      var sz = type.SizeBytes();
+      for (var i = 1; i < sz; i++)
+      {
+        var (itype, ioff) = Decode(this[addr + i]);
+        if (itype != type || ioff != i)
+          return null;
+      }
+
+      return type;
+    }
+
+    private byte this[int addr]
+    {
+      get
+      {
+        var chunki = addr >> CHUNK_SHIFT;
+        var chunk = chunks[chunki];
+        if (chunk == null)
+          return 0;
+        return chunk[addr & CHUNK_MASK];
+      }
+      set
+      {
+        var chunki = addr >> CHUNK_SHIFT;
+        var chunk = chunks[chunki];
+        if (chunk == null)
+          chunk = chunks[chunki] = new byte[CHUNK_SIZE];
+        chunk[addr & CHUNK_MASK] = value;
+      }
+    }
+  }
 }

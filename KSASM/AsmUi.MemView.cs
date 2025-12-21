@@ -95,7 +95,7 @@ namespace KSASM
       ImGui.Checkbox("Show Data", ref debugShowData);
 
       if (debugPC)
-        ScrollToAddr(Current.Processor.PC, 8);
+        ScrollToAddr(Current.Processor.PC, Processor.INST_SIZE);
 
       var pcoff = Current.Processor.PC - debugAddress;
 
@@ -126,7 +126,7 @@ namespace KSASM
         var dataLen = 0;
         for (var i = hoff; i >= 0; i--)
         {
-          if (instOff == -1 && hoff - i < 8 && infos[i].Inst.HasValue)
+          if (instOff == -1 && hoff - i < Processor.INST_SIZE && infos[i].Inst.HasValue)
             instOff = i;
           if (dataOff == -1 && infos[i].Type.HasValue)
           {
@@ -141,7 +141,7 @@ namespace KSASM
         if (instOff >= 0)
         {
           hoverStart = instOff;
-          hoverLen = 8;
+          hoverLen = Processor.INST_SIZE;
         }
         else if (dataOff >= 0)
         {
@@ -168,7 +168,7 @@ namespace KSASM
         for (var i = 0; i < VALS_PER_LINE; i++)
         {
           if (offset == pcoff)
-            dline.HighlightData(8, PCHighlight);
+            dline.HighlightData(Processor.INST_SIZE, PCHighlight);
           else if (offset == hoverStart)
             dline.HighlightData(hoverLen, TokenHoverHilight);
           dline.AddData(infos[offset], data[offset..], out var rect);
@@ -203,9 +203,9 @@ namespace KSASM
         ImGui.Text(dline);
 
         var info = infos[hoverStart];
-        if (info.Inst.HasValue && hoverStart + 8 <= TOTAL_VALS)
+        if (info.Inst.HasValue && hoverStart + Processor.INST_SIZE <= TOTAL_VALS)
         {
-          var inst = Instruction.Decode(Encoding.Decode(data[hoverStart..], DataType.U64).Unsigned);
+          var inst = Instruction.Decode(Encoding.Decode(data[hoverStart..], Processor.INST_TYPE).Unsigned);
           line.Clear();
           inst.Format(ref line, Current.Symbols);
           ImGui.Text(line.Line);

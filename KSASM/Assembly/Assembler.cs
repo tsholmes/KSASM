@@ -47,9 +47,12 @@ namespace KSASM.Assembly
           varray.Width = count;
           ctx.RawValues[new FixedRange(vals.Start + i, count)].CopyTo(varray.Values);
 
+          var vaddr = addr + tsize * i;
           target.Write(
-            new ValuePointer { Address = addr + tsize * i, Type = type, Width = (byte)count },
+            new ValuePointer { Address = vaddr, Type = type, Width = (byte)count },
             varray);
+
+          ctx.Symbols.AddData(vaddr, type, count);
         }
         if (Debug)
         {

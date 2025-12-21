@@ -13,7 +13,7 @@
 }
 
 # a[0] = a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
-.macro d3.dot .dot(*3)
+.macro d3.dot .v.dot(*3)
 
 # v[0] = |v|
 .macro d3.mag {
@@ -23,7 +23,7 @@
 }
 
 # |v| = 1
-.macro d3.norm(v) {
+.macro d3.norm {
   dup:f64*3 2
   .d3.mag
   max:f64 1e-8
@@ -31,17 +31,18 @@
   div:f64*3
 }
 
-# a:f64*3 b:f64*3 -> c:f64*3
-# a @ f+0
-# b @ f+24
+# b:f64*3 a:f64*3 -> c:f64*3
+# b @ f+0
+# a @ f+24
 # c @ f+24
 # c = (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
+# c = cross(a, b)
 d3.cross:
   ldf:f64*6 (+0)
-  swz:f64 (1,2,0,5,3,4)
+  swz:f64 (4,5,3,2,0,1)
   mul:f64*3
   ldf:f64*6 (+0)
-  swz:f64 (2,0,1,4,5,3)
+  swz:f64 (5,3,4,1,2,0)
   mul:f64*3
   sub:f64*3
   stf:f64*3 (+24)
@@ -57,45 +58,12 @@ d3.cross:
 # a @ f+32
 # c @ f+32
 # c = (
-#  +a[0]*b[3] +a[1]*b[2] -a[2]*b[1] +a[3]*b[0]
-#  -a[0]*b[2] +a[1]*b[3] +a[2]*b[0] +a[3]*b[1]
-#  +a[0]*b[1] -a[1]*b[0] +a[2]*b[3] +a[3]*b[2]
-#  -a[0]*b[0] -a[1]*b[1] -a[2]*b[2] +a[3]*b[3]
-# )
-dq.concat:
-  ldf:f64*8 (+0)
-  swz:f64 (4,4,4,4,3,2,1,0) # column 1
-  mul:f64*4
-  mul:f64*4 (+1,-1,+1,-1)
-  ldf:f64*8 (+0)
-  swz:f64 (5,5,5,5,2,3,0,1) # column 2
-  mul:f64*4
-  mul:f64*4 (+1,+1,-1,-1)
-  add:f64*4
-  ldf:f64*8 (+0)
-  swz:f64 (6,6,6,6,1,0,3,2) # column 3
-  mul:f64*4
-  mul:f64*4 (-1,+1,+1,-1)
-  add:f64*4
-  ldf:f64*8 (+0)
-  swz:f64 (7,7,7,7,0,1,2,3) # column 4
-  mul:f64*4
-  add:f64*4
-  stf:f64*4 (+32)
-  adjf (+32)
-  ret
-
-# b:f64*4 a:f64*4 -> c:f64*4
-# b @ f+0
-# a @ f+32
-# c @ f+32
-# c = (
 #  +a[0]*b[3] -a[1]*b[2] +a[2]*b[1] +a[3]*b[0]
 #  +a[0]*b[2] +a[1]*b[3] -a[2]*b[0] +a[3]*b[1]
 #  -a[0]*b[1] +a[1]*b[0] +a[2]*b[3] +a[3]*b[2]
 #  -a[0]*b[0] -a[1]*b[1] -a[2]*b[2] +a[3]*b[3]
 # )
-dq.hamilton:
+dq.concat:
   ldf:f64*8 (+0)
   swz:f64 (4,4,4,4,3,2,1,0) # column 1
   mul:f64*4
@@ -188,15 +156,15 @@ dq.from_yaw_pitch_roll:
 # v  @ f+0
 # r  @ f+24
 # xv @ f+32
-# xv = dq.hamilton(dq.hamilton(conj(r), (...v, 1)), r)
+# xv = dq.concat(dq.concat(conj(r), (...v, 1)), r)
 d3dq.transform:
   ldf:f64*4 (+24)
   mul:f64*4 (-1,-1,-1,1)
   push 1:f64
   ldf:f64*3 (+0)
-  call dq.hamilton
+  call dq.concat
   ldf:f64*4 (+24)
-  call dq.hamilton
+  call dq.concat
   stf:f64*3 (+32)
   pop:f64
   adjf (+32)

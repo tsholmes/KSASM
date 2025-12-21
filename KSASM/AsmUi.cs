@@ -201,16 +201,17 @@ namespace KSASM
       void drawWindow(string title, Action draw)
       {
         ImGuiX.SetNextWindowClass(windowClass);
-        ImGui.Begin($"{title}##{vehicle.Id}");
+        var visible = ImGui.Begin($"{title}##{vehicle.Id}");
 
         if (IImGui.GetWindowDockNode().RootNode() != dockID &&
           !(ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) && ImGui.IsMouseDragging(ImGuiMouseButton.Left) && ImGui.IsItemActive()))
         {
           ImGui.End();
           ImGui.SetNextWindowDockID(dockID);
-          ImGui.Begin($"{title}##{vehicle.Id}");
+          visible = ImGui.Begin($"{title}##{vehicle.Id}");
         }
-        draw();
+        if (visible)
+          draw();
         ImGui.End();
       }
 
