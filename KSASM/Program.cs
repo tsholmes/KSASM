@@ -84,7 +84,7 @@ namespace KSASM
       //   return 0;
       // }
 
-      Assembler.Assemble(source, proc.Memory);
+      var debug = Assembler.Assemble(source, proc.Memory);
 
       var asmTime = stopwatch.Elapsed.TotalMilliseconds;
 
@@ -94,6 +94,18 @@ namespace KSASM
       var runTime = stopwatch.Elapsed.TotalMilliseconds - asmTime;
 
       Console.WriteLine($"asm: {asmTime:0.##}ms, run: {runTime:0.##}ms");
+
+      if (pargs.HasFlag("debug", "source"))
+      {
+        var line = new LineBuilder(stackalloc char[256]);
+        var iter = debug.SourceLineIter(new(-1));
+        while (iter.Next(out _))
+        {
+          line.Clear();
+          iter.Build(ref line);
+          Console.WriteLine(line.Line);
+        }
+      }
 
       return 0;
     }

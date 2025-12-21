@@ -196,31 +196,18 @@ namespace KSASM.Assembly
       if (!Reader.TakeType(TokenType.POpen, out _))
         throw Invalid();
 
-      if (!Reader.Take(out var token))
-        throw Invalid();
-
-      if (token.Type is not TokenType.Word and not TokenType.Macro and not TokenType.Placeholder)
-        throw Invalid(token);
-
-      var type = token.Type == TokenType.Placeholder ? TokenType.Word : token.Type;
-
       using var s = PushSynthSource(".concat", macro.Index);
-      using var t = s.S.MakeToken(type, token.Index);
-      t.AddData(buffer[token]);
-
-      while (Reader.TakeType(TokenType.Word, out var itoken)
-          || Reader.TakeType(TokenType.Macro, out itoken)
-          || Reader.TakeType(TokenType.Placeholder, out itoken)
-          || Reader.TakeType(TokenType.Number, out itoken))
+      using var t = s.S.MakeToken(TokenType.Invalid, macro.Index);
+      while (Reader.Peek(out var itoken) && itoken.Type is not TokenType.EOL and not TokenType.PClose)
       {
-        if (itoken.Type == TokenType.Number && !int.TryParse(buffer[itoken], out _))
-          throw Invalid(itoken);
-
+        Reader.Take(out _);
         t.AddData(buffer[itoken]);
       }
 
       if (!Reader.TakeType(TokenType.PClose, out _))
         throw Invalid();
+
+      t.Reparse();
     }
 
     private void MacroLabel(Token macro)
