@@ -83,10 +83,15 @@ namespace KSASM
 
   public static class Patches
   {
+    private static ProcContext ctx;
     [HarmonyPatch(typeof(Vehicle), nameof(Vehicle.OnDrawSelectedUi)), HarmonyPrefix]
     public static void Vehicle_OnDrawSelectedUi_Postfix(Vehicle __instance, Viewport viewport)
     {
-      AsmUi.OnFrame(__instance);
+      if (__instance != KSA.Program.ControlledVehicle)
+        return;
+      if (ctx?.Id != __instance.Id)
+        ctx = new VehicleProcContext(__instance);
+      AsmUi.OnFrame(ctx);
     }
 
     [HarmonyPatch(typeof(ConsoleWindowEx), nameof(ConsoleWindowEx.OnKey)), HarmonyPrefix]

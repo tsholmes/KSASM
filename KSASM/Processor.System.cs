@@ -13,11 +13,10 @@ namespace KSASM
   {
     public const int STEPS_PER_FRAME = 10000;
 
-    public readonly Vehicle Vehicle;
+    public readonly ProcContext Context;
     public Processor Processor { get; private set; }
     public DebugSymbols Symbols;
     public TypeMemory TypeMem;
-    public readonly Terminal Terminal;
     public readonly LogBuffer Logs = new(65536, 100);
 
     public int LastSteps { get; private set; } = 0;
@@ -25,14 +24,13 @@ namespace KSASM
 
     public bool SingleStep { get; set; }
 
-    public string Id => Vehicle.Id;
+    public string Id => Context.Id;
 
     private readonly Stopwatch stopwatch;
 
-    public ProcSystem(Vehicle vehicle, Action<string> log, Terminal terminal)
+    public ProcSystem(ProcContext ctx)
     {
-      this.Vehicle = vehicle;
-      this.Terminal = terminal;
+      this.Context = ctx;
       stopwatch = new();
 
       Reset();
@@ -40,10 +38,7 @@ namespace KSASM
 
     public void Reset()
     {
-      this.Processor = new(
-        SystemDeviceDefinition.Make("system", new() { System = Vehicle.System, Terminal = Terminal }),
-        VehicleDeviceDefinition.Make("vehicle", Vehicle),
-        FlightComputerDeviceDefinition.Make("fc", Vehicle))
+      this.Processor = new(Context.MakeDevices())
       {
         OnDebug = OnDebug,
         OnDebugStr = OnDebugStr,

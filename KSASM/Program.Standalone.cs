@@ -34,6 +34,7 @@ namespace KSASM
       Glfw.WindowHint(GlfwWindowHint.ClientApi, 0);
       Glfw.WindowHint(GlfwWindowHint.AutoIconify, 0);
       Glfw.WindowHint(GlfwWindowHint.FocusOnShow, 1);
+      Glfw.WindowHint(GlfwWindowHint.Maximized, 1);
       window = Glfw.CreateWindow(new()
       {
         Title = "ImGui Test",

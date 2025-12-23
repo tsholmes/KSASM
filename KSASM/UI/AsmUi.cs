@@ -1,6 +1,5 @@
 
 using System;
-using System.Collections.Generic;
 using Brutal.ImGuiApi;
 using Brutal.Numerics;
 using KSA;
@@ -19,12 +18,10 @@ namespace KSASM.UI
     public static AsmUi Instance { get; private set; }
     public static bool IsTyping => Instance?.isTyping ?? false;
 
-    public static void OnFrame(Vehicle vehicle)
+    public static void OnFrame(ProcContext ctx)
     {
-      if (vehicle == null || vehicle != KSA.Program.ControlledVehicle)
-        return;
-      if (Instance?.ps.Vehicle is not Vehicle cur || cur != vehicle)
-        Instance = new(vehicle);
+      if (Instance?.ps.Id != ctx.Id)
+        Instance = new(ctx);
 
       Instance.OnFrame();
     }
@@ -46,12 +43,11 @@ namespace KSASM.UI
 
     private bool isTyping;
 
-    private AsmUi(Vehicle vehicle)
+    private AsmUi(ProcContext ctx)
     {
-      title = $"KSASM##{vehicle.Id}";
-      dock = ImGui.GetID($"KSASM##{vehicle.Id}-dock");
-      ps = new ProcSystem(vehicle, _ => { }, new(TerminalLabel.Labels));
-      ps.Terminal.Update();
+      title = $"KSASM##{ctx.Id}";
+      dock = ImGui.GetID($"KSASM##{ctx.Id}-dock");
+      ps = new ProcSystem(ctx);
 
       windows = [
         new EditorWindow(dock, ps),
@@ -98,10 +94,8 @@ namespace KSASM.UI
       if (!Enabled)
         return;
 
-      var initPos = ScreenReference.UvToPixels(new(0.17f, 0.08f)) + ImGui.GetMainViewport().Pos;
       ImGui.SetNextWindowSizeConstraints(new(300, 300), new(1e10f, 1e10f));
       ImGui.SetNextWindowSize(new(850, 800), ImGuiCond.Appearing);
-      ImGui.SetNextWindowPos(initPos, ImGuiCond.Appearing);
       ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new float2(0, 0));
       var hidden = !ImGui.Begin(title, ref Enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed();
       ImGui.PopStyleVar();

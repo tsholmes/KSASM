@@ -44,8 +44,6 @@ namespace KSASM.UI
         ImGui.SetScrollHereY();
       lastTotal = ps.Logs.Total;
 
-      ImGui.Text($"{ps.Logs.Count}");
-
       ImGui.EndChild();
     }
   }

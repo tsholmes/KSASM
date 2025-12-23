@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using Brutal.ImGuiApi;
+using KSA;
 using KSASM.Assembly;
 using KSASM.UI;
 
@@ -107,14 +108,17 @@ namespace KSASM
 
     private static int RunStandalone(ProgramArgs pargs)
     {
+      Library.Init(KSASMMod.CWD);
+      Library.RefreshIndex();
+
       if (pargs.Positional(0, out var name))
         EditorWindow.SetDefaultExample(name);
 
+      var ctx = new StandaloneProcContext();
+
       StandaloneImGui.Run(() =>
       {
-        ImGui.Begin("Test");
-        ImGui.Text("TESTING 123");
-        ImGui.End();
+        AsmUi.OnFrame(ctx);
       });
       return 0;
     }
