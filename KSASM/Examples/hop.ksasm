@@ -29,11 +29,11 @@ body_vel: .types.double3(body_vel.)
 .macro lat_speed_scale 20 # lateral speed to reach max tilt
 .macro lat_tilt_z 3 # z value of tilt vector when |(x,y)| <= 1
 .macro rot_speed_scale { (10*.deg2rad) } # rot error to reach max rot speed
-.macro rot_speed_max { (5*.deg2rad) } # max rot speed at max err
+.macro rot_speed_max { (20*.deg2rad) } # max rot speed at max err
 .macro max_vspeed 50 # above this speed engines will shut off
 .macro min_vspeed { (-40) } # below this speed engines will turn on
 .macro rot_deadband { (0.2*.deg2rad) }
-.macro avel_deadband { (0.02*.deg2rad) }
+.macro avel_deadband { (0.05*.deg2rad) }
 
 # control values
 rot_err: .types.double3(rot_err.)
@@ -44,6 +44,7 @@ avel_err: .types.double3(avel_err.)
 @0
 .vehicle.init
 .system.init
+.term.init
 main:
   ld:u64 vehicle.patch.orbit.parent
   st:u64 system.hash_param

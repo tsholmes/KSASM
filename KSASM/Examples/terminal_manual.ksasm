@@ -3,6 +3,7 @@
 
 @0
 .system.init
+.term.init
 main:
   # move all lines down
   ld:u64*8 .term.line(13)
@@ -29,7 +30,7 @@ main:
   ld:f64 system.time
   addr:u8*8
   and:u8 0x1F
-  add system.terminal_data:p24 _:u8 -> _:p24
+  add term.data:p24 _:u8 -> _:p24
   st:u8
   # wait a few frames
   sleep 4:u8

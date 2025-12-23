@@ -19,9 +19,10 @@ namespace KSASM
       var terminal = new Terminal(TerminalLabel.Labels);
       terminal.Update();
       return [
-        SystemDeviceDefinition.Make("system", new() { System = vehicle.System, Terminal = terminal }),
+        SystemDeviceDefinition.Make("system", vehicle.System),
         VehicleDeviceDefinition.Make("vehicle", vehicle),
         FlightComputerDeviceDefinition.Make("fc", vehicle),
+        TerminalDeviceDefinition.Make("term", terminal),
       ];
     }
   }

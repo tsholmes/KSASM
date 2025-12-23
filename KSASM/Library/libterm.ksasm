@@ -1,19 +1,25 @@
 .import libutils
-.import libsystem
+.import libdevice
 
 .ifndef libterm { .macro libterm
 .ns term.
 
+.macro id 4
+
 .region data 2048
 
-:p24 ptr: system.terminal_data 0
+.device.define(.term.id, {
+  :u8 data: 0*512 # 32*16 chars
+})
 
-.macro line(n) (system.terminal_data+32*n)
+:p24 ptr: term.data 0
+
+.macro line(n) (term.data+32*n)
 
 # _ -> _
 # clear the terminal and reset cursor to top-left
 clear:
-  st term.ptr system.terminal_data:p24
+  st term.ptr term.data:p24
   st:u64*8 .term.line(0) 0
   st:u64*8 .term.line(2) 0
   st:u64*8 .term.line(4) 0
@@ -46,11 +52,11 @@ up:
   st:u64*8 .term.line(14)
   st:u64*4 .term.line(15) 0
   ld:p24 term.ptr
-  sub:p24 system.terminal_data
+  sub:p24 term.data
   and:p24 (~31) # line start
   sub:p24 32 # line up
   max:p24 0 # don't move cursor before start
-  add:p24 system.terminal_data
+  add:p24 term.data
   st:p24 term.ptr
   ret
 
@@ -66,9 +72,9 @@ _tryup:
 # move cursor to start of next line
 nl:
   ld:p24 term.ptr
-  sub:p24 system.terminal_data
+  sub:p24 term.data
   and:p24 (~31)
-  add:p24 (system.terminal_data+32)
+  add:p24 (term.data+32)
   st:p24 term.ptr
   jump term._tryup
 
@@ -99,6 +105,25 @@ print:
   ldf:p24 (+3)
   bpos:p24 term.print
   adjf (+6)
+  ret
+
+# c:u8 -> v:u8
+# c @ f+0
+# v @ f+0
+# v = c in [45-57] (- . 0-9) 65-90 (A-Z) 97-122 (a-z)
+printable:
+  ldf:u8 (+0)
+  add:u8 0 -> _:i16
+  dup:i16 6
+  sub:i16 (44,64,96,58,91,123)
+  sign:i16*6 # signs will be +- on match, otherwise (--, 0-, +0, ++)
+  add:i16*3 # if any matched, one of these will be zero
+  mulr:i16*3
+  bzero:i16 term.printable.match
+  stf (+0) 0:u8
+  ret
+printable.match:
+  stf (+0) 1:u8
   ret
 
 .endns

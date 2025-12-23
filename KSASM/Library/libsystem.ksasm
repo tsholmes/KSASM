@@ -13,27 +13,7 @@
   :f64 time: 0
   :u64 hash_param: 0
   .types.astronomical
-  :u8 terminal_data: 0*512 # 32*16 chars
 })
-
-# c:u8 -> v:u8
-# c @ f+0
-# v @ f+0
-# v = c in [45-57] (- . 0-9) 65-90 (A-Z) 97-122 (a-z)
-printable:
-  ldf:u8 (+0)
-  add:u8 0 -> _:i16
-  dup:i16 6
-  sub:i16 (44,64,96,58,91,123)
-  sign:i16*6 # signs will be +- on match, otherwise (--, 0-, +0, ++)
-  add:i16*3 # if any matched, one of these will be zero
-  mulr:i16*3
-  bzero:i16 system.printable.match
-  stf (+0) 0:u8
-  ret
-printable.match:
-  stf (+0) 1:u8
-  ret
 
 .endns
 }

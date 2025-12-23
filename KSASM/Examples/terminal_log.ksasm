@@ -27,6 +27,7 @@
 premain:
   .system.init
   .vehicle.init
+  .term.init
   call term.clear
   ld:s48 s_intro
   call term.print
