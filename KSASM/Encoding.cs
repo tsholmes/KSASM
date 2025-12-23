@@ -42,7 +42,7 @@ namespace KSASM
     };
 
     [StructLayout(LayoutKind.Explicit)]
-    private ref struct EVal
+    public ref struct EVal
     {
       [FieldOffset(0)]
       public Byte8 Bytes;

@@ -250,7 +250,34 @@ namespace KSASM
       if (DebugOps)
         Console.WriteLine($"  RET {A.Values[0].Unsigned & ADDR_MASK:X6} (FP: {origFP:X6}->{FP:X6}, PC: {PC:X6}, SP: {SP:X6})");
     }
-    private void OpRand() => throw new NotImplementedException();
+    private void OpRand()
+    {
+      var bmode = B.Mode;
+      B.Mode = A.Mode;
+      var val = new Encoding.EVal();
+      for (var i = 0; i < A.Width; i++)
+      {
+        switch (A.Mode)
+        {
+          case ValueMode.Unsigned:
+            rand.NextBytes(val.Bytes);
+            B.Values[i].Unsigned = val.U64 % A.Values[i].Unsigned;
+            break;
+          case ValueMode.Signed:
+            rand.NextBytes(val.Bytes);
+            B.Values[i].Signed = val.I64 % A.Values[i].Signed;
+            break;
+          case ValueMode.Float:
+            val.F64 = rand.NextDouble();
+            if (A.Values[i].Float < 0)
+              val.F64 = (val.F64 - 0.5) * 2.0 * A.Values[i].Float;
+            else
+              val.F64 *= A.Values[i].Float;
+            break;
+        }
+      }
+      B.Convert(bmode);
+    }
     private void OpSleep()
     {
       A.Convert(ValueMode.Unsigned);

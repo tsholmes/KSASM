@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using Brutal.ImGuiApi;
 using KSA;
 
 namespace KSASM
@@ -192,8 +193,28 @@ namespace KSASM
 
     public override void OnDrawUi(ref T parent, Span<byte> deviceBuf, int offset)
     {
-      // TODO: display value
-      IDevice.DrawTreeLeaf($"{Name}@{offset}x{length}: <{length} bytes>");
+      
+      ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
+      ImGui.Text($"{Name}@{offset}x{length}: <{length} bytes>");
+
+      const int WIDTH = 16;
+
+      var data = getter(ref parent);
+
+      var line = new LineBuilder(stackalloc char[WIDTH*2 + 4]);
+      for (var row = 0; row*WIDTH < length; row++)
+      {
+        var start = row * WIDTH;
+        var end = Math.Min(start + WIDTH, length);
+        line.Clear();
+        line.Add(start, "X3");
+        line.Add(':');
+        for (var i = start; i < end; i++)
+          line.Add(data[i], "X2");
+        ImGui.Text(line.Line);
+      }
+
+      ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
     }
   }
 

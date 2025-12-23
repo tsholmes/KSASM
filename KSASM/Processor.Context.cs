@@ -16,7 +16,7 @@ namespace KSASM
 
     public override IDevice[] MakeDevices()
     {
-      var terminal = new Terminal(TerminalLabel.Labels);
+      var terminal = new GaugeTerminal(TerminalLabel.Labels);
       terminal.Update();
       return [
         SystemDeviceDefinition.Make("system", vehicle.System),
@@ -29,6 +29,9 @@ namespace KSASM
 
   public class StandaloneProcContext() : ProcContext("standalone")
   {
-    public override IDevice[] MakeDevices() => [];
+    public readonly ImGuiTerminal Terminal = new();
+    public override IDevice[] MakeDevices() => [
+      TerminalDeviceDefinition.Make("term", Terminal),
+    ];
   }
 }

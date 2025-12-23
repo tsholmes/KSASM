@@ -2,7 +2,6 @@
 using System;
 using Brutal.ImGuiApi;
 using Brutal.Numerics;
-using KSA;
 
 using IImGui = Brutal.ImGuiApi.Internal.ImGui;
 
@@ -57,6 +56,7 @@ namespace KSASM.UI
         new StackViewWindow(dock, ps),
         new MemViewWindow(dock, ps),
         new MemWatchWindow(dock, ps),
+        new DevViewWindow(dock, ps),
       ];
     }
 

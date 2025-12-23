@@ -46,14 +46,14 @@ namespace KSASM
 
       static float pos(int i, int len) => EDGE_PAD + (1 - 2 * EDGE_PAD) * ((float)i / (float)len);
 
-      for (var cy = 0; cy < Terminal.Y_CHARS; cy++)
+      for (var cy = 0; cy < ITerminal.Y_CHARS; cy++)
       {
-        var y0 = pos(cy, Terminal.Y_CHARS);
-        var y1 = pos(cy + 1, Terminal.Y_CHARS);
-        for (var cx = 0; cx < Terminal.X_CHARS; cx++)
+        var y0 = pos(cy, ITerminal.Y_CHARS);
+        var y1 = pos(cy + 1, ITerminal.Y_CHARS);
+        for (var cx = 0; cx < ITerminal.X_CHARS; cx++)
         {
-          var x0 = pos(cx, Terminal.X_CHARS);
-          var x1 = pos(cx + 1, Terminal.X_CHARS);
+          var x0 = pos(cx, ITerminal.X_CHARS);
+          var x1 = pos(cx + 1, ITerminal.X_CHARS);
 
           var label = new TerminalLabel
           {

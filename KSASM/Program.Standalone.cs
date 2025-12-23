@@ -80,10 +80,8 @@ namespace KSASM
       if (result != FrameResult.Success)
       {
         RebuildRenderer();
-        (result, frame) = renderer.TryAcquireNextFrame();
+        return;
       }
-      if (result != FrameResult.Success)
-        throw new InvalidOperationException($"{result}");
 
       var (resources, commandBuffer) = frame;
       var begin = new VkRenderPassBeginInfo()
@@ -104,7 +102,15 @@ namespace KSASM
 
       var frameResult = renderer.TrySubmitFrame();
       ImGui.UpdatePlatformWindows();
-      ImGui.RenderPlatformWindowsDefault();
+      try
+      {
+        ImGui.RenderPlatformWindowsDefault();
+      }
+      catch (VkResultError ex)
+      {
+        if (ex.Result != VkResult.ErrorOutOfDateKHR)
+          throw;
+      }
       if (frameResult != FrameResult.Success)
         RebuildRenderer();
     }

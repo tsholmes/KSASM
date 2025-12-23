@@ -3,8 +3,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using Brutal.ImGuiApi;
-using KSA;
 using KSASM.Assembly;
 using KSASM.UI;
 
@@ -119,6 +117,7 @@ namespace KSASM
       StandaloneImGui.Run(() =>
       {
         AsmUi.OnFrame(ctx);
+        ctx.Terminal.DrawUi();
       });
       return 0;
     }

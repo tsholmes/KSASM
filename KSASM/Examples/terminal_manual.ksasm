@@ -1,8 +1,6 @@
-.import libsystem
 .import libterm
 
 @0
-.system.init
 .term.init
 main:
   # move all lines down
@@ -26,11 +24,9 @@ main:
   st:u64*4 .term.line(0) 0
   # set column to dot
   push ".":u8
-  # convert universe time to column by summing bytes
-  ld:f64 system.time
-  addr:u8*8
-  and:u8 0x1F
-  add term.data:p24 _:u8 -> _:p24
+  # get random column
+  rand:p24 0x1F
+  add:p24 term.data:p24
   st:u8
   # wait a few frames
   sleep 4:u8

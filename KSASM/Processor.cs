@@ -22,6 +22,8 @@ namespace KSASM
     public int FP = 0;
     public ulong SleepTime = 0;
 
+    private readonly Random rand = new();
+
     private readonly ValArray A = new();
     private ValuePointer Aptr;
     private readonly ValArray B = new();
