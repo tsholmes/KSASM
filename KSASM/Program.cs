@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using Brutal.ImGuiApi;
 using KSASM.Assembly;
+using KSASM.UI;
 
 namespace KSASM
 {
@@ -30,25 +31,10 @@ namespace KSASM
       AppDomain.CurrentDomain.AssemblyResolve += FindAssembly;
 
       if (pargs.HasFlag("standalone"))
-      {
-        StandaloneImGui.Run(() =>
-        {
-          ImGui.Begin("Test");
-          ImGui.Text("TESTING 123");
-          ImGui.End();
-        });
-        return 0;
-      }
+        return RunStandalone(pargs);
 
       if (pargs.HasFlag("game"))
-      {
-        var mod = new KSASMMod();
-        mod.ImmediateLoad(null);
-
-        if (pargs.Positional(0, out var name))
-          AsmUi.LoadExample(name);
-        return RunGame(args);
-      }
+        return RunGame(args, pargs);
 
       Library.Init(KSASMMod.CWD);
       Library.RefreshIndex();
@@ -119,8 +105,28 @@ namespace KSASM
       return null;
     }
 
-    private static int RunGame(string[] args)
+    private static int RunStandalone(ProgramArgs pargs)
     {
+      if (pargs.Positional(0, out var name))
+        EditorWindow.SetDefaultExample(name);
+
+      StandaloneImGui.Run(() =>
+      {
+        ImGui.Begin("Test");
+        ImGui.Text("TESTING 123");
+        ImGui.End();
+      });
+      return 0;
+    }
+
+    private static int RunGame(string[] args, ProgramArgs pargs)
+    {
+      var mod = new KSASMMod();
+      mod.ImmediateLoad(null);
+
+      if (pargs.Positional(0, out var name))
+        EditorWindow.SetDefaultExample(name);
+
       var main = typeof(KSA.Program).GetMethod(
         "Main", BindingFlags.Static | BindingFlags.NonPublic).CreateDelegate<Func<string[], int>>();
       return main(args);

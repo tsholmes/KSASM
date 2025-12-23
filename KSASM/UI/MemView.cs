@@ -3,31 +3,31 @@ using System;
 using Brutal.ImGuiApi;
 using KSASM.Assembly;
 
-namespace KSASM
+namespace KSASM.UI
 {
-  public static partial class AsmUi
+  public class MemViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("MemView", dock, ps)
   {
     private const int VALS_PER_LINE = 16;
     private const int VAL_LINES = 16;
     private const int TOTAL_VALS = VALS_PER_LINE * VAL_LINES;
-    private static int debugAddress = 0;
-    private static bool debugPC = true;
-    private static bool debugShowInst = true;
-    private static bool debugShowData = true;
-    private static int hoverAddress = -1;
-    private static InputFilter searchFilter;
+    private int startAddress = 0;
+    private bool followPC = true;
+    private bool showInst = true;
+    private bool showData = true;
+    private int hoverAddress = -1;
+    private ImGuiTextFilter searchFilter = new();
 
-    private static void DrawMemView()
+    public override DockGroup Group => DockGroup.Memory;
+    protected override void Draw()
     {
-      searchFilter ??= new();
       Span<char> lineBuf = stackalloc char[512];
-      var dline = new DataLineView(lineBuf, VALS_PER_LINE, Current.Symbols);
+      var dline = new DataLineView(lineBuf, VALS_PER_LINE, ps.Symbols);
       var line = new LineBuilder(lineBuf);
 
-      ImGui.BeginDisabled(debugPC);
+      ImGui.BeginDisabled(followPC);
       ImGui.SetNextItemWidth(ImGui.GetFontSize() * 8f);
-      ImGui.InputInt("##debugAddress", ref debugAddress, VALS_PER_LINE, TOTAL_VALS, ImGuiInputTextFlags.CharsHexadecimal);
-      var dhovered = debugPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+      ImGui.InputInt("##debugAddress", ref startAddress, VALS_PER_LINE, TOTAL_VALS, ImGuiInputTextFlags.CharsHexadecimal);
+      var dhovered = followPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
 
       ImGui.SameLine();
       ImGui.SetNextItemWidth(-float.Epsilon);
@@ -41,13 +41,13 @@ namespace KSASM
         searchFilter.Draw("##debugLabelFilter", -float.Epsilon);
 
         var more = 0;
-        var count = Current.Symbols?.LabelCount ?? 0;
+        var count = ps.Symbols?.LabelCount ?? 0;
         var matchCount = 0;
         const int MAX_LABELS = 14;
         Span<AddrInfo> linfo = stackalloc AddrInfo[1];
         for (var i = 0; i < count; i++)
         {
-          var label = Current.Symbols.Label(i);
+          var label = ps.Symbols.Label(i);
           if (!searchFilter.PassFilter(label.Label))
             continue;
           if (matchCount == MAX_LABELS)
@@ -63,7 +63,7 @@ namespace KSASM
           ImGui.PushID(i);
           if (ImGui.Selectable(line.Line))
           {
-            Current.Symbols.GetAddrInfo(label.Addr, linfo, false, debugShowData);
+            ps.Symbols.GetAddrInfo(label.Addr, linfo, false, showData);
             ScrollToAddr(label.Addr, linfo[0].Type?.SizeBytes() ?? 1);
           }
           ImGui.PopID();
@@ -79,37 +79,37 @@ namespace KSASM
 
         ImGui.EndCombo();
       }
-      dhovered |= debugPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+      dhovered |= followPC && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
       ImGui.EndDisabled();
       if (dhovered)
         ImGui.SetTooltip("Disable 'Follow PC' to edit address");
 
-      debugAddress = Math.Clamp(debugAddress, 0, Processor.MAIN_MEM_SIZE - TOTAL_VALS);
+      startAddress = Math.Clamp(startAddress, 0, Processor.MAIN_MEM_SIZE - TOTAL_VALS);
 
-      ImGui.Checkbox("Follow PC", ref debugPC);
-
-      ImGui.SameLine();
-      ImGui.Checkbox("Show Inst", ref debugShowInst);
+      ImGui.Checkbox("Follow PC", ref followPC);
 
       ImGui.SameLine();
-      ImGui.Checkbox("Show Data", ref debugShowData);
+      ImGui.Checkbox("Show Inst", ref showInst);
 
-      if (debugPC)
-        ScrollToAddr(Current.Processor.PC, Processor.INST_SIZE);
+      ImGui.SameLine();
+      ImGui.Checkbox("Show Data", ref showData);
 
-      var pcoff = Current.Processor.PC - debugAddress;
+      if (followPC)
+        ScrollToAddr(ps.Processor.PC, Processor.INST_SIZE);
+
+      var pcoff = ps.Processor.PC - startAddress;
 
       Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
-      Current.Symbols?.GetAddrInfo(debugAddress, infos, debugShowInst, debugShowData);
+      ps.Symbols?.GetAddrInfo(startAddress, infos, showInst, showData);
 
       Span<byte> data = stackalloc byte[TOTAL_VALS];
-      Current.Processor.MappedMemory.Read(data, debugAddress);
+      ps.Processor.MappedMemory.Read(data, startAddress);
 
       dline.Clear();
       dline.Empty(7);
       for (var i = 0; i < VALS_PER_LINE; i++)
       {
-        var col = (debugAddress + i) & 15;
+        var col = (startAddress + i) & 15;
         dline.Sp();
         dline.Add(col, "X2");
       }
@@ -118,9 +118,9 @@ namespace KSASM
       var hoverStart = -1;
       var hoverLen = 0;
 
-      if (hoverAddress >= debugAddress & hoverAddress < debugAddress + TOTAL_VALS)
+      if (hoverAddress >= startAddress & hoverAddress < startAddress + TOTAL_VALS)
       {
-        var hoff = hoverAddress - debugAddress;
+        var hoff = hoverAddress - startAddress;
         var instOff = -1;
         var dataOff = -1;
         var dataLen = 0;
@@ -162,15 +162,15 @@ namespace KSASM
       for (var lnum = 0; lnum < VAL_LINES; lnum++)
       {
         dline.Clear();
-        var addr = debugAddress + lnum * VALS_PER_LINE;
+        var addr = startAddress + lnum * VALS_PER_LINE;
         dline.Add(addr, "X6");
         dline.Sp();
         for (var i = 0; i < VALS_PER_LINE; i++)
         {
           if (offset == pcoff)
-            dline.HighlightData(Processor.INST_SIZE, PCHighlight);
+            dline.HighlightData(Processor.INST_SIZE, AsmUi.PCHighlight);
           else if (offset == hoverStart)
-            dline.HighlightData(hoverLen, TokenHoverHilight);
+            dline.HighlightData(hoverLen, AsmUi.TokenHoverHilight);
           dline.AddData(infos[offset], data[offset..], out var rect);
           if (rect.Contains(mouse))
             nextHoverOff = offset;
@@ -185,8 +185,8 @@ namespace KSASM
 
       if (nextHoverOff >= hoverStart && nextHoverOff < hoverStart + hoverLen && ImGui.BeginTooltip())
       {
-        var addr = debugAddress + hoverStart;
-        var id = Current.Symbols?.ID(addr) ?? default;
+        var addr = startAddress + hoverStart;
+        var id = ps.Symbols?.ID(addr) ?? default;
 
         line.Clear();
         line.Add(addr, "X6");
@@ -207,7 +207,7 @@ namespace KSASM
         {
           var inst = Instruction.Decode(Encoding.Decode(data[hoverStart..], Processor.INST_TYPE).Unsigned);
           line.Clear();
-          inst.Format(ref line, Current.Symbols);
+          inst.Format(ref line, ps.Symbols);
           ImGui.Text(line.Line);
         }
         else if (info.Type.HasValue)
@@ -227,9 +227,9 @@ namespace KSASM
             line.Clear();
             var val = Encoding.Decode(data[doff..], type);
             line.Add(val, type);
-            if (type == DataType.P24 && Current.Symbols != null)
+            if (type == DataType.P24 && ps.Symbols != null)
             {
-              id = Current.Symbols.ID((int)val.Unsigned);
+              id = ps.Symbols.ID((int)val.Unsigned);
               if (id.Label != null)
               {
                 line.Sp();
@@ -254,32 +254,32 @@ namespace KSASM
         ImGui.EndTooltip();
       }
 
-      hoverAddress = nextHoverOff + debugAddress;
+      hoverAddress = nextHoverOff + startAddress;
     }
 
-    private static void ScrollToAddr(int addr, int align = 1)
+    private void ScrollToAddr(int addr, int align = 1)
     {
-      debugAddress -= debugAddress % align;
-      debugAddress += addr % align;
+      startAddress -= startAddress % align;
+      startAddress += addr % align;
 
-      if (addr < debugAddress || addr >= debugAddress + TOTAL_VALS)
-        debugAddress = addr - VALS_PER_LINE * 3;
-      else if (debugAddress > addr - VALS_PER_LINE * 3)
-        debugAddress -= (debugAddress - (addr - VALS_PER_LINE * 3) + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
-      else if (addr - TOTAL_VALS + VALS_PER_LINE * 4 > debugAddress)
-        debugAddress += ((addr - TOTAL_VALS + VALS_PER_LINE * 4) - debugAddress + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
+      if (addr < startAddress || addr >= startAddress + TOTAL_VALS)
+        startAddress = addr - VALS_PER_LINE * 3;
+      else if (startAddress > addr - VALS_PER_LINE * 3)
+        startAddress -= (startAddress - (addr - VALS_PER_LINE * 3) + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
+      else if (addr - TOTAL_VALS + VALS_PER_LINE * 4 > startAddress)
+        startAddress += ((addr - TOTAL_VALS + VALS_PER_LINE * 4) - startAddress + VALS_PER_LINE - 1) / VALS_PER_LINE * VALS_PER_LINE;
 
-      if (debugAddress < 0)
-        debugAddress = 0;
-      if (debugAddress > Processor.MAIN_MEM_SIZE - TOTAL_VALS)
+      if (startAddress < 0)
+        startAddress = 0;
+      if (startAddress > Processor.MAIN_MEM_SIZE - TOTAL_VALS)
       {
-        debugAddress = Processor.MAIN_MEM_SIZE - TOTAL_VALS;
+        startAddress = Processor.MAIN_MEM_SIZE - TOTAL_VALS;
         if (addr % align != 0)
-          debugAddress -= VALS_PER_LINE;
+          startAddress -= VALS_PER_LINE;
       }
 
-      debugAddress -= debugAddress % align;
-      debugAddress += addr % align;
+      startAddress -= startAddress % align;
+      startAddress += addr % align;
     }
   }
 }

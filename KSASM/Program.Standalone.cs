@@ -56,6 +56,7 @@ namespace KSASM
       var io = ImGui.GetIO();
       io.ConfigDpiScaleFonts = true;
       io.ConfigDpiScaleViewports = true;
+      io.ConfigFlags |= ImGuiConfigFlags.ViewportsEnable;
 
       ImGuiBackend.Initialize(window, renderer);
 
@@ -101,6 +102,8 @@ namespace KSASM
       commandBuffer.End();
 
       var frameResult = renderer.TrySubmitFrame();
+      ImGui.UpdatePlatformWindows();
+      ImGui.RenderPlatformWindowsDefault();
       if (frameResult != FrameResult.Success)
         RebuildRenderer();
     }

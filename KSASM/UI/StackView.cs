@@ -2,14 +2,15 @@
 using System;
 using Brutal.ImGuiApi;
 
-namespace KSASM
+namespace KSASM.UI
 {
-  public partial class AsmUi
+  public class StackViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("StackView", dock, ps)
   {
-    private static void DrawStackView()
+    public override DockGroup Group => DockGroup.Memory;
+    protected override void Draw()
     {
-      var FP = Current.Processor.FP;
-      var SP = Current.Processor.SP;
+      var FP = ps.Processor.FP;
+      var SP = ps.Processor.SP;
 
       if (FP == 0) FP = Processor.MAIN_MEM_SIZE;
       if (SP == 0) SP = Processor.MAIN_MEM_SIZE;
@@ -27,7 +28,7 @@ namespace KSASM
       var addr = start;
       while (addr < end)
       {
-        var type = stack[stackCount++] = Current.TypeMem.Read(addr);
+        var type = stack[stackCount++] = ps.TypeMem.Read(addr);
         addr += type?.SizeBytes() ?? 1;
       }
 
@@ -40,17 +41,17 @@ namespace KSASM
       }
     }
 
-    private static void DrawStackVal(ref LineBuilder line, int addr, DataType type, bool known)
+    private void DrawStackVal(ref LineBuilder line, int addr, DataType type, bool known)
     {
       Span<byte> buf = stackalloc byte[16];
       // read from underlying memory so we don't trigger read hooks
-      Current.Processor.MappedMemory.Read(buf[..type.SizeBytes()], addr);
+      ps.Processor.MappedMemory.Read(buf[..type.SizeBytes()], addr);
 
       var val = Encoding.Decode(buf, type);
 
-      var fp = Current.Processor.FP;
+      var fp = ps.Processor.FP;
       if (fp == 0 && addr >= 1000) fp = Processor.MAIN_MEM_SIZE;
-      var sp = Current.Processor.SP;
+      var sp = ps.Processor.SP;
       if (sp == 0 && addr >= 1000) sp = Processor.MAIN_MEM_SIZE;
 
       line.Clear();

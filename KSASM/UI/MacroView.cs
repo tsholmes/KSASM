@@ -4,24 +4,26 @@ using Brutal.ImGuiApi;
 using Brutal.Numerics;
 using KSASM.Assembly;
 
-namespace KSASM
+namespace KSASM.UI
 {
-  public static partial class AsmUi
+  public class MacroViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("MacroView", dock, ps)
   {
-    private static readonly List<MacroEntry> macroStack = [];
-    private static bool doMacroScroll = false;
-    private static DebugSymbols macroLastSymbols;
-    private static TokenIndex[] macroProducts;
-    private static bool macroFromEnd = false;
-    private static void DrawMacroView()
+    private readonly List<MacroEntry> macroStack = [];
+    private bool doScroll = false;
+    private DebugSymbols lastSymbols;
+    private TokenIndex[] products;
+    private bool fromEnd = false;
+
+    public override DockGroup Group => DockGroup.Editor;
+    protected override void Draw()
     {
-      if (macroLastSymbols != (macroLastSymbols = Current.Symbols))
+      if (lastSymbols != (lastSymbols = ps.Symbols))
       {
         macroStack.Clear();
-        macroProducts = null;
+        products = null;
       }
 
-      if (Current.Symbols == null)
+      if (ps.Symbols == null)
       {
         ImGui.Text("Assemble source to view macro expansions");
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 400);
@@ -32,43 +34,43 @@ namespace KSASM
       var maxWidth = ImGui.GetContentRegionAvail().X - ImGui.GetStyle().WindowPadding.X;
 
       ImGui.PushStyleVar(ImGuiStyleVar.SelectableTextAlign, new float2(0.5f, 0.5f));
-      if (ImGui.Selectable("From Source", !macroFromEnd, size: new(maxWidth / 2, 0f)))
+      if (ImGui.Selectable("From Source", !fromEnd, size: new(maxWidth / 2, 0f)))
       {
-        macroFromEnd = false;
+        fromEnd = false;
         macroStack.Clear();
       }
       ImGui.SameLine();
-      if (ImGui.Selectable("From End", macroFromEnd, size: new(maxWidth / 2, 0f)))
+      if (ImGui.Selectable("From End", fromEnd, size: new(maxWidth / 2, 0f)))
       {
-        macroFromEnd = true;
+        fromEnd = true;
         macroStack.Clear();
       }
       ImGui.PopStyleVar();
 
-      var debug = Current.Symbols;
+      var debug = ps.Symbols;
       var pbuf = debug.Buffer;
       var scount = pbuf.SourceCount;
 
       if (macroStack.Count == 0)
-        macroStack.Add(new(new(macroFromEnd ? -1 : 0), new(macroFromEnd ? 0 : -1)));
+        macroStack.Add(new(new(fromEnd ? -1 : 0), new(fromEnd ? 0 : -1)));
 
-      if (macroProducts == null)
+      if (products == null)
       {
-        macroProducts = new TokenIndex[pbuf.TokenCount];
+        products = new TokenIndex[pbuf.TokenCount];
         void walkProducer(Token token)
         {
           if (token.Type == TokenType.EOL) return;
           var producer = debug.GetProducer(token);
-          if (producer == TokenIndex.Invalid || macroProducts[producer.Index] != default)
+          if (producer == TokenIndex.Invalid || products[producer.Index] != default)
             return;
-          macroProducts[producer.Index] = token.Index;
+          products[producer.Index] = token.Index;
           walkProducer(pbuf[producer]);
         }
         foreach (var token in debug.FinalTokens)
           walkProducer(token);
         for (var sindex = pbuf.SourceCount; --sindex >= 0;)
           foreach (var token in pbuf.SourceTokens(new(sindex)))
-            if (macroProducts[token.Index.Index] != default)
+            if (products[token.Index.Index] != default)
               walkProducer(token);
       }
 
@@ -131,7 +133,7 @@ namespace KSASM
         ? pbuf.Source(curMacro.Source).Producer
         : TokenIndex.Invalid;
 
-      var hasInst = debug.InstToken(Current.Processor.PC, out var inst);
+      var hasInst = debug.InstToken(ps.Processor.PC, out var inst);
       if (hasInst && curMacro.Source.Index >= 0)
       {
         while (inst != TokenIndex.Invalid)
@@ -151,29 +153,29 @@ namespace KSASM
         var titer = iter.Tokens();
         while (titer.Next(out var token, out var range))
         {
-          if (doMacroScroll && token.Index == curMacro.Producer)
+          if (doScroll && token.Index == curMacro.Producer)
           {
             ImGui.SetScrollHereY();
-            doMacroScroll = false;
+            doScroll = false;
           }
 
           var rect = ImGuiX.TextRect(range, lstart);
           var urect = ImGuiX.TextUnderlineRect(range, lstart);
           if (hasInst && (inst == token.Index || inst == token.Previous))
-            ImGuiX.DrawRect(ImGuiX.LineRect(lstart), PCHighlight);
+            ImGuiX.DrawRect(ImGuiX.LineRect(lstart), AsmUi.PCHighlight);
 
           if (!hovering || mouse.X < rect.X || mouse.X >= rect.Z || mouse.Y < rect.Y || mouse.Y >= rect.W)
           {
             if (token.Index == curMacro.Producer)
-              ImGuiX.DrawRect(rect, TokenHighlight);
-            else if (!macroFromEnd && token.Index.Index >= 0 && macroProducts[token.Index.Index] != default)
-              ImGuiX.DrawRect(urect, TokenHighlight);
+              ImGuiX.DrawRect(rect, AsmUi.TokenHighlight);
+            else if (!fromEnd && token.Index.Index >= 0 && products[token.Index.Index] != default)
+              ImGuiX.DrawRect(urect, AsmUi.TokenHighlight);
             continue;
           }
 
           Token target = default;
           bool validTarget;
-          if (macroFromEnd)
+          if (fromEnd)
           {
             var producer = curMacro.Source.Index < 0 ? token.Previous : curProducer;
             validTarget = producer != TokenIndex.Invalid;
@@ -182,7 +184,7 @@ namespace KSASM
           }
           else
           {
-            var product = token.Index.Index < 0 ? default : macroProducts[token.Index.Index];
+            var product = token.Index.Index < 0 ? default : products[token.Index.Index];
             validTarget = product != default;
             if (validTarget)
               target = debug.Token(product);
@@ -190,15 +192,15 @@ namespace KSASM
 
           if (validTarget)
           {
-            ImGuiX.DrawRect(rect, TokenHoverHilight);
+            ImGuiX.DrawRect(rect, AsmUi.TokenHoverHilight);
             if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             {
               macroStack.Add(new(target.Source, target.Index));
-              doMacroScroll = true;
+              doScroll = true;
             }
           }
           ImGui.BeginTooltip();
-          if (macroFromEnd)
+          if (fromEnd)
           {
             var otok = token;
             while (true)
@@ -224,9 +226,9 @@ namespace KSASM
               line.Add(": ");
               line.Add(debug.SourceLine(otok.Index, out _, out _));
               ImGui.Text(line.Line);
-              if (otok.Index.Index < 0 || macroProducts[otok.Index.Index] == default)
+              if (otok.Index.Index < 0 || products[otok.Index.Index] == default)
                 break;
-              otok = debug.Token(macroProducts[otok.Index.Index]);
+              otok = debug.Token(products[otok.Index.Index]);
             }
           }
           ImGui.EndTooltip();

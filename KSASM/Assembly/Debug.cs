@@ -669,6 +669,8 @@ namespace KSASM.Assembly
         return null;
 
       var sz = type.SizeBytes();
+      if (addr + sz > Processor.MAIN_MEM_SIZE)
+        return null;
       for (var i = 1; i < sz; i++)
       {
         var (itype, ioff) = Decode(this[addr + i]);
@@ -684,6 +686,8 @@ namespace KSASM.Assembly
       get
       {
         var chunki = addr >> CHUNK_SHIFT;
+        if (chunki < 0 || chunki >= chunks.Length)
+          throw new InvalidOperationException($"{addr} {chunki}");
         var chunk = chunks[chunki];
         if (chunk == null)
           return 0;

@@ -1,23 +1,25 @@
 
 using Brutal.ImGuiApi;
 
-namespace KSASM
+namespace KSASM.UI
 {
-  public static partial class AsmUi
+  public class InstViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("InstView", dock, ps)
   {
-    private static bool instFollowPC = true;
-    private static int instLastPC = -1;
-    private static void DrawInstView()
+    private bool followPC = true;
+    private int lastPC = -1;
+
+    public override DockGroup Group => DockGroup.Editor;
+    protected override void Draw()
     {
-      if (ImGui.Checkbox("Follow PC##instfollowpc", ref instFollowPC))
-        instLastPC = -1; // scroll to PC on enable
+      if (ImGui.Checkbox("Follow PC", ref followPC))
+        lastPC = -1; // scroll to PC on enable
 
       ImGui.Separator();
       ImGui.BeginChild("##instview", new(-float.Epsilon, -float.Epsilon), windowFlags: ImGuiWindowFlags.HorizontalScrollbar);
-      var iter = Current.Symbols?.InstIter() ?? default;
+      var iter = ps.Symbols?.InstIter() ?? default;
       var line = new LineBuilder(stackalloc char[256]);
-      var mem = Current.Processor.Memory;
-      var pc = Current.Processor.PC;
+      var mem = ps.Processor.Memory;
+      var pc = ps.Processor.PC;
 
       var first = true;
 
@@ -35,17 +37,17 @@ namespace KSASM
           ImGui.SeparatorText(line.Line);
         }
         if (addr == pc)
-          ImGuiX.DrawRect(ImGuiX.LineRect(), PCHighlight);
+          ImGuiX.DrawRect(ImGuiX.LineRect(), AsmUi.PCHighlight);
         line.Clear();
         var inst = Instruction.Decode(mem.Read(addr, DataType.P24).Unsigned);
-        inst.Format(ref line, Current.Symbols);
+        inst.Format(ref line, ps.Symbols);
         ImGui.Text(line.Line);
-        if (instFollowPC && addr == pc && pc != instLastPC)
+        if (followPC && addr == pc && pc != lastPC)
           ImGui.SetScrollHereY();
 
         first = false;
       }
-      instLastPC = pc;
+      lastPC = pc;
 
       ImGui.EndChild();
     }
