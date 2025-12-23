@@ -35,7 +35,7 @@ namespace KSASM
     public B Astronomical(
       string name, DeviceFieldBufGetter<V, Astronomical> getter
     ) => NonNull(name, getter, b => b
-      .Uint("hash", (ref a) => a.Hash)
+      .Uint("hash", (ref a) => a.Hash.Code)
       .Double("mean_radius", (ref a) => a.MeanRadius)
       .Double("angular_velocity", (ref a) => a.AngularVelocity)
       .Double("mass", (ref a) => a is Vehicle v ? v.TotalMass : a.Mass)

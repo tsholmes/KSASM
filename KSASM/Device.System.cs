@@ -11,7 +11,7 @@ namespace KSASM
       .Double("time", (ref _) => Universe.GetElapsedSeconds())
       .SearchView(null, "hash_param", b => b
         .Astronomical(null,
-          (ref v, _) => v.Key == 0 ? v.Parent.System.GetWorldSun() : v.Parent.System.Get(v.Key)))
+          (ref v, _) => v.Key == 0 ? v.Parent.System.GetWorldSun() : v.Parent.System.Get(new KeyHash(v.Key))))
       .Raw(
         "terminal_data",
         Terminal.TOTAL_SIZE,

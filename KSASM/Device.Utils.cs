@@ -1,7 +1,6 @@
 
 using System;
 using System.Collections.Generic;
-using Brutal.ImGuiApi;
 using KSA;
 
 namespace KSASM
@@ -66,9 +65,9 @@ namespace KSASM
     ) => Composite(name, getter, b => b.Switch(sb => sb.Case(v => v != null, (ref v, _) => v, build)));
 
     public B Hash(string name, DeviceFieldGetter<V, IKeyed> getter) =>
-      Uint(name, (ref v) => getter(ref v)?.Hash ?? 0);
+      Uint(name, (ref v) => getter(ref v)?.Hash.Code ?? 0);
     public B ChildHash(string name, DeviceFieldBufGetter<V, IKeyed> getter) =>
-      NonNull(null, getter, b => b.Uint(name, (ref v) => v.Hash));
+      NonNull(null, getter, b => b.Uint(name, (ref v) => v.Hash.Code));
 
     public B Raw(
       string name, int length, DeviceFieldGetter<V, Span<byte>> getter, DeviceFieldSetter<V, Span<byte>> setter

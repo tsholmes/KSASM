@@ -10,7 +10,7 @@ namespace KSASM
     public override ulong GetId(Vehicle device) => 2;
 
     public override IDeviceFieldBuilder<Vehicle> Build(RootDeviceFieldBuilder<Vehicle> b) => b
-      .Uint("hash", (ref v) => v.Hash)
+      .Uint("hash", (ref v) => v.Hash.Code)
       .Double3("avel", (ref v, _) => v.BodyRates)
       .DoubleQuat("body2cci", (ref v, _) => v.GetBody2Cci())
       .DoubleQuat("body2cce", (ref v, _) => v.Body2Cce)
@@ -42,9 +42,9 @@ namespace KSASM
   public partial class DeviceFieldBuilder<B, T, V>
   {
     public B Part(string name, DeviceFieldBufGetter<V, Part> getter) => NonNull(name, getter, b => b
-      .Ulong("id", (ref p) => p.Id)
-      .Ulong("parent", (ref p) => p.Parent?.Id ?? 0)
-      .String("name", 64, (ref p, _) => p.Name)
+      .Ulong("id", (ref p) => p.InstanceId)
+      .Ulong("parent", (ref p) => p.Parent?.InstanceId ?? 0)
+      .String("name", 64, (ref p, _) => p.DisplayName)
     );
   }
 }
