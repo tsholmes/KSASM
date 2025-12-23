@@ -75,7 +75,7 @@ namespace KSASM
     [InlineArray(8)]
     public struct Byte8 { private byte element; }
 
-    public static Value Decode(Span<byte> data, DataType type)
+    public static Value Decode(ReadOnlySpan<byte> data, DataType type)
     {
       var eval = default(EVal);
       data[..type.SizeBytes()].CopyTo(eval.Bytes);

@@ -181,7 +181,7 @@ namespace KSASM.UI
           var ival = Encoding.Decode(data[off..], Processor.INST_TYPE);
           var inst = Instruction.Decode(ival.Unsigned);
           line.Clear();
-          inst.Format(ref line, ps.Symbols);
+          inst.Format(ref line, data[(off + Processor.INST_SIZE)..]);
 
           if (line.Length < width)
             line.PadLeft(width);
@@ -268,7 +268,7 @@ namespace KSASM.UI
         line.Add(": ");
 
         var inst = Instruction.Decode(Encoding.Decode(data, Processor.INST_TYPE).Unsigned);
-        inst.Format(ref line, ps.Symbols);
+        inst.Format(ref line, data[Processor.INST_SIZE..]);
         ImGui.Text(line.Line);
       }
       else

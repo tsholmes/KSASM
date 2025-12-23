@@ -1,4 +1,5 @@
 
+using System;
 using Brutal.ImGuiApi;
 
 namespace KSASM.UI
@@ -23,6 +24,8 @@ namespace KSASM.UI
 
       var first = true;
 
+      Span<byte> buf = stackalloc byte[256];
+
       while (iter.Next(out var addr, out var label))
       {
         if (first && label == null)
@@ -39,8 +42,13 @@ namespace KSASM.UI
         if (addr == pc)
           ImGuiX.DrawRect(ImGuiX.LineRect(), AsmUi.PCHighlight);
         line.Clear();
-        var inst = Instruction.Decode(mem.Read(addr, DataType.P24).Unsigned);
-        inst.Format(ref line, ps.Symbols);
+        var inst = Instruction.Decode(mem.Read(addr, Processor.INST_TYPE).Unsigned);
+        var immAddr = addr + Processor.INST_SIZE;
+        var immSize = Math.Min(inst.ImmSize(), buf.Length);
+        immSize = Math.Min(immSize, Processor.MAIN_MEM_SIZE - immAddr);
+        if (immSize > 0)
+          ps.Processor.MappedMemory.Read(buf[..immSize], immAddr);
+        inst.Format(ref line, buf[..immSize]);
         ImGui.Text(line.Line);
         if (followPC && addr == pc && pc != lastPC)
           ImGui.SetScrollHereY();

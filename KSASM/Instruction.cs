@@ -49,7 +49,21 @@ namespace KSASM
       _ => throw new IndexOutOfRangeException($"{idx}"),
     };
 
-    public void Format(ref LineBuilder line, DebugSymbols debug = null)
+    public int ImmSize()
+    {
+      var info = OpCodeInfo.For(OpCode);
+      var sz = 0;
+      for (var i = 0; i < info.InOps && i < ImmCount; i++)
+      {
+        var opInfo = info[i];
+        var type = opInfo.Type ?? Type(i);
+        var width = opInfo.Width ?? Width;
+        sz += type.SizeBytes() * width;
+      }
+      return sz;
+    }
+
+    public void Format(ref LineBuilder line, ReadOnlySpan<byte> immData)
     {
       var info = OpCodeInfo.For(OpCode);
 
@@ -58,13 +72,40 @@ namespace KSASM
       for (var i = 0; i < info.InOps; i++)
       {
         var opInfo = info[i];
+
+        var type = opInfo.Type ?? Type(i);
+        var width = opInfo.Width ?? Width;
+
         if (i < ImmCount)
-          line.Add(" <>");
+        {
+          var tsize = type.SizeBytes();
+          if (tsize * width <= immData.Length)
+          {
+            line.Sp();
+            if (width > 1)
+              line.Add('(');
+            for (var w = 0; w < width; w++)
+            {
+              if (w > 0)
+                line.Add(',');
+              var val = KSASM.Encoding.Decode(immData, type);
+              immData = immData[tsize..];
+              line.Add(val, type);
+            }
+            if (width > 1)
+              line.Add(')');
+          }
+          else
+          {
+            line.Add(" <>");
+            immData = [];
+          }
+        }
         else
           line.Add(" _");
-        line.Add(opInfo.Type ?? Type(i));
+        line.Add(type);
         line.Add('*');
-        line.Add(opInfo.Width ?? Width, "g");
+        line.Add(width, "g");
       }
 
       for (var i = 0; i < info.OutOps; i++)
