@@ -248,7 +248,10 @@ namespace KSASM.Assembly
     public void EmitInlineStrings()
     {
       if (!Labels.TryGetValue("STRINGS", out InlineStringStart))
+      {
         InlineStringStart = Labels["STRINGS"] = Assembler.DEFAULT_STRINGS_START;
+        Symbols.AddLabel("STRINGS", Assembler.DEFAULT_STRINGS_START);
+      }
 
       Addr = InlineStringStart;
       using var emitter = Emitter(DataType.U8);

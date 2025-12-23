@@ -14,14 +14,14 @@ namespace KSASM.UI
     private bool followPC = true;
     private bool showInst = true;
     private bool showData = true;
-    private int hoverAddress = -1;
+    private bool showChars = false;
     private ImGuiTextFilter searchFilter = new();
+    private readonly CharGrid grid = new(65536, 6 + 1 + VALS_PER_LINE * 3, VAL_LINES + 1);
 
     public override DockGroup Group => DockGroup.Memory;
     protected override void Draw()
     {
-      Span<char> lineBuf = stackalloc char[512];
-      var dline = new DataLineView(lineBuf, VALS_PER_LINE, ps.Symbols);
+      Span<char> lineBuf = stackalloc char[128];
       var line = new LineBuilder(lineBuf);
 
       ImGui.BeginDisabled(followPC);
@@ -88,11 +88,23 @@ namespace KSASM.UI
 
       ImGui.Checkbox("Follow PC", ref followPC);
 
+      ImGui.BeginDisabled(showChars);
+
       ImGui.SameLine();
       ImGui.Checkbox("Show Inst", ref showInst);
+      dhovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
 
       ImGui.SameLine();
       ImGui.Checkbox("Show Data", ref showData);
+      dhovered |= ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled);
+
+      ImGui.EndDisabled();
+
+      if (showChars && dhovered)
+        ImGui.SetTooltip("Disable 'Show Chars' to show instructions or data");
+
+      ImGui.SameLine();
+      ImGui.Checkbox("Show Chars", ref showChars);
 
       if (followPC)
         ScrollToAddr(ps.Processor.PC, Processor.INST_SIZE);
@@ -102,159 +114,224 @@ namespace KSASM.UI
       Span<AddrInfo> infos = stackalloc AddrInfo[TOTAL_VALS];
       ps.Symbols?.GetAddrInfo(startAddress, infos, showInst, showData);
 
+      grid.NewFrame();
+      var hoveredPt = grid.HoveredPoint();
+      var hoveredRow = hoveredPt.Y - 1;
+      var hoveredCol = (hoveredPt.X - 7) / 3;
+
       Span<byte> data = stackalloc byte[TOTAL_VALS];
       ps.Processor.MappedMemory.Read(data, startAddress);
 
-      dline.Clear();
-      dline.Empty(7);
+      line.Clear();
+      var header = grid[0..1, (6 + 1)..];
       for (var i = 0; i < VALS_PER_LINE; i++)
       {
+
+        CharGrid.Highlight? hl = null;
+        if (i == hoveredCol)
+          hl = new() { Color = AsmUi.TokenHoverHilight };
+
         var col = (startAddress + i) & 15;
-        dline.Sp();
-        dline.Add(col, "X2");
-      }
-      ImGui.Text(dline);
 
-      var hoverStart = -1;
-      var hoverLen = 0;
-
-      if (hoverAddress >= startAddress & hoverAddress < startAddress + TOTAL_VALS)
-      {
-        var hoff = hoverAddress - startAddress;
-        var instOff = -1;
-        var dataOff = -1;
-        var dataLen = 0;
-        for (var i = hoff; i >= 0; i--)
-        {
-          if (instOff == -1 && hoff - i < Processor.INST_SIZE && infos[i].Inst.HasValue)
-            instOff = i;
-          if (dataOff == -1 && infos[i].Type.HasValue)
-          {
-            var dlen = infos[i].Type.Value.SizeBytes() * infos[i].Width.Value;
-            if (hoff - i < dlen)
-            {
-              dataOff = i;
-              dataLen = dlen;
-            }
-          }
-        }
-        if (instOff >= 0)
-        {
-          hoverStart = instOff;
-          hoverLen = Processor.INST_SIZE;
-        }
-        else if (dataOff >= 0)
-        {
-          hoverStart = dataOff;
-          hoverLen = dataLen;
-        }
-        else
-        {
-          hoverStart = hoff;
-          hoverLen = 1;
-        }
+        header.Add(" ", hl);
+        header.AddF(col, "X2", hl);
       }
 
-      var mouse = ImGui.GetMousePos();
-
-      var offset = 0;
-      var nextHoverOff = -1;
-      for (var lnum = 0; lnum < VAL_LINES; lnum++)
+      var addrCol = grid[1.., 0..6];
+      line.Clear();
+      for (var i = 0; i < VAL_LINES; i++)
       {
-        dline.Clear();
-        var addr = startAddress + lnum * VALS_PER_LINE;
-        dline.Add(addr, "X6");
-        dline.Sp();
-        for (var i = 0; i < VALS_PER_LINE; i++)
-        {
-          if (offset == pcoff)
-            dline.HighlightData(Processor.INST_SIZE, AsmUi.PCHighlight);
-          else if (offset == hoverStart)
-            dline.HighlightData(hoverLen, AsmUi.TokenHoverHilight);
-          dline.AddData(infos[offset], data[offset..], out var rect);
-          if (rect.Contains(mouse))
-            nextHoverOff = offset;
-          offset++;
-        }
-        ImGui.Text(dline);
+        CharGrid.Highlight? hl = null;
+        if (i == hoveredRow)
+          hl = new() { Color = AsmUi.TokenHoverHilight };
+
+        var rowAddr = startAddress + (i * VALS_PER_LINE);
+        addrCol.AddF(rowAddr, "X6", hl);
       }
 
-      // dont draw hover tooltip if search combo is open
-      if (!ImGui.IsWindowFocused())
-        nextHoverOff = -1;
+      var dataView = grid[1.., 7..];
 
-      if (nextHoverOff >= hoverStart && nextHoverOff < hoverStart + hoverLen && ImGui.BeginTooltip())
+      var addr = startAddress;
+      var endAddress = startAddress + TOTAL_VALS;
+      var hoveredAddress = -1;
+      while (addr < endAddress)
       {
-        var addr = startAddress + hoverStart;
-        var id = ps.Symbols?.ID(addr) ?? default;
+        var off = addr - startAddress;
+        var maxWidth = TOTAL_VALS - off;
+        if (addr == ps.Processor.PC)
+          dataView.AddHighlight(Math.Min(Processor.INST_SIZE, maxWidth) * 3, AsmUi.PCHighlight);
 
-        line.Clear();
-        line.Add(addr, "X6");
-        if (!string.IsNullOrEmpty(id.Label))
+        var info = infos[addr - startAddress];
+
+        if (showChars)
         {
-          line.Add(": ");
-          line.Add(id.Label);
-          if (id.Offset != 0)
-          {
-            line.Add('+');
-            line.Add(id.Offset, "g");
-          }
+          if (dataView.NextHovered(3))
+            hoveredAddress = addr;
+
+          line.Clear();
+          line.AddEscaped((char)data[off]);
+          line.PadLeft(3);
+          dataView.Add(line.Line, dataView.HoveredHighlight(3, AsmUi.TokenHoverHilight));
+
+          addr++;
         }
-        ImGui.Text(dline);
-
-        var info = infos[hoverStart];
-        if (info.Inst.HasValue && hoverStart + Processor.INST_SIZE <= TOTAL_VALS)
+        else if (info.Inst is TokenIndex insti && maxWidth >= Processor.INST_SIZE)
         {
-          var inst = Instruction.Decode(Encoding.Decode(data[hoverStart..], Processor.INST_TYPE).Unsigned);
+          var width = Processor.INST_SIZE * 3;
+          var ival = Encoding.Decode(data[off..], Processor.INST_TYPE);
+          var inst = Instruction.Decode(ival.Unsigned);
           line.Clear();
           inst.Format(ref line, ps.Symbols);
-          ImGui.Text(line.Line);
-        }
-        else if (info.Type.HasValue)
-        {
-          var type = info.Type.Value;
-          var width = info.Width.Value;
-          line.Clear();
-          line.Add(type);
-          line.Add('*');
-          line.Add(width, "g");
-          ImGui.Text(line.Line);
 
-          var doff = hoverStart;
-
-          for (var i = 0; i < width && doff + type.SizeBytes() <= TOTAL_VALS; i++, doff += type.SizeBytes())
+          if (line.Length < width)
+            line.PadLeft(width);
+          else if (line.Length > width)
           {
-            line.Clear();
-            var val = Encoding.Decode(data[doff..], type);
-            line.Add(val, type);
-            if (type == DataType.P24 && ps.Symbols != null)
-            {
-              id = ps.Symbols.ID((int)val.Unsigned);
-              if (id.Label != null)
-              {
-                line.Sp();
-                line.Add(id.Label);
-                if (id.Offset != 0)
-                {
-                  line.Add('+');
-                  line.Add(id.Offset, "g");
-                }
-              }
-            }
-            ImGui.Text(line.Line);
+            line.Length = width - 3;
+            line.Add("...");
           }
+
+          if (dataView.NextHovered(width))
+            hoveredAddress = addr;
+
+          dataView.Add(line.Line, dataView.HoveredHighlight(width, AsmUi.TokenHoverHilight));
+
+          addr += Processor.INST_SIZE;
         }
         else
         {
-          line.Clear();
-          line.Add(data[hoverStart], "X2");
-          ImGui.Text(line.Line);
+          var type = info.Type ?? DataType.U8;
+          var tsize = type.SizeBytes();
+          var width = tsize * 3;
+          var dwidth = Math.Min(info.Width ?? 1, maxWidth / tsize);
+          if (dwidth == 0)
+          {
+            type = DataType.U8;
+            tsize = type.SizeBytes();
+            width = tsize * 3;
+            dwidth = 1;
+          }
+
+          if (dataView.NextHovered(width * dwidth))
+          {
+            hoveredAddress = addr;
+            dataView.AddHighlight(width * dwidth, AsmUi.TokenHoverHilight);
+          }
+
+          for (var w = 0; w < dwidth; w++)
+          {
+            var val = Encoding.Decode(data[off..], type);
+            line.Clear();
+            line.Add(val, type);
+
+            // if we have space on both sides, move off the edge
+            if (line.Length < width - 1)
+              line.Sp();
+
+            if (line.Length < width)
+              line.PadLeft(width);
+            else if (line.Length > width)
+            {
+              line.Length = width - 3;
+              line.Add("...");
+            }
+
+            dataView.Add(line.Line);
+
+            addr += tsize;
+            off += tsize;
+          }
         }
+      }
+
+      grid.Draw();
+
+      if (hoveredAddress != -1 && ImGui.IsWindowHovered())
+      {
+        ImGui.BeginTooltip();
+
+        var off = hoveredAddress - startAddress;
+        var info = infos[off];
+
+        DrawDetails(hoveredAddress, infos[off], data[off..], ref line);
 
         ImGui.EndTooltip();
       }
+    }
 
-      hoverAddress = nextHoverOff + startAddress;
+    private void DrawDetails(int addr, AddrInfo info, Span<byte> data, ref LineBuilder line)
+    {
+      if (info.Inst != null && data.Length >= Processor.INST_SIZE)
+      {
+        line.Clear();
+        FormatAddr(ref line, addr);
+        line.Add(": ");
+
+        var inst = Instruction.Decode(Encoding.Decode(data, Processor.INST_TYPE).Unsigned);
+        inst.Format(ref line, ps.Symbols);
+        ImGui.Text(line.Line);
+      }
+      else
+      {
+        line.Clear();
+        FormatAddr(ref line, addr);
+        line.Add(": ");
+
+        var lwidth = line.Length;
+
+        var type = info.Type ?? DataType.U8;
+        if (type.SizeBytes() > data.Length)
+          type = DataType.U8;
+        var tsize = type.SizeBytes();
+        var dwidth = info.Width ?? 1;
+        dwidth = Math.Min(dwidth, data.Length / tsize);
+
+        Span<byte> sbuf = stackalloc byte[16];
+
+        for (var w = 0; w < dwidth; w++)
+        {
+          line.PadRight(lwidth);
+          var val = Encoding.Decode(data[(w * tsize)..], type);
+          line.Add(val, type);
+          if (info.Type != null)
+            line.Add(type);
+
+          if (type == DataType.S48)
+          {
+            var saddr = (int)(val.Unsigned & 0xFFFFFF);
+            var slen = (int)((val.Unsigned >> 24) & 0xFFFFFF);
+            var rslen = Math.Min(slen, Processor.MAIN_MEM_SIZE - saddr);
+            rslen = Math.Min(rslen, 16);
+
+            ps.Processor.MappedMemory.Read(sbuf[..rslen], saddr);
+
+            line.Add(" \"");
+            for (var i = 0; i < rslen; i++)
+              line.AddEscaped((char)sbuf[i], escapeQuote: true);
+            if (rslen < slen)
+              line.Add("...");
+            line.Add('"');
+          }
+
+          ImGui.Text(line.Line);
+          line.Clear();
+        }
+      }
+    }
+
+    private void FormatAddr(ref LineBuilder line, int addr)
+    {
+      line.Add(addr, "X6");
+      if (ps.Symbols?.ID(addr) is DebugSymbols.AddrId id && !string.IsNullOrEmpty(id.Label))
+      {
+        line.Sp();
+        line.Add(id.Label);
+        if (id.Offset != 0)
+        {
+          line.Add('+');
+          line.Add(id.Offset, "g");
+        }
+      }
     }
 
     private void ScrollToAddr(int addr, int align = 1)

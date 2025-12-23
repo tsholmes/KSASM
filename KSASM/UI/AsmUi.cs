@@ -95,7 +95,7 @@ namespace KSASM.UI
         return;
 
       ImGui.SetNextWindowSizeConstraints(new(300, 300), new(1e10f, 1e10f));
-      ImGui.SetNextWindowSize(new(850, 800), ImGuiCond.Appearing);
+      ImGui.SetNextWindowSize(new(900, 800), ImGuiCond.Appearing);
       ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new float2(0, 0));
       var hidden = !ImGui.Begin(title, ref Enabled, WINDOW_FLAGS) || ImGui.IsWindowCollapsed();
       ImGui.PopStyleVar();
@@ -111,7 +111,7 @@ namespace KSASM.UI
         IImGui.DockBuilderSplitNode(dock, ImGuiDir.Down, 0.3f, out var down, out var up);
         IImGui.DockBuilderGetNode(down).LocalFlags |= ImGuiDockNodeFlags.AutoHideTabBar;
 
-        IImGui.DockBuilderSplitNode(up, ImGuiDir.Right, 0.5f, out var right, out var left);
+        IImGui.DockBuilderSplitNode(up, ImGuiDir.Right, 0.57f, out var right, out var left);
 
         foreach (var window in windows)
         {

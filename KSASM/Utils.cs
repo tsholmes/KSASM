@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using KSASM.Assembly;
 
 namespace KSASM
 {
@@ -374,6 +375,140 @@ namespace KSASM
     }
 
     public T Pop() => values[--length];
+  }
+
+  public ref struct LineBuilder(Span<char> line)
+  {
+    private readonly Span<char> line = line;
+    private int length = 0;
+
+    public int Length
+    {
+      get => length;
+      set => length = value >= 0 && value <= length ? value : throw new IndexOutOfRangeException($"{value}");
+    }
+
+    public Span<char> Line => line[..length];
+
+    public void Clear()
+    {
+      line.Fill(' ');
+      length = 0;
+    }
+
+    public void Add<T>(T val, ReadOnlySpan<char> format) where T : ISpanFormattable
+    {
+      if (!val.TryFormat(line[length..], out int written, format, null))
+        throw new InvalidOperationException();
+      length += written;
+    }
+
+    public void Add(Value val, DataType type)
+    {
+      if (type == DataType.S48)
+      {
+        var addr = val.Unsigned & 0xFFFFFF;
+        var len = (val.Unsigned >> 24) & 0xFFFFFF;
+        Add(addr, "X6");
+        Add('+');
+        Add(len, "g");
+        return;
+      }
+      var fmt = type switch
+      {
+        DataType.U8 => "X2",
+        DataType.P24 => "X6",
+        DataType.F64 => "G12",
+        _ => "g",
+      };
+      switch (type.VMode())
+      {
+        case ValueMode.Unsigned: Add(val.Unsigned, fmt); break;
+        case ValueMode.Signed: Add(val.Signed, fmt); break;
+        case ValueMode.Float: Add(val.Float, fmt); break;
+        default: throw new InvalidOperationException($"{type.VMode()}");
+      }
+    }
+
+    public void AddEscaped(char c, bool escapeQuote = false)
+    {
+      switch (c)
+      {
+        case '\a': Add("\\a"); break;
+        case '\b': Add("\\b"); break;
+        case '\f': Add("\\f"); break;
+        case '\n': Add("\\n"); break;
+        case '\r': Add("\\r"); break;
+        case '\t': Add("\\t"); break;
+        case '\v': Add("\\v"); break;
+        case '\"' when escapeQuote: Add("\\\""); break;
+        case '\\': Add("\\\\"); break;
+        case < (char)32 or >= (char)127:
+          Add('\\');
+          Add((byte)c, "X2");
+          break;
+        default: Add(c); break;
+      }
+    }
+
+    public void Add(DataType type)
+    {
+      Add(':');
+      Add(type, "g");
+    }
+
+    public void Add(ReadOnlySpan<char> chars)
+    {
+      chars.CopyTo(line[length..]);
+      length += chars.Length;
+    }
+
+    public void Add(char c) => line[length++] = c;
+
+    public void Empty(int len) => line[length..(length += len)].Fill(' ');
+
+    public void Sp() => Add(' ');
+
+    public void AddAddr(int addr, DebugSymbols debug)
+    {
+      if (debug == null)
+      {
+        Add(addr, "X6");
+        return;
+      }
+
+      var id = debug.ID(addr);
+      if (string.IsNullOrEmpty(id.Label))
+      {
+        Add(addr, "X6");
+        return;
+      }
+      Add(id.Label);
+      if (id.Offset > 0)
+      {
+        Add('+');
+        Add(id.Offset, "g");
+      }
+    }
+
+    public void PadLeft(int len)
+    {
+      var pad = len - length;
+      if (pad <= 0)
+        return;
+      line[..length].CopyTo(line[pad..]);
+      line[..pad].Fill(' ');
+      length = len;
+    }
+
+    public void PadRight(int len)
+    {
+      var pad = len - length;
+      if (pad <= 0)
+        return;
+      line[length..len].Fill(' ');
+      length = len;
+    }
   }
 
   public static partial class Extensions
