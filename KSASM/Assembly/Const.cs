@@ -5,23 +5,33 @@ namespace KSASM.Assembly
 {
   public static class Const
   {
-    public static bool TryParse<T>(T parser) where T : IConstParser
+    public static bool TryParse<T>(T parser) where T : IConstParser, allows ref struct =>
+      new CParser<T>(parser).TryParse();
+
+    public static bool TryParse<T>(ref T parser) where T : struct, IConstParser =>
+      new CParser<RefParser<T>>(new(ref parser)).TryParse();
+
+    private readonly ref struct CParser<T>(T parser) where T : IConstParser, allows ref struct
     {
-      bool parseAddSub()
+      private readonly T parser = parser;
+
+      public bool TryParse() => ParseAddSub();
+      
+      private bool ParseAddSub()
       {
-        if (!parseMulDiv())
+        if (!ParseMulDiv())
           return false;
         while (true)
         {
           if (parser.TakeType(TokenType.Plus, out var otoken))
           {
-            if (!parseMulDiv())
+            if (!ParseMulDiv())
               return false;
             parser.PushConstNode(ConstOp.Add, otoken);
           }
           else if (parser.TakeType(TokenType.Minus, out otoken))
           {
-            if (!parseMulDiv())
+            if (!ParseMulDiv())
               return false;
             parser.PushConstNode(ConstOp.Sub, otoken);
           }
@@ -29,21 +39,21 @@ namespace KSASM.Assembly
             return true;
         }
       }
-      bool parseMulDiv()
+      private bool ParseMulDiv()
       {
-        if (!parseGroup())
+        if (!ParseGroup())
           return false;
         while (true)
         {
           if (parser.TakeType(TokenType.Mult, out var mtoken))
           {
-            if (!parseGroup())
+            if (!ParseGroup())
               return false;
             parser.PushConstNode(ConstOp.Mul, mtoken);
           }
           else if (parser.TakeType(TokenType.Div, out var dtoken))
           {
-            if (!parseGroup())
+            if (!ParseGroup())
               return false;
             parser.PushConstNode(ConstOp.Div, dtoken);
           }
@@ -51,11 +61,11 @@ namespace KSASM.Assembly
             return true;
         }
       }
-      bool parseGroup()
+      private bool ParseGroup()
       {
         if (parser.TakeType(TokenType.POpen, out _))
         {
-          if (!parseAddSub())
+          if (!ParseAddSub())
             return false;
           if (!parser.TakeType(TokenType.PClose, out _))
             return false;
@@ -64,15 +74,15 @@ namespace KSASM.Assembly
           parser.PushConstNode(ConstOp.Leaf, wtoken);
         else if (parser.TakeType(TokenType.Minus, out var otoken))
         {
-          if (!parseGroup())
+          if (!ParseGroup())
             return false;
           parser.PushConstNode(ConstOp.Neg, otoken);
         }
         else if (parser.TakeType(TokenType.Plus, out _))
-          return parseGroup();
+          return ParseGroup();
         else if (parser.TakeType(TokenType.Not, out var bntoken))
         {
-          if (!parseGroup())
+          if (!ParseGroup())
             return false;
           parser.PushConstNode(ConstOp.Not, bntoken);
         }
@@ -83,7 +93,6 @@ namespace KSASM.Assembly
 
         return true;
       }
-      return parseAddSub();
     }
 
     // returns invalid token on error
@@ -166,6 +175,14 @@ namespace KSASM.Assembly
 
       public void Push(Value val) => vals[count++] = val;
       public Value Pop() => vals[--count];
+    }
+
+    private readonly ref struct RefParser<T>(ref T parser) : IConstParser
+      where T : struct, IConstParser
+    {
+      private readonly ref T parser = ref parser;
+      public void PushConstNode(ConstOp op, Token token) => parser.PushConstNode(op, token);
+      public bool TakeType(TokenType type, out Token token) => parser.TakeType(type, out token);
     }
   }
 
