@@ -30,18 +30,13 @@ On load the KSASM window and the Terminal Gauge will be visible. Click `Assemble
   - Working compilation of text instructions to encoded instructions
   - Incomplete set of built-in macros
   - Working user-defined macro expansion for utilities and meta-programming
-  - Missing some error handling. Import loops will hang and then crash the game
+  - Missing some error handling. Import/macro loops will hang and then crash the game
 - Library scripts:
   - data layouts for currently implemented devices
   - some vector/quaternion utility macros
-  - utilities for defining "functions"
-    - currently just uses globals for arguments and return address
-    - TODO: make macros for stack-based function calls
-    - TODO: add optional args with default values
   - string utilities
-    - uses adjacent p24 values of (addr, length) for strings
+    - uses s48 type of address in low bits, length in highbits
     - limited ftoa implementations
-      - ftoa_unit: scales to powers of 1000 and adds a unit on the end with metric size prefixes
       - ftoa_n3: full integer part (up to i64 max value) and 3 decimal places
       - TODO: scientific notation
   - terminal utilites to clear/print to the Terminal gauge while scrolling previous text upwards
@@ -57,6 +52,7 @@ On load the KSASM window and the Terminal Gauge will be visible. Click `Assemble
     - system for general info view (time, astronomical lookup)
     - vehicle for vehicle-specific info (parts, extra reference frames, inputs)
     - fc for flight-computer calculations (burns and their resulting flight plans)
+    - terminal for display gauge
   - Still missing a lot of info/inputs
   - TODO: dynamic devices for parts
   - TODO: separate user inputs from programmatic inputs
@@ -67,6 +63,7 @@ On load the KSASM window and the Terminal Gauge will be visible. Click `Assemble
   - MacroView lets you walk into macro expansion from source, or backwards from final result
     - still has some bugs with debug symbols that cause rare crashes
   - InstView shows encoded instructions grouped by the nearest label
+  - StackView shows the current stack state
   - MemView shows hex view of memory with instructions and values from source inlined
     - TODO: character view for strings
     - TODO: right-click menu for adding watches/highlighting values
@@ -78,3 +75,4 @@ On load the KSASM window and the Terminal Gauge will be visible. Click `Assemble
     - TODO: don't require 0x prefix to input hex addresses
     - TODO: allow address expressions `label+offset`
     - TODO: allow value expressions `$(addr1:f64 + addr2:u64)`
+  - DevView shows the mappable devices and their fields
