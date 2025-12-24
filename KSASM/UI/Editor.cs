@@ -4,7 +4,7 @@ using Brutal.Numerics;
 
 namespace KSASM.UI
 {
-  public class EditorWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("Editor", dock, ps)
+  public class EditorWindow(AsmUi parent) : DockedWindow("Editor", parent)
   {
     private const string DEFAULT_SCRIPT = """
       @0

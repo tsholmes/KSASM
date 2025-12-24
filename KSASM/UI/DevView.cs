@@ -1,9 +1,7 @@
 
-using Brutal.ImGuiApi;
-
 namespace KSASM.UI
 {
-  public class DevViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("DevView", dock, ps)
+  public class DevViewWindow(AsmUi parent) : DockedWindow("DevView", parent)
   {
     public override DockGroup Group => DockGroup.Memory;
     protected override void Draw()

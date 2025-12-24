@@ -6,7 +6,7 @@ using KSASM.Assembly;
 
 namespace KSASM.UI
 {
-  public class MemWatchWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("MemWatch", dock, ps)
+  public class MemWatchWindow(AsmUi parent) : DockedWindow("MemWatch", parent)
   {
     private readonly List<(int, DataType)> watches = [];
     private readonly ImInputString addText = new(1024);

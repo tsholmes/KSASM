@@ -3,7 +3,7 @@ using Brutal.ImGuiApi;
 
 namespace KSASM.UI
 {
-  public class ControlsWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("Controls", dock, ps)
+  public class ControlsWindow(AsmUi parent) : DockedWindow("Controls", parent)
   {
     private int lastTotal = 0;
 

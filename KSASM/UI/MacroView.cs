@@ -6,7 +6,7 @@ using KSASM.Assembly;
 
 namespace KSASM.UI
 {
-  public class MacroViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("MacroView", dock, ps)
+  public class MacroViewWindow(AsmUi parent) : DockedWindow("MacroView", parent)
   {
     private readonly List<MacroEntry> macroStack = [];
     private bool doScroll = false;

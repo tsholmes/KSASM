@@ -4,7 +4,7 @@ using Brutal.ImGuiApi;
 
 namespace KSASM.UI
 {
-  public class StackViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("StackView", dock, ps)
+  public class StackViewWindow(AsmUi parent) : DockedWindow("StackView", parent)
   {
     public override DockGroup Group => DockGroup.Memory;
     protected override void Draw()

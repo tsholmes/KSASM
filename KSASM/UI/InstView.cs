@@ -4,7 +4,7 @@ using Brutal.ImGuiApi;
 
 namespace KSASM.UI
 {
-  public class InstViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("InstView", dock, ps)
+  public class InstViewWindow(AsmUi parent) : DockedWindow("InstView", parent)
   {
     private bool followPC = true;
     private int lastPC = -1;

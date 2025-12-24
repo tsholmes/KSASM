@@ -5,7 +5,7 @@ using KSASM.Assembly;
 
 namespace KSASM.UI
 {
-  public class MemViewWindow(ImGuiID dock, ProcSystem ps) : DockedWindow("MemView", dock, ps)
+  public class MemViewWindow(AsmUi parent) : DockedWindow("MemView", parent)
   {
     private const int VALS_PER_LINE = 16;
     private const int VAL_LINES = 16;

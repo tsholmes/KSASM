@@ -40,6 +40,18 @@ namespace KSASM.UI
     private readonly ProcSystem ps;
     private readonly DockedWindow[] windows;
 
+    public ImGuiID Dock => dock;
+    public ProcSystem Ps => ps;
+
+    public EditorWindow Editor { get; init; }
+    public ControlsWindow Controls { get; init; }
+    public MacroViewWindow MacroView { get; init; }
+    public InstViewWindow InstView { get; init; }
+    public StackViewWindow StackView { get; init; }
+    public MemViewWindow MemView { get; init; }
+    public MemWatchWindow MemWatch { get; init; }
+    public DevViewWindow DevView { get; init; }
+
     private bool isTyping;
 
     private AsmUi(ProcContext ctx)
@@ -49,14 +61,14 @@ namespace KSASM.UI
       ps = new ProcSystem(ctx);
 
       windows = [
-        new EditorWindow(dock, ps),
-        new ControlsWindow(dock, ps),
-        new MacroViewWindow(dock, ps),
-        new InstViewWindow(dock, ps),
-        new StackViewWindow(dock, ps),
-        new MemViewWindow(dock, ps),
-        new MemWatchWindow(dock, ps),
-        new DevViewWindow(dock, ps),
+        Editor = new(this),
+        Controls = new(this),
+        MacroView = new(this),
+        InstView = new(this),
+        StackView = new(this),
+        MemView = new(this),
+        MemWatch = new(this),
+        DevView = new(this),
       ];
     }
 
@@ -142,15 +154,18 @@ namespace KSASM.UI
 
   public enum DockGroup { Editor, Memory, Logs, }
 
-  public abstract class DockedWindow(string title, ImGuiID dock, ProcSystem ps)
+  public abstract class DockedWindow(string title, AsmUi parent)
   {
-    private readonly string title = $"{title}##{ps.Id}";
+    protected readonly AsmUi parent = parent;
+    protected readonly ProcSystem ps = parent.Ps;
+    protected readonly ImGuiID dock = parent.Dock;
+
+    private readonly string title = $"{title}##{parent.Ps.Id}";
     private readonly ImGuiWindowClass windowClass = new()
     {
-      ClassId = dock,
+      ClassId = parent.Dock,
       DockingAllowUnclassed = false,
     };
-    protected readonly ProcSystem ps = ps;
 
     public string Title => title;
 
