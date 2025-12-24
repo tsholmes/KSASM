@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace KSASM.Assembly
 {
-  public class Parser : TokenProcessor
+  public class Parser : TokenProcessor, IConstParser
   {
     public readonly List<Statement> Statements = [];
     public readonly AppendBuffer<ExprNode> ConstNodes = new();
@@ -31,14 +31,6 @@ namespace KSASM.Assembly
       return true;
     }
 
-    private bool Take(out Token token)
-    {
-      if (!Peek(out token))
-        return false;
-      index++;
-      return true;
-    }
-
     private bool TakeType(TokenType type)
     {
       if (EOF || tokens[index].Type != type)
@@ -46,7 +38,7 @@ namespace KSASM.Assembly
       index++;
       return true;
     }
-    private bool TakeType(TokenType type, out Token token)
+    public bool TakeType(TokenType type, out Token token)
     {
       if (!Peek(out token) || token.Type != type)
         return false;
@@ -227,78 +219,13 @@ namespace KSASM.Assembly
 
     private void ParseConstInner()
     {
-      void parseAddSub()
-      {
-        parseMulDiv();
-        while (true)
-        {
-          if (TakeType(TokenType.Plus, out var otoken))
-          {
-            parseMulDiv();
-            PushConstOp(ConstOp.Add, otoken.Index);
-          }
-          else if (TakeType(TokenType.Minus, out otoken))
-          {
-            parseMulDiv();
-            PushConstOp(ConstOp.Sub, otoken.Index);
-          }
-          else
-            break;
-        }
-      }
-      void parseMulDiv()
-      {
-        parseGroup();
-        while (true)
-        {
-          if (TakeType(TokenType.Mult, out var mtoken))
-          {
-            parseGroup();
-            PushConstOp(ConstOp.Mul, mtoken.Index);
-          }
-          else if (TakeType(TokenType.Div, out var dtoken))
-          {
-            parseGroup();
-            PushConstOp(ConstOp.Div, dtoken.Index);
-          }
-          else
-            break;
-        }
-      }
-      void parseGroup()
-      {
-        if (TakeType(TokenType.POpen, out _))
-        {
-          parseAddSub();
-          if (!TakeType(TokenType.PClose, out _))
-            throw Invalid();
-        }
-        else if (TakeType(TokenType.Word, out var wtoken))
-          PushConstVal(wtoken.Index);
-        else if (TakeType(TokenType.Minus, out var otoken))
-        {
-          parseGroup();
-          PushConstOp(ConstOp.Neg, otoken.Index);
-        }
-        else if (TakeType(TokenType.Plus))
-          parseGroup();
-        else if (TakeType(TokenType.Not, out var bntoken))
-        {
-          parseGroup();
-          PushConstOp(ConstOp.Not, bntoken.Index);
-        }
-        else if (TakeType(TokenType.Number, out var ntoken))
-          PushConstVal(ntoken.Index);
-        else
-          throw Invalid();
-      }
       var start = ConstNodes.Length;
-      parseAddSub();
+      if (!Const.TryParse(this))
+        throw Invalid();
       ConstRanges.Add(new(start, ConstNodes.Length - start));
     }
 
-    private void PushConstOp(ConstOp op, TokenIndex index) => ConstNodes.Add(new(op, index));
-    private void PushConstVal(TokenIndex index) => PushConstOp(ConstOp.Leaf, index);
+    public void PushConstNode(ConstOp op, Token token) => ConstNodes.Add(new(op, token.Index));
   }
 
   public class ParsedData

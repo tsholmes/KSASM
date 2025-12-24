@@ -263,74 +263,10 @@ namespace KSASM.Assembly
     private readonly Stack<Value> evalStack = new();
     public Value EvalExpr(int index, ValueMode mode)
     {
-      var vals = evalStack;
-      vals.Clear();
-      Value left = default, right = default;
-      var ops = mode.Ops();
       var range = ConstRanges[index];
-      for (var i = range.Start; i < range.End; i++)
-      {
-        var node = ConstNodes[i];
-        var token = Buffer[node.Token];
-        switch (node.Op)
-        {
-          case ConstOp.Leaf:
-            if (token.Type == TokenType.Number)
-            {
-              if (!Token.TryParseValue(Buffer[token], out left, out var lmode))
-                throw Invalid(token);
-              left.Convert(lmode, mode);
-            }
-            else if (token.Type == TokenType.Word)
-            {
-              if (!Labels.TryGetValue(new(Buffer[token]), out var lpos))
-                throw Invalid(token);
-              left.Unsigned = (ulong)lpos;
-              left.Convert(ValueMode.Unsigned, mode);
-            }
-            else
-              throw Invalid(token);
-            vals.Push(left);
-            break;
-          case ConstOp.Neg:
-            right = vals.Pop();
-            ops.Negate(ref right);
-            vals.Push(right);
-            break;
-          case ConstOp.Not:
-            right = vals.Pop();
-            ops.BitNot(ref right);
-            vals.Push(right);
-            break;
-          case ConstOp.Add:
-            right = vals.Pop();
-            left = vals.Pop();
-            ops.Add(ref left, right);
-            vals.Push(left);
-            break;
-          case ConstOp.Sub:
-            right = vals.Pop();
-            left = vals.Pop();
-            ops.Sub(ref left, right);
-            vals.Push(left);
-            break;
-          case ConstOp.Mul:
-            right = vals.Pop();
-            left = vals.Pop();
-            ops.Mul(ref left, right);
-            vals.Push(left);
-            break;
-          case ConstOp.Div:
-            right = vals.Pop();
-            left = vals.Pop();
-            ops.Div(ref left, right);
-            vals.Push(left);
-            break;
-          default:
-            throw new InvalidOperationException($"Unknown const op {node.Op}");
-        }
-      }
-      return vals.Pop();
+      if (Const.TryEvaluate(new ConstEval(this, ConstNodes[range]), mode, out var val) is Token err)
+        throw Invalid(err);
+      return val;
     }
 
     protected override bool Peek(out Token token) => throw new NotImplementedException();
@@ -363,6 +299,41 @@ namespace KSASM.Assembly
 
       readonly void IDisposable.Dispose() =>
         ctx.Values.Add((addr, type, new(start, ctx.RawValues.Length - start)));
+    }
+
+    private ref struct ConstEval(Context ctx, ReadOnlySpan<ExprNode> nodes) : IConstEvaluator
+    {
+      private readonly Context ctx = ctx;
+      private ReadOnlySpan<ExprNode> nodes = nodes;
+
+      public bool NextOp(out ConstOp op, out Token token)
+      {
+        if (nodes.Length == 0)
+        {
+          op = default;
+          token = default;
+          return false;
+        }
+        var node = nodes[0];
+        nodes = nodes[1..];
+        op = node.Op;
+        token = ctx.Buffer[node.Token];
+        return true;
+      }
+
+      public ReadOnlySpan<char> TokenData(Token token) => ctx.Buffer[token];
+
+      public bool TryGetName(ReadOnlySpan<char> name, ValueMode mode, out Value val)
+      {
+        if (!ctx.Labels.TryGetValue(new(name), out var addr))
+        {
+          val = default;
+          return false;
+        }
+        val = new() { Unsigned = (ulong)addr };
+        val.Convert(ValueMode.Unsigned, mode);
+        return true;
+      }
     }
   }
 }
