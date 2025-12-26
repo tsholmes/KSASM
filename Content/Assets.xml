@@ -1,10 +1,13 @@
 <Assets>
+  <ShaderEx Id="TermCharsFrag" Path="TermChars.frag">
+    <TextureBinding Path="TermFont.png" />
+  </ShaderEx>
   <GaugeCanvas Id="KSASMTerminal">
     <DisplayName Value="KSASM Terminal" />
     <AnchorUv X="1" Y="0" />
     <PivotUv X="1" Y="0" />
-    <OffsetUv X="-0.01" Y="0.02" />
-    <SizeUv X="0.2" Y="0.16" Locked="true" />
+    <OffsetUv X="-0.01" Y="0.015" />
+    <SizeUv X="0.2" Y="0.1852" Locked="true" />
     <Component Name="Back">
       <AnchorUv X="0" Y="0" />
       <PivotUv X="0" Y="0" />
@@ -14,9 +17,35 @@
       <Vertex Id="GaugeInstancedVert" />
       <Box X="0" Y="0" Width="1" Height="1">
         <Color R="0.07" G="0.07" B="0.07" />
-        <Rounding Value="0.001" />
+        <Rounding Value="0.07" />
       </Box>
     </Component>
+    <Component Name="Screws">
+      <AnchorUv X="0" Y="0" />
+      <PivotUv X="0" Y="0" />
+      <OffsetUv X="0" Y="0" />
+      <SizeUv X="1" Y="1" />
+      <Fragment Id="GaugeScrew" />
+      <Vertex Id="GaugeInstancedVert" />
+      <Rect X="0.015" Y="0.0162" Width="0.0345" Height="0.041" />
+      <Rect X="0.015" Y="0.9428" Width="0.0345" Height="0.041" />
+      <Rect X="0.9505" Y="0.9428" Width="0.0345" Height="0.041" />
+      <Rect X="0.9505" Y="0.0162" Width="0.0345" Height="0.041" />
+    </Component>
+    <TermComponent Name="Term">
+      <TermConfig
+        Width="32" Height="16"
+        AutoLayout="true"
+        Weight="0.05" Edge="0.1"
+        Background="Black" Foreground="White"
+      />
+      <AnchorUv X="0" Y="0" />
+      <PivotUv X="0" Y="0" />
+      <OffsetUv X="0.05" Y="0.05" />
+      <SizeUv X="0.9" Y="0.9" />
+      <Fragment Id="TermCharsFrag" />
+      <Vertex Id="GaugeInstancedVert" />
+    </TermComponent>
     <Component Name="Labels">
       <AnchorUv X="0" Y="0" />
       <PivotUv X="0" Y="0" />

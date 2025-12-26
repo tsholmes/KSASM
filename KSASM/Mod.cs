@@ -1,6 +1,4 @@
 
-using System;
-using System.Linq;
 using Brutal.ImGuiApi;
 using Brutal.ImGuiApi.Abstractions;
 using Brutal.Logging;
@@ -27,51 +25,6 @@ namespace KSASM
 
       harmony = new("KSASM");
       new PatchClassProcessor(harmony, typeof(Patches)).Patch();
-
-      if (mod == null)
-      {
-        AllModsLoadedPatch.Mod = this;
-        new PatchClassProcessor(harmony, typeof(AllModsLoadedPatch)).Patch();
-      }
-    }
-
-    [StarMapAllModsLoaded]
-    public void AllModsLoaded()
-    {
-      var terminalCanvas = ModLibrary.Get<GaugeCanvas>("KSASMTerminal");
-      var labelsComp = terminalCanvas.Components.First(c => c.Name == "Labels");
-
-      const float EDGE_PAD = 0.025f;
-      const float SCALE = 0.9f;
-
-      static float pos(int i, int len) => EDGE_PAD + (1 - 2 * EDGE_PAD) * ((float)i / (float)len);
-
-      for (var cy = 0; cy < ITerminal.Y_CHARS; cy++)
-      {
-        var y0 = pos(cy, ITerminal.Y_CHARS);
-        var y1 = pos(cy + 1, ITerminal.Y_CHARS);
-        for (var cx = 0; cx < ITerminal.X_CHARS; cx++)
-        {
-          var x0 = pos(cx, ITerminal.X_CHARS);
-          var x1 = pos(cx + 1, ITerminal.X_CHARS);
-
-          var label = new TerminalLabel
-          {
-            X = x0,
-            Y = y0,
-            Width = x1 - x0,
-            Height = y1 - y0,
-            TextColor = IndexedColor.White,
-            BackgroundColor = IndexedColor.DarkGrey,
-            TextScale = SCALE,
-            Label = " "
-          };
-          labelsComp.Rects.Add(label);
-          TerminalLabel.Labels.Add(label);
-        }
-      }
-
-      labelsComp.OnDataLoad(labelsComp.Mod);
     }
 
     [StarMapUnload]
@@ -139,30 +92,4 @@ namespace KSASM
       _nextWindowClass = null;
     }
   }
-
-  public static class AllModsLoadedPatch
-  {
-    public static KSASMMod Mod;
-
-    [HarmonyPatch(typeof(ModLibrary), nameof(ModLibrary.LoadAll)), HarmonyPostfix]
-    static void ModLibrary_LoadAll_Postfix()
-    {
-      Mod.AllModsLoaded();
-    }
-  }
-}
-
-namespace StarMap.API
-{
-  [AttributeUsage(AttributeTargets.Class)]
-  internal class StarMapModAttribute : Attribute { }
-
-  [AttributeUsage(AttributeTargets.Method)]
-  internal class StarMapImmediateLoadAttribute : Attribute { }
-
-  [AttributeUsage(AttributeTargets.Method)]
-  internal class StarMapAllModsLoadedAttribute : Attribute { }
-
-  [AttributeUsage(AttributeTargets.Method)]
-  internal class StarMapUnloadAttribute : Attribute { }
 }

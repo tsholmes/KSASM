@@ -1,0 +1,13 @@
+./msdf-atlas-gen/msdf-atlas-gen.exe `
+  -font C:\Program` Files\Kitten` Space` Agency\Content\Fonts\3270-Regular.ttf `
+  -charset Font/termchars.txt `
+  -type mtsdf `
+  -format png `
+  -dimensions 1024 1024 `
+  -emrange 0.2 `
+  -pxalign on `
+  -outerpxpadding 2 `
+  -yorigin top `
+  -imageout Content/TermFont.png `
+  -csv Font/TermFont.csv `
+  -json Font/TermFont.json

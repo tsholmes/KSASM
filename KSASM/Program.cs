@@ -25,9 +25,16 @@ namespace KSASM
 
       KSASMMod.CWD = Directory.GetCurrentDirectory();
 
-      Directory.SetCurrentDirectory(KSADir);
-
       AppDomain.CurrentDomain.AssemblyResolve += FindAssembly;
+
+      if (pargs.HasFlag("termfont"))
+      {
+        KSASM.Gauge.FontAtlas.Generate(
+          "../Font/TermChars.txt", "../Font/TermFont.json", "../Content/TermFont.glsl");
+        return 0;
+      }
+
+      Directory.SetCurrentDirectory(KSADir);
 
       if (pargs.HasFlag("standalone"))
         return RunStandalone(pargs);

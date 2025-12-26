@@ -16,7 +16,7 @@ namespace KSASM
 
     public override IDevice[] MakeDevices()
     {
-      var terminal = new GaugeTerminal(TerminalLabel.Labels);
+      var terminal = new GaugeTerminal();
       terminal.Update();
       return [
         SystemDeviceDefinition.Make("system", vehicle.System),

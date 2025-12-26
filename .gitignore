@@ -2,3 +2,6 @@ bin/
 obj/
 **/*.log
 **/test*.ksasm
+msdf-atlas-gen/
+Font/*.json
+Font/*.csv
