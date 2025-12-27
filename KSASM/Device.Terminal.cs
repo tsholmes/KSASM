@@ -71,7 +71,7 @@ namespace KSASM
 
     public void Update()
     {
-      TerminalBinding.SetData(Data);
+      TerminalTextUbo.SetData(Data);
     }
   }
 }

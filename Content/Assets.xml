@@ -1,6 +1,7 @@
 <Assets>
   <ShaderEx Id="TermCharsFrag" Path="TermChars.frag">
     <TextureBinding Path="TermFont.png" />
+    <TerminalText Id="TerminalText" Size="1" />
   </ShaderEx>
   <GaugeCanvas Id="KSASMTerminal">
     <DisplayName Value="KSASM Terminal" />
@@ -33,9 +34,8 @@
       <Rect X="0.9505" Y="0.0162" Width="0.0345" Height="0.041" />
     </Component>
     <TermComponent Name="Term">
-      <TermConfig
+      <TerminalText
         Width="32" Height="16"
-        AutoLayout="true"
         Weight="0.05" Edge="0.1"
         Background="Black" Foreground="White"
       />

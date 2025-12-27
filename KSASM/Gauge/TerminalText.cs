@@ -1,50 +1,52 @@
 
 using System;
-using Brutal.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using KittenExtensions;
 using KSA;
 
 namespace KSASM.Gauge
 {
-  public class TerminalText : GaugeRectReference
+  [KxUniformBuffer("TerminalText")]
+  [StructLayout(LayoutKind.Sequential, Pack = 1)]
+  public struct TerminalTextUbo
   {
-    public const int MAX_CHARS = 16;
+    public const int MAX_SIZE = 32 * 16;
+    [KxUniformBufferLookup]
+    public static KxPtrLookup<TerminalTextUbo> Lookup;
 
-    public int CharCount = MAX_CHARS;
-    public IndexedColor Background = IndexedColor.Black;
-    public IndexedColor Foreground = IndexedColor.White;
-    public double Weight = 0f;
-    public double Edge = 0f;
+    private static unsafe TerminalTextUbo* ptr;
 
-    private uint4 curData = new();
-
-    public void SetData(ReadOnlySpan<byte> data)
+    public static unsafe void SetConfig(TerminalGaugeComponent.TermConfig config)
     {
-      var res = new uint4();
-      for (var i = 0; i < MAX_CHARS; i++)
-      {
-        var b = i < data.Length ? data[i] : (byte)0;
-        var shift = (i & 3) << 3;
-        var idx = (i >> 2) & 3;
-        res[idx] |= (uint)b << shift;
-      }
-      curData = res;
+      if (ptr == null)
+        ptr = Lookup(KeyHash.Make("TerminalText"));
+
+      ptr->Width = (uint)config.Width;
+      ptr->Height = (uint)config.Height;
+      ptr->Weight = (uint)config.Weight;
+      ptr->Edge = (uint)config.Edge;
+      ptr->Background = (uint)config.Background;
+      ptr->Foreground = (uint)config.Foreground;
     }
 
-    public override uint4 PackData0() => curData;
-    public override uint4 PackData1() => new(Pack1X(), Pack1Y(), 0, 0);
-
-    private uint Pack1X() => 0
-      | (((uint)CharCount - 1) << 0)
-      | ((uint)Background << 4)
-      | ((uint)Foreground << 8);
-    
-    private uint Pack1Y()
+    public static unsafe void SetData(ReadOnlySpan<byte> data)
     {
-      var sweight = Math.Clamp((Weight + 1.0) / 2.0, 0, 1) * ushort.MaxValue;
-      var sedge = Math.Clamp(Edge, 0, 1) * ushort.MaxValue;
-      return 0
-        | ((uint)sweight << 0)
-        | ((uint)sedge << 16);
+      if (ptr == null)
+        ptr = Lookup(KeyHash.Make("TerminalText"));
+
+      data.CopyTo(ptr->Data);
     }
+
+    public CharData Data;
+    public uint Width;
+    public uint Height;
+    public float Weight;
+    public float Edge;
+    public uint Background;
+    public uint Foreground;
+
+    [InlineArray(MAX_SIZE)]
+    public struct CharData { private byte _element; }
   }
 }
